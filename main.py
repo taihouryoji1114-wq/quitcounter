@@ -200,7 +200,10 @@ def settings():
             on_click=lambda: ui.navigate.to("/"),
         ).classes("w-80")
 
-app.add_static_files('/static','static')
+ui.add_static_files('/static','static')
+
+ui.add_head_html("""
+<link rel="apple-touch-icon" href="/static/habitory_icon.png">""")
 
 ui.run(
     title="Habitory",
