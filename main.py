@@ -202,6 +202,7 @@ def settings():
 
 
 ui.run(
-    title="QuitCounter",
+    title="Habitory",
+    favicon="static/habitory_icon.png",
     reload=True,
 )
