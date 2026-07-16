@@ -200,9 +200,10 @@ def settings():
             on_click=lambda: ui.navigate.to("/"),
         ).classes("w-80")
 
+ui.add_static_files('/static','static')
 
 ui.run(
     title="Habitory",
-    favicon="static/habitory_icon.png",
+    favicon="/static/habitory_icon.png",
     reload=True,
 )
