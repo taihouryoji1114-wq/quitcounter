@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 from datetime import date, datetime
 import json
 
@@ -200,7 +200,7 @@ def settings():
             on_click=lambda: ui.navigate.to("/"),
         ).classes("w-80")
 
-ui.add_static_files('/static','static')
+app.add_static_files('/static','static')
 
 ui.run(
     title="Habitory",
