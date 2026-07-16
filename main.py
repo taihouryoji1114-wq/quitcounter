@@ -2,23 +2,49 @@ from nicegui import app, ui
 from datetime import date, datetime
 import json
 
-DATA_FILE = "data.json"
+app.add_static_files('/static', 'static')
+
+DATA_FILE = 'data.json'
 
 
 def load_data():
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {
+            "current_user": 0,
+            "users": [
+                {
+                    "name": "良治",
+                    "start_date": "2026-07-12",
+                    "cigarettes_per_day": 10,
+                    "price_per_pack": 1000
+                },
+                {
+                    "name": "胡花",
+                    "start_date": "2026-07-12",
+                    "cigarettes_per_day": 10,
+                    "price_per_pack": 1000
+                }
+            ]
+        }
 
 
 data = load_data()
-
 current_user = data.get("current_user", 0)
 
 
 def save_data():
     data["current_user"] = current_user
+
     with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        json.dump(
+            data,
+            f,
+            ensure_ascii=False,
+            indent=4,
+        )
 
 
 def get_user():
@@ -27,11 +53,12 @@ def get_user():
 
 def change_user(index):
     global current_user
+
     current_user = index
+
     save_data()
+
     ui.navigate.reload()
-
-
 def calculate():
 
     user = get_user()
@@ -91,12 +118,12 @@ def home():
         ui.label(
             str(result["days"])
         ).classes("text-8xl font-bold")
-
         ui.label(
             "DAYS"
         ).classes("text-2xl text-grey-6")
 
         ui.space().style("height:20px")
+
         with ui.card().classes("w-80"):
 
             ui.label(
@@ -151,7 +178,6 @@ def settings():
         ui.label(
             "⚙️ 設定"
         ).classes("text-3xl font-bold")
-
         name = ui.input(
             "名前",
             value=user["name"],
@@ -171,8 +197,8 @@ def settings():
             "1箱の値段",
             value=user["price_per_pack"],
         ).classes("w-80")
-        def save():
 
+        def save():
             user["name"] = name.value
             user["start_date"] = start.value
             user["cigarettes_per_day"] = int(cigs.value)
@@ -180,9 +206,7 @@ def settings():
 
             save_data()
 
-            ui.notify("保存しました")
-            
-            ui.navigate.reload()
+            ui.notify("保存しました！")
 
             ui.navigate.to("/")
 
@@ -200,13 +224,10 @@ def settings():
             on_click=lambda: ui.navigate.to("/"),
         ).classes("w-80")
 
-ui.add_static_files('/static','static')
-
-ui.add_head_html("""
-<link rel="apple-touch-icon" href="/static/habitory_icon.png">""")
 
 ui.run(
     title="Habitory",
-    favicon="/static/habitory_icon.png",
+    host="0.0.0.0",
+    port=8080,
     reload=True,
 )
