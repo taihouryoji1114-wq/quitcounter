@@ -1,0 +1,17 @@
+{
+    "users": [
+        {
+            "name": "良治",
+            "start_date": "2026-07-12",
+            "cigarettes_per_day": 10,
+            "price_per_pack": 600
+        },
+        {
+            "name": "胡花",
+            "start_date": "2026-07-01",
+            "cigarettes_per_day": 10,
+            "price_per_pack": 600
+        }
+    ],
+    "current_user": 0
+}
