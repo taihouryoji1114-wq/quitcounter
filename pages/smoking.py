@@ -1,5 +1,6 @@
 from nicegui import ui
 
+from core.data import data
 from core.theme import Theme
 from core.utils import smoking_summary
 
@@ -7,7 +8,8 @@ from core.utils import smoking_summary
 @ui.page("/smoking")
 def smoking():
     Theme.page("禁煙")
-    summary = smoking_summary()
+    page_user_id = data.active_user_id
+    summary = smoking_summary(page_user_id)
     content = Theme.shell("禁煙", "静かな毎日の積み重ね", back_to="/")
     with content:
         with ui.card().classes("hero-card w-full q-pa-xl q-mb-md"):

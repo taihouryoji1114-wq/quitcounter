@@ -1,40 +1,48 @@
 {
   "workout": [],
+  "schema_version": 3,
   "users": {
-    "active_id": "0",
-    "profiles": {
-      "0": {
+    "ryoji": {
+      "profile": {
         "name": "良治"
       },
-      "1": {
+      "smoking": {
+        "start_date": "2026-07-12",
+        "cigarettes_per_day": 10,
+        "price_per_pack": 600
+      },
+      "workout_records": [
+        {
+          "date": "2026-07-20",
+          "body_parts": [
+            "腹筋"
+          ]
+        },
+        {
+          "date": "2026-07-22",
+          "body_parts": [
+            "胸"
+          ]
+        }
+      ],
+      "hydration_records": [
+        {
+          "date": "2026-07-25",
+          "amount": 100
+        }
+      ]
+    },
+    "koka": {
+      "profile": {
         "name": "胡花"
-      }
+      },
+      "smoking": {
+        "start_date": "2026-07-01",
+        "cigarettes_per_day": 10,
+        "price_per_pack": 600
+      },
+      "workout_records": []
     }
   },
-  "smoking": {
-    "0": {
-      "start_date": "2026-07-12",
-      "cigarettes_per_day": 10,
-      "price_per_pack": 600
-    },
-    "1": {
-      "start_date": "2026-07-01",
-      "cigarettes_per_day": 10,
-      "price_per_pack": 600
-    }
-  },
-  "workout_records": [
-    {
-      "date": "2026-07-20",
-      "body_parts": [
-        "腹筋"
-      ]
-    },
-    {
-      "date": "2026-07-22",
-      "body_parts": [
-        "胸"
-      ]
-    }
-  ]
+  "current_user_id": "ryoji"
 }

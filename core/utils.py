@@ -3,8 +3,8 @@ from datetime import date, datetime
 from core.data import data
 
 
-def smoking_summary():
-    smoking = data.get_smoking()
+def smoking_summary(user_id=None):
+    smoking = data.get_smoking(user_id)
     start_date = datetime.strptime(smoking["start_date"], "%Y-%m-%d").date()
     days = max(0, (date.today() - start_date).days)
     cigarettes = days * smoking["cigarettes_per_day"]
