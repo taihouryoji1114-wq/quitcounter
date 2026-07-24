@@ -1,18 +1,40 @@
 {
-    "current_user": 0,
-    "users": [
-        {
-            "name": "良治",
-            "start_date": "2026-07-12",
-            "cigarettes_per_day": 10,
-            "price_per_pack": 600
-        },
-        {
-            "name": "胡花",
-            "start_date": "2026-07-01",
-            "cigarettes_per_day": 10,
-            "price_per_pack": 600
-        }
-    ],
-    "workout": []
+  "workout": [],
+  "users": {
+    "active_id": "0",
+    "profiles": {
+      "0": {
+        "name": "良治"
+      },
+      "1": {
+        "name": "胡花"
+      }
+    }
+  },
+  "smoking": {
+    "0": {
+      "start_date": "2026-07-12",
+      "cigarettes_per_day": 10,
+      "price_per_pack": 600
+    },
+    "1": {
+      "start_date": "2026-07-01",
+      "cigarettes_per_day": 10,
+      "price_per_pack": 600
+    }
+  },
+  "workout_records": [
+    {
+      "date": "2026-07-20",
+      "body_parts": [
+        "腹筋"
+      ]
+    },
+    {
+      "date": "2026-07-22",
+      "body_parts": [
+        "胸"
+      ]
+    }
+  ]
 }

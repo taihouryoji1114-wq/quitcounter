@@ -1,6 +1,12 @@
+from pathlib import Path
+
 from nicegui import app, ui
 
-app.add_static_files("/static", "static")
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+app.add_static_files("/static", str(STATIC_DIR))
 
 # ページ読み込み
 import pages.home
@@ -13,5 +19,5 @@ ui.run(
     host="0.0.0.0",
     port=8080,
     reload=True,
-    favicon="static/habitory_icon.png",
+    favicon=str(STATIC_DIR / "habitory_icon.png"),
 )
