@@ -74,11 +74,11 @@ class NutritionSettingsManagerTest(unittest.TestCase):
         page_user_id = self.manager.active_user_id
         self.manager.select_user("user2")
         self.manager.update_profile(
-            "ユーザー1更新", "2026-07-12", 10, 600, page_user_id
+            "良治更新", "2026-07-12", 10, 600, page_user_id
         )
         self.calories.save_settings(120, 2000, 1600, "普通", page_user_id)
-        self.assertEqual(self.manager.get_profile("user1")["name"], "ユーザー1更新")
-        self.assertEqual(self.manager.get_profile("user2")["name"], "ユーザー2")
+        self.assertEqual(self.manager.get_profile("user1")["name"], "良治更新")
+        self.assertEqual(self.manager.get_profile("user2")["name"], "胡花")
         self.assertEqual(
             self.calories.get_settings("user1")["protein_goal"], 120
         )

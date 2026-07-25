@@ -68,6 +68,12 @@ class DataManager:
         if self._is_ver3(source):
             result = deepcopy(source)
             self._ensure_required_users(result)
+            # Replace only untouched placeholder names. User-edited names are preserved.
+            placeholder_names = {"user1": "ユーザー1", "user2": "ユーザー2"}
+            for user_id, placeholder in placeholder_names.items():
+                user = result.get("users", {}).get(user_id)
+                if user and user.get("profile", {}).get("name") == placeholder:
+                    user["profile"]["name"] = DEFAULT_USERS[user_id]["profile"]["name"]
             return result, result != source
 
         # Unknown application data remains at root. Replaced Ver2 containers are
