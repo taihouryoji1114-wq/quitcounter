@@ -10,7 +10,7 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from core.users import DEFAULT_USERS, UserManager
+from core.users import DEFAULT_USERS, STANDARD_FOODS, UserManager
 
 
 DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data.json"
@@ -74,6 +74,16 @@ class DataManager:
                 user = result.get("users", {}).get(user_id)
                 if user and user.get("profile", {}).get("name") == placeholder:
                     user["profile"]["name"] = DEFAULT_USERS[user_id]["profile"]["name"]
+            for user in result.get("users", {}).values():
+                if not user.get("standard_foods_seeded"):
+                    foods = user.setdefault("foods", [])
+                    existing_names = {food.get("name") for food in foods}
+                    foods.extend(
+                        deepcopy(food)
+                        for food in STANDARD_FOODS
+                        if food["name"] not in existing_names
+                    )
+                    user["standard_foods_seeded"] = True
             return result, result != source
 
         # Unknown application data remains at root. Replaced Ver2 containers are

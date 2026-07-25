@@ -13,6 +13,8 @@ class NutritionManagerTest(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.path = Path(self.temp_dir.name) / "data.json"
         self.manager = DataManager(self.path)
+        for user in self.manager.data["users"].values():
+            user["foods"] = []
         self.nutrition = NutritionManager(self.manager)
 
     def tearDown(self):
