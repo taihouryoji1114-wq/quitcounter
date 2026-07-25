@@ -18,17 +18,34 @@ class HydrationManagerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_records_are_separated_by_user(self):
-        self.hydration.add(500, "2026-07-25", "ryoji")
-        self.hydration.add(300, "2026-07-25", "koka")
-        self.assertEqual(self.hydration.get_amount("2026-07-25", "ryoji"), 500)
-        self.assertEqual(self.hydration.get_amount("2026-07-25", "koka"), 300)
+        self.hydration.add(500, "2026-07-25", "user1")
+        self.hydration.add(300, "2026-07-25", "user2")
+        self.assertEqual(self.hydration.get_amount("2026-07-25", "user1"), 500)
+        self.assertEqual(self.hydration.get_amount("2026-07-25", "user2"), 300)
+
+    def test_undo_last_added_amount(self):
+        self.hydration.add(300, "2026-07-25", "user1")
+        self.hydration.add(500, "2026-07-25", "user1")
+
+        self.assertEqual(
+            self.hydration.undo_last("2026-07-25", "user1"),
+            500,
+        )
+        self.assertEqual(
+            self.hydration.get_amount("2026-07-25", "user1"),
+            300,
+        )
+
+    def test_undo_without_new_entry_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "取り消せる"):
+            self.hydration.undo_last("2026-07-25", "user1")
 
     def test_page_owner_is_stable_after_user_switch(self):
         page_user_id = self.manager.active_user_id
-        self.manager.select_user("koka")
+        self.manager.select_user("user2")
         self.hydration.add(100, "2026-07-25", page_user_id)
-        self.assertEqual(self.hydration.get_amount("2026-07-25", "ryoji"), 100)
-        self.assertEqual(self.hydration.get_amount("2026-07-25", "koka"), 0)
+        self.assertEqual(self.hydration.get_amount("2026-07-25", "user1"), 100)
+        self.assertEqual(self.hydration.get_amount("2026-07-25", "user2"), 0)
 
     def test_amounts_accumulate_in_one_hundred_ml_units(self):
         self.hydration.add(300, "2026-07-25")
@@ -38,21 +55,21 @@ class HydrationManagerTest(unittest.TestCase):
             self.hydration.add(250, "2026-07-25")
 
     def test_goal_is_optional_and_user_scoped(self):
-        self.assertIsNone(self.hydration.get_goal("ryoji"))
-        self.hydration.set_goal(2500, "ryoji")
-        self.assertEqual(self.hydration.get_goal("ryoji"), 2500)
-        self.assertIsNone(self.hydration.get_goal("koka"))
-        self.hydration.set_goal("", "ryoji")
-        self.assertIsNone(self.hydration.get_goal("ryoji"))
+        self.assertIsNone(self.hydration.get_goal("user1"))
+        self.hydration.set_goal(2500, "user1")
+        self.assertEqual(self.hydration.get_goal("user1"), 2500)
+        self.assertIsNone(self.hydration.get_goal("user2"))
+        self.hydration.set_goal("", "user1")
+        self.assertIsNone(self.hydration.get_goal("user1"))
 
     def test_summary_and_existing_data_are_preserved(self):
         original = {
             "schema_version": 3,
-            "current_user_id": "ryoji",
+            "current_user_id": "user1",
             "custom": {"keep": True},
             "users": {
-                "ryoji": {
-                    "profile": {"name": "良治"},
+                "user1": {
+                    "profile": {"name": "ユーザー1"},
                     "smoking": {
                         "start_date": "2026-07-12",
                         "cigarettes_per_day": 10,
@@ -60,8 +77,8 @@ class HydrationManagerTest(unittest.TestCase):
                     },
                     "workout_records": [{"date": "2026-07-20", "body_parts": ["胸"]}],
                 },
-                "koka": {
-                    "profile": {"name": "胡花"},
+                "user2": {
+                    "profile": {"name": "ユーザー2"},
                     "smoking": {
                         "start_date": "2026-07-01",
                         "cigarettes_per_day": 10,
@@ -83,8 +100,8 @@ class HydrationManagerTest(unittest.TestCase):
         saved = json.loads(self.path.read_text(encoding="utf-8"))
         self.assertEqual(saved["custom"], original["custom"])
         self.assertEqual(
-            saved["users"]["ryoji"]["workout_records"],
-            original["users"]["ryoji"]["workout_records"],
+            saved["users"]["user1"]["workout_records"],
+            original["users"]["user1"]["workout_records"],
         )
 
 

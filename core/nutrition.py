@@ -41,6 +41,37 @@ class NutritionManager:
         self._data_manager.save()
         return food
 
+    def update_food(self, food_id, name, calories, protein, user_id=None):
+        name = str(name).strip()
+        if not name:
+            raise ValueError("食品名を入力してください。")
+        calories = self._non_negative_number(calories, "カロリー")
+        protein = self._non_negative_number(protein, "タンパク質")
+        if calories == 0 and protein == 0:
+            raise ValueError("カロリーまたはタンパク質を入力してください。")
+
+        foods = self._user(user_id).get("foods", [])
+        food = next((item for item in foods if item.get("id") == food_id), None)
+        if food is None:
+            raise ValueError("選択された食品が見つかりません。")
+        if any(
+            item.get("id") != food_id and item.get("name") == name
+            for item in foods
+        ):
+            raise ValueError("同じ食品名が既に登録されています。")
+        food.update({"name": name, "calories": calories, "protein": protein})
+        self._data_manager.save()
+        return food
+
+    def delete_food(self, food_id, user_id=None):
+        foods = self._user(user_id).get("foods", [])
+        food = next((item for item in foods if item.get("id") == food_id), None)
+        if food is None:
+            raise ValueError("選択された食品が見つかりません。")
+        foods.remove(food)
+        self._data_manager.save()
+        return food
+
     def get_meal_records(self, record_date=None, user_id=None):
         records = self._user(user_id).get("meal_records", [])
         if record_date is not None:
@@ -51,31 +82,51 @@ class NutritionManager:
         return list(records)
 
     def add_meal(self, record_date, food_id, amount, user_id=None):
+        return self.add_meals(record_date, [food_id], amount, user_id)[0]
+
+    def add_meals(self, record_date, food_ids, amount=1, user_id=None):
         self._validate_date(record_date)
         amount = self._positive_number(amount, "量")
+        food_ids = list(dict.fromkeys(food_ids or []))
+        if not food_ids:
+            raise ValueError("食品を1つ以上選択してください。")
 
-        # Resolve the owner once so a user switch in another tab cannot redirect
-        # the food lookup or the resulting meal record.
         owner_id = user_id or self._data_manager.active_user_id
         user = self._user(owner_id)
-        food = next(
-            (item for item in user.get("foods", []) if item.get("id") == food_id),
-            None,
-        )
-        if food is None:
+        foods_by_id = {
+            item.get("id"): item for item in user.get("foods", [])
+        }
+        if any(food_id not in foods_by_id for food_id in food_ids):
             raise ValueError("選択された食品が見つかりません。")
 
-        record = {
-            "id": uuid4().hex,
-            "date": record_date,
-            "food_id": food["id"],
-            "food_name": food["name"],
-            "amount": amount,
-            "calories": self._clean_number(food["calories"] * amount),
-            "protein": self._clean_number(food["protein"] * amount),
-        }
-        user.setdefault("meal_records", []).append(record)
+        created = []
+        for food_id in food_ids:
+            food = foods_by_id[food_id]
+            created.append(
+                {
+                    "id": uuid4().hex,
+                    "date": record_date,
+                    "food_id": food["id"],
+                    "food_name": food["name"],
+                    "amount": amount,
+                    "calories": self._clean_number(food["calories"] * amount),
+                    "protein": self._clean_number(food["protein"] * amount),
+                }
+            )
+        user.setdefault("meal_records", []).extend(created)
         user["meal_records"].sort(key=lambda item: item["date"])
+        self._data_manager.save()
+        return created
+
+    def delete_meal(self, meal_id, user_id=None):
+        records = self._user(user_id).get("meal_records", [])
+        record = next(
+            (item for item in records if item.get("id") == meal_id),
+            None,
+        )
+        if record is None:
+            raise ValueError("選択された食事記録が見つかりません。")
+        records.remove(record)
         self._data_manager.save()
         return record
 
@@ -84,6 +135,30 @@ class NutritionManager:
         records = self.get_meal_records(record_date, user_id)
         return {
             "date": record_date,
+            "calories": self._clean_number(
+                sum(float(record.get("calories", 0)) for record in records)
+            ),
+            "protein": self._clean_number(
+                sum(float(record.get("protein", 0)) for record in records)
+            ),
+        }
+
+    def period_summary(self, start_date, end_date, user_id=None):
+        self._validate_date(start_date)
+        self._validate_date(end_date)
+        if start_date > end_date:
+            raise ValueError("集計期間の開始日と終了日が正しくありません。")
+        records = [
+            record
+            for record in self.get_meal_records(user_id=user_id)
+            if start_date <= record.get("date", "") <= end_date
+        ]
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "days": (end - start).days + 1,
             "calories": self._clean_number(
                 sum(float(record.get("calories", 0)) for record in records)
             ),

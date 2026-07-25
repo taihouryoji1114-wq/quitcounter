@@ -1,0 +1,28 @@
+{
+  "schema_version": 3,
+  "current_user_id": "user1",
+  "users": {
+    "user1": {
+      "profile": {
+        "name": "ユーザー1"
+      },
+      "smoking": {
+        "start_date": "2026-01-01",
+        "cigarettes_per_day": 0,
+        "price_per_pack": 0
+      },
+      "workout_records": []
+    },
+    "user2": {
+      "profile": {
+        "name": "ユーザー2"
+      },
+      "smoking": {
+        "start_date": "2026-01-01",
+        "cigarettes_per_day": 0,
+        "price_per_pack": 0
+      },
+      "workout_records": []
+    }
+  }
+}

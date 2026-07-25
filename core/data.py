@@ -13,9 +13,11 @@ from pathlib import Path
 from core.users import DEFAULT_USERS, UserManager
 
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data.json"
+DEFAULT_DATA_FILE = Path(__file__).resolve().parent.parent / "data.json"
+DATA_FILE = Path(os.environ.get("HABITORY_DATA_FILE", DEFAULT_DATA_FILE))
 BODY_PARTS = ("胸", "背中", "脚", "肩", "腕", "腹筋")
 SCHEMA_VERSION = 3
+MAX_AUTOMATIC_BACKUPS = 20
 
 
 class DataManager:
@@ -32,7 +34,7 @@ class DataManager:
     def _default():
         return {
             "schema_version": SCHEMA_VERSION,
-            "current_user_id": "ryoji",
+            "current_user_id": "user1",
             "users": deepcopy(DEFAULT_USERS),
         }
 
@@ -91,7 +93,7 @@ class DataManager:
         else:
             active = source.get("current_user_id", source.get("current_user", 0))
 
-        id_map = {"0": "ryoji", "1": "koka", 0: "ryoji", 1: "koka"}
+        id_map = {"0": "user1", "1": "user2", 0: "user1", 1: "user2"}
         active_id = id_map.get(active, str(active))
         smoking_by_user = source.get("smoking", {})
         if not isinstance(smoking_by_user, dict):
@@ -125,7 +127,7 @@ class DataManager:
         result["users"] = users
         self._ensure_required_users(result)
         if active_id not in result["users"]:
-            active_id = "ryoji"
+            active_id = next(iter(result["users"]))
         result["current_user_id"] = active_id
 
         for record in self._legacy_workouts(source, active_id):
@@ -148,10 +150,10 @@ class DataManager:
     @staticmethod
     def _ensure_required_users(source):
         users = source.setdefault("users", {})
-        for user_id, default in DEFAULT_USERS.items():
-            users.setdefault(user_id, deepcopy(default))
+        if not users:
+            users.update(deepcopy(DEFAULT_USERS))
         if source.get("current_user_id") not in users:
-            source["current_user_id"] = "ryoji"
+            source["current_user_id"] = next(iter(users))
 
     def _legacy_workouts(self, source, default_user_id):
         by_user_date = {}
@@ -165,7 +167,7 @@ class DataManager:
             valid = list(dict.fromkeys(part for part in parts if part in BODY_PARTS))
             if not valid:
                 return
-            user_id = {"0": "ryoji", "1": "koka"}.get(record.get("user_id"), record.get("user_id", default_user_id))
+            user_id = {"0": "user1", "1": "user2"}.get(record.get("user_id"), record.get("user_id", default_user_id))
             item = by_user_date.setdefault(
                 (user_id, record["date"]),
                 {"user_id": user_id, "date": record["date"], "body_parts": []},
@@ -203,6 +205,7 @@ class DataManager:
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         temporary_name = None
         try:
+            self._create_automatic_backup()
             descriptor, temporary_name = tempfile.mkstemp(
                 prefix=f".{self.file_path.name}.", suffix=".tmp", dir=self.file_path.parent
             )
@@ -221,6 +224,29 @@ class DataManager:
             if temporary_name:
                 Path(temporary_name).unlink(missing_ok=True)
             raise RuntimeError(f"data.jsonを保存できません: {error}") from error
+
+    def _create_automatic_backup(self):
+        """Keep a local copy of the previous data before it is overwritten."""
+        if not self.file_path.exists():
+            return None
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        backup = self.file_path.with_name(
+            f"{self.file_path.name}.backup.{timestamp}"
+        )
+        with self.file_path.open("rb") as source, backup.open("xb") as destination:
+            shutil.copyfileobj(source, destination)
+            destination.flush()
+            os.fsync(destination.fileno())
+
+        backups = sorted(
+            self.file_path.parent.glob(f"{self.file_path.name}.backup.*"),
+            key=lambda path: path.name,
+            reverse=True,
+        )
+        for old_backup in backups[MAX_AUTOMATIC_BACKUPS:]:
+            old_backup.unlink(missing_ok=True)
+        return backup
 
     @property
     def active_user_id(self):
@@ -317,6 +343,22 @@ class DataManager:
             records.append(record)
         record["body_parts"] = selected
         records.sort(key=lambda item: item["date"])
+        self.save()
+
+    def delete_workout(self, record_date, user_id=None):
+        try:
+            datetime.strptime(record_date, "%Y-%m-%d")
+        except (TypeError, ValueError) as error:
+            raise ValueError("記録日は YYYY-MM-DD 形式で指定してください。") from error
+
+        records = self.get_workout_records(user_id)
+        record = next(
+            (item for item in records if item["date"] == record_date),
+            None,
+        )
+        if record is None:
+            raise ValueError("削除する筋トレ記録がありません。")
+        records.remove(record)
         self.save()
         return record
 data = DataManager()

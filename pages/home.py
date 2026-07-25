@@ -1,5 +1,6 @@
 from nicegui import ui
 
+from core.auth import log_out, require_login
 from core.data import data
 from core.hydration import hydration
 from core.theme import Theme
@@ -7,19 +8,23 @@ from core.utils import smoking_summary
 
 
 HABITS = (
-    {"title": "禁煙", "icon": "🚭", "accent": "#D96C63", "route": "/smoking"},
-    {"title": "筋トレ", "icon": "💪", "accent": "#5B8269", "route": "/workout"},
+    {"title": "禁煙", "icon": "🚭", "accent": "#D96C63", "route": "/habitory/smoking"},
+    {"title": "筋トレ", "icon": "💪", "accent": "#5B8269", "route": "/habitory/workout"},
     {"title": "読書", "icon": "📚", "accent": "#8B7BB8", "route": None},
-    {"title": "水分", "icon": "💧", "accent": "#659BB9", "route": "/hydration"},
+    {"title": "水分", "icon": "💧", "accent": "#659BB9", "route": "/habitory/hydration"},
 )
 
 
-@ui.page("/")
+@ui.page("/habitory")
 def home():
+    if not require_login():
+        return
     Theme.page("Habitory")
 
     def settings_action():
-        ui.button(icon="settings", on_click=lambda: ui.navigate.to("/settings")).props("flat round").classes("text-grey-8")
+        with ui.row().classes("items-center gap-1"):
+            ui.button(icon="settings", on_click=lambda: ui.navigate.to("/habitory/settings")).props("flat round").classes("text-grey-8")
+            ui.button(icon="logout", on_click=log_out).props("flat round").classes("text-grey-8")
 
     content = Theme.shell("Habitory", "育てる、毎日の習慣", action=settings_action)
     current_user = data.get_current_user()

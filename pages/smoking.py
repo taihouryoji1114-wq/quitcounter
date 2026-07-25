@@ -1,16 +1,19 @@
 from nicegui import ui
 
+from core.auth import require_login
 from core.data import data
 from core.theme import Theme
 from core.utils import smoking_summary
 
 
-@ui.page("/smoking")
+@ui.page("/habitory/smoking")
 def smoking():
+    if not require_login():
+        return
     Theme.page("禁煙")
     page_user_id = data.active_user_id
     summary = smoking_summary(page_user_id)
-    content = Theme.shell("禁煙", "静かな毎日の積み重ね", back_to="/")
+    content = Theme.shell("禁煙", "静かな毎日の積み重ね", back_to="/habitory")
     with content:
         with ui.card().classes("hero-card w-full q-pa-xl q-mb-md"):
             ui.label("継続日数").classes("section-kicker")

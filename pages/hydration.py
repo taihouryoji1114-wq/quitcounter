@@ -2,17 +2,20 @@ from datetime import date
 
 from nicegui import ui
 
+from core.auth import require_login
 from core.data import data
 from core.hydration import hydration
 from core.theme import Theme
 
 
-@ui.page("/hydration")
+@ui.page("/habitory/hydration")
 def hydration_page():
+    if not require_login():
+        return
     Theme.page("水分")
     page_user_id = data.active_user_id
     today = date.today().isoformat()
-    content = Theme.shell("水分", "今日も、こまめにひと息。", back_to="/")
+    content = Theme.shell("水分", "今日も、こまめにひと息。", back_to="/habitory")
 
     with content:
         @ui.refreshable
@@ -43,6 +46,15 @@ def hydration_page():
             custom_amount.value = None
             today_status.refresh()
 
+        def undo_last():
+            try:
+                amount = hydration.undo_last(today, page_user_id)
+            except (RuntimeError, ValueError) as error:
+                ui.notify(str(error), type="warning")
+                return
+            ui.notify(f"直前の{amount}mlを取り消しました", type="positive")
+            today_status.refresh()
+
         today_status()
         with ui.card().classes("surface-card w-full q-pa-lg"):
             ui.label("水分を記録").classes("section-kicker q-mb-sm")
@@ -60,3 +72,8 @@ def hydration_page():
                 icon="add",
                 on_click=lambda: add_amount(custom_amount.value),
             ).classes("w-full")
+            ui.button(
+                "直前の記録を取り消す",
+                icon="undo",
+                on_click=undo_last,
+            ).props("flat").classes("w-full q-mt-sm text-grey-7")

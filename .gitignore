@@ -1,0 +1,9 @@
+.DS_Store
+static/.DS_Store
+.venv/
+__pycache__/
+.pytest_cache/
+
+# 個人の記録はこのMacだけに保存し、GitHubへ送らない
+data.json
+data.json.*

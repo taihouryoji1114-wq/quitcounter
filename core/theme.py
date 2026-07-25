@@ -7,6 +7,9 @@ class Theme:
         ui.colors(primary="#4F7C68", secondary="#A7BCAE", positive="#4F7C68")
         ui.page_title(title)
         ui.add_head_html("""
+        <link rel="manifest" href="/static/manifest.json">
+        <link rel="apple-touch-icon" href="/static/habitory_icon.png">
+        <meta name="theme-color" content="#4F7C68">
         <style>
           body { background: #F7F7F5; color: #1D2822; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
           .app-shell { width: min(100%, 680px); margin: 0 auto; padding: 28px 20px 48px; box-sizing: border-box; }
@@ -17,6 +20,8 @@ class Theme:
           .metric-value { letter-spacing: -.045em; }
           .calendar-day { min-height: 72px; border-radius: 16px; background: #FBFCFA; border: 1px solid #EEF0EC; }
           .calendar-day:hover { background: #F0F5F1; }
+          .calendar-day.today-calendar-day { background: #FFF5F4; border: 2px solid #E3A09A; box-shadow: 0 0 0 2px rgba(255,255,255,.9) inset; }
+          .today-date-number { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: #FFF; background: #D9544D; border-radius: 999px; font-size: 12px; font-weight: 800; box-shadow: 0 3px 9px rgba(217,84,77,.25); }
           .body-part .q-checkbox__label { font-weight: 600; }
           .q-btn { border-radius: 14px; min-height: 44px; font-weight: 650; letter-spacing: 0; }
           @media (min-width: 640px) { .app-shell { padding: 40px 32px 64px; } }

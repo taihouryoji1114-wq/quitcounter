@@ -1,20 +1,23 @@
 from nicegui import ui
 
+from core.auth import require_login
 from core.calories import ACTIVITY_FACTORS, nutrition_settings
 from core.data import data
 from core.hydration import hydration
 from core.theme import Theme
 
 
-@ui.page("/settings")
+@ui.page("/habitory/settings")
 def settings():
+    if not require_login():
+        return
     Theme.page("設定")
     page_user_id = data.active_user_id
     profile = data.get_profile(page_user_id)
     smoking = data.get_smoking(page_user_id)
     hydration_goal = hydration.get_goal(page_user_id)
     nutrition = nutrition_settings.get_settings(page_user_id)
-    content = Theme.shell("設定", "あなたに合わせて整える", back_to="/")
+    content = Theme.shell("設定", "あなたに合わせて整える", back_to="/habitory")
     with content:
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
             ui.label("プロフィール").classes("section-kicker q-mb-md")
@@ -84,6 +87,6 @@ def settings():
                 ui.notify(f"保存できませんでした: {error}", type="negative")
                 return
             ui.notify("設定を保存しました", type="positive")
-            ui.navigate.to("/")
+            ui.navigate.to("/habitory")
 
         ui.button("変更を保存", icon="check", on_click=save_settings).classes("w-full")

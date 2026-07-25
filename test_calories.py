@@ -49,10 +49,10 @@ class NutritionSettingsManagerTest(unittest.TestCase):
         self.assertIsNone(self.calories.estimated_daily_expenditure())
 
     def test_settings_are_separated_by_user(self):
-        self.calories.save_settings(120, 2000, 1600, "普通", "ryoji")
-        self.calories.save_settings(90, 1800, 1400, "少ない", "koka")
+        self.calories.save_settings(120, 2000, 1600, "普通", "user1")
+        self.calories.save_settings(90, 1800, 1400, "少ない", "user2")
         self.assertEqual(
-            self.calories.get_settings("ryoji"),
+            self.calories.get_settings("user1"),
             {
                 "protein_goal": 120,
                 "calorie_goal": 2000,
@@ -61,7 +61,7 @@ class NutritionSettingsManagerTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            self.calories.get_settings("koka"),
+            self.calories.get_settings("user2"),
             {
                 "protein_goal": 90,
                 "calorie_goal": 1800,
@@ -72,25 +72,25 @@ class NutritionSettingsManagerTest(unittest.TestCase):
 
     def test_page_owner_is_stable_after_user_switch(self):
         page_user_id = self.manager.active_user_id
-        self.manager.select_user("koka")
+        self.manager.select_user("user2")
         self.manager.update_profile(
-            "良治更新", "2026-07-12", 10, 600, page_user_id
+            "ユーザー1更新", "2026-07-12", 10, 600, page_user_id
         )
         self.calories.save_settings(120, 2000, 1600, "普通", page_user_id)
-        self.assertEqual(self.manager.get_profile("ryoji")["name"], "良治更新")
-        self.assertEqual(self.manager.get_profile("koka")["name"], "胡花")
+        self.assertEqual(self.manager.get_profile("user1")["name"], "ユーザー1更新")
+        self.assertEqual(self.manager.get_profile("user2")["name"], "ユーザー2")
         self.assertEqual(
-            self.calories.get_settings("ryoji")["protein_goal"], 120
+            self.calories.get_settings("user1")["protein_goal"], 120
         )
-        self.assertIsNone(self.calories.get_settings("koka")["protein_goal"])
+        self.assertIsNone(self.calories.get_settings("user2")["protein_goal"])
 
     def test_existing_user_data_and_other_settings_are_preserved(self):
         manager = DataManager(self.path)
-        manager.data["users"]["ryoji"]["settings"] = {
+        manager.data["users"]["user1"]["settings"] = {
             "hydration_goal_ml": 2500,
             "future_setting": "keep",
         }
-        manager.data["users"]["ryoji"]["hydration_records"] = [
+        manager.data["users"]["user1"]["hydration_records"] = [
             {"date": "2026-07-25", "amount": 1800}
         ]
         manager.save()
@@ -98,7 +98,7 @@ class NutritionSettingsManagerTest(unittest.TestCase):
         calories.save_settings(120, 2000, 1600, "普通")
 
         saved = json.loads(self.path.read_text(encoding="utf-8"))
-        user = saved["users"]["ryoji"]
+        user = saved["users"]["user1"]
         self.assertEqual(user["settings"]["hydration_goal_ml"], 2500)
         self.assertEqual(user["settings"]["future_setting"], "keep")
         self.assertEqual(

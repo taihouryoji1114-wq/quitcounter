@@ -46,12 +46,32 @@ class HydrationManager:
             None,
         )
         if record is None:
-            record = {"date": record_date, "amount": 0}
+            record = {"date": record_date, "amount": 0, "entries": []}
             records.append(record)
         record["amount"] = int(record.get("amount", 0)) + amount
+        record.setdefault("entries", []).append(amount)
         records.sort(key=lambda item: item["date"])
         self._data_manager.save()
         return record
+
+    def undo_last(self, record_date=None, user_id=None):
+        record_date = record_date or date.today().isoformat()
+        self._validate_date(record_date)
+        user = self._user(user_id)
+        records = user.get("hydration_records", [])
+        record = next(
+            (item for item in records if item.get("date") == record_date),
+            None,
+        )
+        if record is None or not record.get("entries"):
+            raise ValueError("取り消せる直前の水分記録がありません。")
+
+        amount = int(record["entries"].pop())
+        record["amount"] = max(0, int(record.get("amount", 0)) - amount)
+        if record["amount"] == 0:
+            records.remove(record)
+        self._data_manager.save()
+        return amount
 
     def get_goal(self, user_id=None):
         goal = self._user(user_id).get("settings", {}).get("hydration_goal_ml")

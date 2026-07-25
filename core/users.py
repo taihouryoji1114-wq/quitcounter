@@ -7,8 +7,8 @@ from copy import deepcopy
 
 
 DEFAULT_USERS = {
-    "ryoji": {
-        "profile": {"name": "良治"},
+    "user1": {
+        "profile": {"name": "ユーザー1"},
         "smoking": {
             "start_date": "2026-07-12",
             "cigarettes_per_day": 10,
@@ -16,8 +16,8 @@ DEFAULT_USERS = {
         },
         "workout_records": [],
     },
-    "koka": {
-        "profile": {"name": "胡花"},
+    "user2": {
+        "profile": {"name": "ユーザー2"},
         "smoking": {
             "start_date": "2026-07-01",
             "cigarettes_per_day": 10,

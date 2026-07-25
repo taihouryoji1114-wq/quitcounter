@@ -19,15 +19,44 @@ class NutritionManagerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_foods_are_separated_by_user(self):
-        self.nutrition.add_food("プロテイン", 140, 25, "ryoji")
-        self.nutrition.add_food("ヨーグルト", 100, 10, "koka")
+        self.nutrition.add_food("プロテイン", 140, 25, "user1")
+        self.nutrition.add_food("ヨーグルト", 100, 10, "user2")
         self.assertEqual(
-            [food["name"] for food in self.nutrition.get_foods("ryoji")],
+            [food["name"] for food in self.nutrition.get_foods("user1")],
             ["プロテイン"],
         )
         self.assertEqual(
-            [food["name"] for food in self.nutrition.get_foods("koka")],
+            [food["name"] for food in self.nutrition.get_foods("user2")],
             ["ヨーグルト"],
+        )
+
+    def test_food_can_be_updated_and_deleted(self):
+        food = self.nutrition.add_food("卵", 71, 6.1, "user1")
+        updated = self.nutrition.update_food(
+            food["id"], "卵（1個）", 71, 6.1, "user1"
+        )
+        self.assertEqual(updated["name"], "卵（1個）")
+
+        deleted = self.nutrition.delete_food(food["id"], "user1")
+        self.assertEqual(deleted["id"], food["id"])
+        self.assertEqual(self.nutrition.get_foods("user1"), [])
+
+    def test_meal_can_be_deleted_and_totals_are_updated(self):
+        food = self.nutrition.add_food("卵", 71, 6.1, "user1")
+        meal = self.nutrition.add_meal(
+            "2026-07-25", food["id"], 2, "user1"
+        )
+        self.assertEqual(
+            self.nutrition.daily_summary("2026-07-25", "user1")["calories"],
+            142,
+        )
+
+        deleted = self.nutrition.delete_meal(meal["id"], "user1")
+
+        self.assertEqual(deleted["id"], meal["id"])
+        self.assertEqual(
+            self.nutrition.daily_summary("2026-07-25", "user1")["calories"],
+            0,
         )
 
     def test_amount_calculates_calories_and_protein(self):
@@ -46,40 +75,64 @@ class NutritionManagerTest(unittest.TestCase):
             },
         )
 
+    def test_multiple_foods_are_saved_together(self):
+        egg = self.nutrition.add_food("卵", 71, 6.1)
+        rice = self.nutrition.add_food("ライス", 78, 1.25)
+        meals = self.nutrition.add_meals(
+            "2026-07-25", [egg["id"], rice["id"]]
+        )
+        self.assertEqual(len(meals), 2)
+        self.assertEqual(
+            self.nutrition.daily_summary("2026-07-25")["calories"],
+            149,
+        )
+
+    def test_period_summary_aggregates_week(self):
+        food = self.nutrition.add_food("卵", 71, 6.1)
+        self.nutrition.add_meal("2026-07-20", food["id"], 1)
+        self.nutrition.add_meal("2026-07-25", food["id"], 2)
+        self.nutrition.add_meal("2026-07-27", food["id"], 3)
+        summary = self.nutrition.period_summary(
+            "2026-07-20", "2026-07-26"
+        )
+        self.assertEqual(summary["days"], 7)
+        self.assertEqual(summary["calories"], 213)
+        self.assertEqual(summary["protein"], 18.3)
+
     def test_meals_and_totals_are_separated_by_user(self):
-        ryoji_food = self.nutrition.add_food(
-            "プロテイン", 140, 25, "ryoji"
+        user1_food = self.nutrition.add_food(
+            "プロテイン", 140, 25, "user1"
         )
-        koka_food = self.nutrition.add_food(
-            "ヨーグルト", 100, 10, "koka"
-        )
-        self.nutrition.add_meal(
-            "2026-07-25", ryoji_food["id"], 2, "ryoji"
+        user2_food = self.nutrition.add_food(
+            "ヨーグルト", 100, 10, "user2"
         )
         self.nutrition.add_meal(
-            "2026-07-25", koka_food["id"], 1, "koka"
+            "2026-07-25", user1_food["id"], 2, "user1"
+        )
+        self.nutrition.add_meal(
+            "2026-07-25", user2_food["id"], 1, "user2"
         )
         self.assertEqual(
-            self.nutrition.daily_summary("2026-07-25", "ryoji")["calories"],
+            self.nutrition.daily_summary("2026-07-25", "user1")["calories"],
             280,
         )
         self.assertEqual(
-            self.nutrition.daily_summary("2026-07-25", "koka")["calories"],
+            self.nutrition.daily_summary("2026-07-25", "user2")["calories"],
             100,
         )
 
     def test_page_owner_is_stable_after_user_switch(self):
-        food = self.nutrition.add_food("プロテイン", 140, 25, "ryoji")
+        food = self.nutrition.add_food("プロテイン", 140, 25, "user1")
         page_user_id = self.manager.active_user_id
-        self.manager.select_user("koka")
+        self.manager.select_user("user2")
         self.nutrition.add_meal(
             "2026-07-25", food["id"], 1, page_user_id
         )
         self.assertEqual(
-            len(self.nutrition.get_meal_records("2026-07-25", "ryoji")), 1
+            len(self.nutrition.get_meal_records("2026-07-25", "user1")), 1
         )
         self.assertEqual(
-            len(self.nutrition.get_meal_records("2026-07-25", "koka")), 0
+            len(self.nutrition.get_meal_records("2026-07-25", "user2")), 0
         )
 
     def test_meal_keeps_food_snapshot(self):
@@ -94,7 +147,7 @@ class NutritionManagerTest(unittest.TestCase):
     def test_existing_data_and_goals_are_preserved(self):
         goals = NutritionSettingsManager(self.manager)
         goals.save_settings(120, 2000, 1600, "普通")
-        self.manager.data["users"]["ryoji"]["hydration_records"] = [
+        self.manager.data["users"]["user1"]["hydration_records"] = [
             {"date": "2026-07-25", "amount": 1800}
         ]
         self.manager.save()
@@ -102,7 +155,7 @@ class NutritionManagerTest(unittest.TestCase):
         self.nutrition.add_meal("2026-07-25", food["id"], 1)
 
         saved = json.loads(self.path.read_text(encoding="utf-8"))
-        user = saved["users"]["ryoji"]
+        user = saved["users"]["user1"]
         self.assertEqual(user["settings"]["protein_goal"], 120)
         self.assertEqual(user["settings"]["calorie_goal"], 2000)
         self.assertEqual(

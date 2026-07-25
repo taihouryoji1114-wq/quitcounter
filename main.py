@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 from nicegui import app, ui
 
@@ -11,6 +12,8 @@ app.add_static_files("/static", str(STATIC_DIR))
 # ページ読み込み
 import pages.home
 import pages.hydration
+import pages.login
+import pages.portal
 import pages.smoking
 import pages.settings
 import pages.workout
@@ -18,7 +21,10 @@ import pages.workout
 ui.run(
     title="Habitory",
     host="0.0.0.0",
-    port=8080,
-    reload=True,
+    port=int(os.environ.get("PORT", "8080")),
+    reload=os.environ.get("RENDER") is None,
     favicon=str(STATIC_DIR / "habitory_icon.png"),
+    storage_secret=os.environ.get(
+        "STORAGE_SECRET", "habitory-local-development"
+    ),
 )

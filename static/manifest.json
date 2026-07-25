@@ -1,10 +1,11 @@
 {
   "name": "Habitory",
   "short_name": "Habitory",
-  "start_url": "/",
+  "start_url": "/habitory",
+  "scope": "/habitory",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#4CAF50",
+  "background_color": "#F7F7F5",
+  "theme_color": "#4F7C68",
   "icons": [
     {
       "src": "/static/habitory_icon.png",
