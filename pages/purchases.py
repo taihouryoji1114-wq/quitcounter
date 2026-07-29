@@ -68,7 +68,11 @@ def purchases():
 .camera-modal{position:fixed;inset:0;z-index:9999;background:#05070A;color:#fff;display:grid;grid-template-rows:64px 1fr 140px}.camera-top{display:grid;grid-template-columns:48px 1fr 48px;align-items:center;text-align:center;padding:0 14px}.camera-top button{width:40px;height:40px;border:0;border-radius:50%;background:#ffffff22;color:#fff;font-size:26px}.camera-top b{font-size:13px}.camera-view{position:relative;overflow:hidden;background:#111}.camera-view video{width:100%;height:100%;object-fit:cover}.doc-frame{position:absolute;inset:7%;border:3px solid #fff;border-radius:10px;box-shadow:0 0 0 9999px #00000055}.camera-bottom{display:flex;flex-direction:column;align-items:center;justify-content:center}.camera-bottom p{font-size:10px;color:#B5BEC9;margin:0 0 12px}#shutter{width:70px;height:70px;display:grid;place-items:center;border:3px solid #fff;border-radius:50%;background:transparent}#shutter span{width:56px;height:56px;border-radius:50%;background:#fff}.reading{position:fixed;inset:0;z-index:10000;background:#14243EEE;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}.loader{width:48px;height:48px;border:4px solid #ffffff44;border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}.reading b{margin-top:16px}.reading small{margin-top:7px;color:#D8E1ED}@keyframes spin{to{transform:rotate(360deg)}}.notice{position:fixed;left:50%;bottom:24px;z-index:10001;transform:translateX(-50%);background:#193529;color:#fff;border-radius:12px;padding:12px 18px;font-size:12px;box-shadow:0 10px 30px #0003;white-space:nowrap}
 @media(max-width:520px){.field-grid{grid-template-columns:1fr}.s-card{padding:22px 16px}.items-head,.item-row{grid-template-columns:1.45fr .52fr .67fr 24px}}
 </style>
-
+            ''',
+            sanitize=False,
+        ).classes("w-full")
+        ui.add_body_html(
+            r'''
 <script>
 (() => {
   const $=id=>document.getElementById(id), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
@@ -85,6 +89,5 @@ def purchases():
   $('open-camera').onclick=openCamera;$('close-camera').onclick=closeCamera;$('shutter').onclick=capture;$('retake').onclick=()=>{$('review-card').classList.add('hidden');$('capture-card').classList.remove('hidden')};$('add-item').onclick=()=>{rows.push({name:'',qty:1,price:0});renderRows()};$('save-purchase').onclick=()=>{const record={id:Date.now(),supplier:$('supplier').value.trim()||'仕入先未入力',date:$('delivery-date').value,count:rows.length,total:total(),items:rows};let data=[];try{data=JSON.parse(localStorage.getItem('habitory-purchases')||'[]')}catch(e){}data.unshift(record);localStorage.setItem('habitory-purchases',JSON.stringify(data));history();notify('仕入帳に登録しました');$('review-card').classList.add('hidden');$('capture-card').classList.remove('hidden')};$('clear-history').onclick=()=>{if(confirm('この端末の仕入れ記録をすべて消去しますか？')){localStorage.removeItem('habitory-purchases');history()}};history();
 })();
 </script>
-            ''',
-            sanitize=False,
-        ).classes("w-full")
+            '''
+        )
