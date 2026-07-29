@@ -8,6 +8,7 @@ from core.calories import nutrition_settings
 from core.data import BODY_PARTS, data
 from core.hydration import hydration
 from core.nutrition import nutrition
+from core.reading import reading
 from core.theme import Theme
 from core.utils import days_ago
 
@@ -41,6 +42,8 @@ def record_dialog(record_date, parts, user_id):
             f"合計 {totals['calories']}kcal・タンパク質 {totals['protein']}g"
         ).classes("font-bold q-mt-sm")
         ui.label(f"水分 {water}ml").classes("font-bold q-mt-sm")
+        reading_seconds = reading.total_seconds(record_date, user_id)
+        ui.label(f"読書 {reading_seconds // 60}分").classes("font-bold q-mt-sm")
         ui.button("閉じる", on_click=dialog.close).props("flat").classes("w-full q-mt-md")
     dialog.open()
 
@@ -131,10 +134,9 @@ def workout():
                     with ui.row().classes("items-center no-wrap"):
                         ui.button("今日", on_click=go_today).props("flat dense")
                         ui.button(icon="chevron_right", on_click=lambda: change_month(1)).props("flat round")
-                with ui.element("div").classes("grid grid-cols-8 gap-1 w-full"):
+                with ui.element("div").classes("grid grid-cols-7 gap-1 w-full"):
                     for weekday in ("月", "火", "水", "木", "金", "土", "日"):
                         ui.label(weekday).classes("text-center text-grey-7 text-xs")
-                    ui.label("週報").classes("text-center text-grey-7 text-xs")
                     for week in calendar.monthcalendar(display_month[0].year, display_month[0].month):
                         for number in week:
                             if not number:
@@ -153,29 +155,6 @@ def workout():
                                     with ui.row().classes("gap-1 q-mt-xs flex-wrap"):
                                         for part in parts:
                                             ui.element("span").style(f"background:{PART_COLORS[part]};width:8px;height:8px;border-radius:999px")
-                        week_days = [
-                            date(display_month[0].year, display_month[0].month, number)
-                            for number in week if number
-                        ]
-                        week_start = week_days[0] - timedelta(days=week_days[0].weekday())
-                        week_end = min(week_start + timedelta(days=6), today)
-                        expenditure = nutrition_settings.estimated_daily_expenditure(page_user_id)
-                        with ui.card().classes("calendar-day q-pa-xs"):
-                            if week_start > today:
-                                ui.label("—").classes("text-xs text-grey-6")
-                            elif expenditure is None:
-                                ui.label("設定\n未完了").classes("text-[10px] text-grey-6 whitespace-pre-line")
-                            else:
-                                totals = nutrition.period_summary(
-                                    week_start.isoformat(), week_end.isoformat(), page_user_id
-                                )
-                                balance = totals["calories"] - expenditure * totals["days"]
-                                fat = balance / 7200
-                                ui.label(f"{balance:+,.0f}").classes(
-                                    "text-[10px] font-bold "
-                                    + ("text-negative" if balance > 0 else "text-positive")
-                                )
-                                ui.label(f"{fat:+.2f}kg").classes("text-[10px] text-grey-7")
 
         def change_month(offset):
             year, month = display_month[0].year, display_month[0].month + offset

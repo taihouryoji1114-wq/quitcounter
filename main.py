@@ -14,6 +14,7 @@ import pages.home
 import pages.hydration
 import pages.login
 import pages.portal
+import pages.reading
 import pages.smoking
 import pages.settings
 import pages.workout
