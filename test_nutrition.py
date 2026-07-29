@@ -89,6 +89,26 @@ class NutritionManagerTest(unittest.TestCase):
             149,
         )
 
+    def test_registered_food_can_be_saved_as_multiple_units(self):
+        rice = self.nutrition.add_food("ライス50g", 78, 1.25)
+        meal = self.nutrition.add_meal(
+            "2026-07-25", rice["id"], 8
+        )
+        self.assertEqual(meal["amount"], 8)
+        self.assertEqual(meal["calories"], 624)
+        self.assertEqual(meal["protein"], 10)
+
+    def test_manual_meal_is_included_in_totals(self):
+        meal = self.nutrition.add_manual_meal(
+            "2026-07-25", 650, 32.5, "外食"
+        )
+        self.assertEqual(meal["food_name"], "外食")
+        self.assertIsNone(meal["food_id"])
+        self.assertEqual(
+            self.nutrition.daily_summary("2026-07-25"),
+            {"date": "2026-07-25", "calories": 650, "protein": 32.5},
+        )
+
     def test_period_summary_aggregates_week(self):
         food = self.nutrition.add_food("卵", 71, 6.1)
         self.nutrition.add_meal("2026-07-20", food["id"], 1)

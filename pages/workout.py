@@ -284,8 +284,6 @@ def workout():
                 "食品を登録", icon="add", on_click=save_food
             ).props("outline").classes("w-full")
 
-        ui.label("登録済み食品").classes("text-xl font-bold q-mb-sm")
-
         @ui.refreshable
         def food_list():
             foods = nutrition.get_foods(page_user_id)
@@ -362,7 +360,10 @@ def workout():
                         ui.button(icon="edit", on_click=open_edit).props("flat round")
                         ui.button(icon="delete_outline", on_click=confirm_food_delete).props("flat round color=negative")
 
-        food_list()
+        with ui.expansion(
+            "登録済み食品を見る・編集する", icon="inventory_2"
+        ).classes("surface-card w-full q-mb-md"):
+            food_list()
 
         with ui.card().classes("surface-card w-full q-pa-lg"):
             ui.label("食事を記録").classes("section-kicker q-mb-sm")
@@ -378,8 +379,11 @@ def workout():
                 multiple=True,
             ).props("outlined use-chips").classes("w-full q-mb-sm")
             meal_amount = ui.number(
-                "量（1食分を1）", value=1, min=0.1, step=0.1
-            ).props("outlined suffix=食").classes("w-full q-mb-sm")
+                "選んだ食品の個数", value=1, min=0.1, step=0.1
+            ).props("outlined suffix=個").classes("w-full q-mb-xs")
+            ui.label(
+                "例：ライス50gを100gなら2個、400gなら8個"
+            ).classes("text-xs text-grey-7 q-mb-sm")
 
             def save_meal():
                 try:
@@ -401,6 +405,43 @@ def workout():
             ui.button(
                 "食事を記録", icon="check", on_click=save_meal
             ).classes("w-full")
+
+            with ui.expansion(
+                "カロリー・タンパク質を手入力", icon="edit_note"
+            ).classes("w-full q-mt-md"):
+                manual_name = ui.input(
+                    "メモ（省略できます）", placeholder="外食、間食など"
+                ).props("outlined").classes("w-full q-mb-sm")
+                manual_calories = ui.number(
+                    "カロリー", min=0
+                ).props("outlined suffix=kcal").classes("w-full q-mb-sm")
+                manual_protein = ui.number(
+                    "タンパク質", min=0
+                ).props("outlined suffix=g").classes("w-full q-mb-sm")
+
+                def save_manual_meal():
+                    try:
+                        nutrition.add_manual_meal(
+                            meal_date.value,
+                            manual_calories.value,
+                            manual_protein.value,
+                            manual_name.value,
+                            page_user_id,
+                        )
+                    except (RuntimeError, ValueError) as error:
+                        ui.notify(f"保存できませんでした: {error}", type="negative")
+                        return
+                    manual_name.value = ""
+                    manual_calories.value = None
+                    manual_protein.value = None
+                    nutrition_summary.refresh()
+                    nutrition_history.refresh()
+                    meal_list.refresh()
+                    ui.notify("手入力の食事を記録しました", type="positive")
+
+                ui.button(
+                    "手入力で記録", icon="check", on_click=save_manual_meal
+                ).props("outline").classes("w-full")
 
         ui.label("選択日の食事").classes("text-xl font-bold q-mt-lg q-mb-sm")
 

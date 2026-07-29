@@ -118,6 +118,32 @@ class NutritionManager:
         self._data_manager.save()
         return created
 
+    def add_manual_meal(
+        self, record_date, calories, protein, name="手入力", user_id=None
+    ):
+        """Save nutrition totals without requiring a registered food."""
+        self._validate_date(record_date)
+        name = str(name or "手入力").strip() or "手入力"
+        calories = self._non_negative_number(calories, "カロリー")
+        protein = self._non_negative_number(protein, "タンパク質")
+        if calories == 0 and protein == 0:
+            raise ValueError("カロリーまたはタンパク質を入力してください。")
+
+        record = {
+            "id": uuid4().hex,
+            "date": record_date,
+            "food_id": None,
+            "food_name": name,
+            "amount": 1,
+            "calories": calories,
+            "protein": protein,
+        }
+        user = self._user(user_id)
+        user.setdefault("meal_records", []).append(record)
+        user["meal_records"].sort(key=lambda item: item["date"])
+        self._data_manager.save()
+        return record
+
     def delete_meal(self, meal_id, user_id=None):
         records = self._user(user_id).get("meal_records", [])
         record = next(
