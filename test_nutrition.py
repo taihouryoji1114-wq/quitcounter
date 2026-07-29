@@ -109,6 +109,17 @@ class NutritionManagerTest(unittest.TestCase):
             {"date": "2026-07-25", "calories": 650, "protein": 32.5},
         )
 
+    def test_meals_can_be_grouped_by_morning_lunch_and_dinner(self):
+        egg = self.nutrition.add_food("卵", 71, 6.1)
+        breakfast = self.nutrition.add_meals(
+            "2026-07-25", [egg["id"]], meal_period="朝"
+        )[0]
+        dinner = self.nutrition.add_manual_meal(
+            "2026-07-25", 500, 30, "夕食", meal_period="夜"
+        )
+        self.assertEqual(breakfast["meal_period"], "朝")
+        self.assertEqual(dinner["meal_period"], "夜")
+
     def test_period_summary_aggregates_week(self):
         food = self.nutrition.add_food("卵", 71, 6.1)
         self.nutrition.add_meal("2026-07-20", food["id"], 1)

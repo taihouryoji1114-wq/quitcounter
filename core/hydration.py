@@ -117,12 +117,12 @@ class HydrationManager:
         try:
             numeric = float(amount)
         except (TypeError, ValueError) as error:
-            raise ValueError("水分量は100ml単位で入力してください。") from error
+            raise ValueError("水分量を1ml以上で入力してください。") from error
         if not numeric.is_integer():
-            raise ValueError("水分量は100ml単位で入力してください。")
+            raise ValueError("水分量は整数で入力してください。")
         amount = int(numeric)
-        if amount <= 0 or amount % 100:
-            raise ValueError("水分量は100ml単位で入力してください。")
+        if amount <= 0:
+            raise ValueError("水分量を1ml以上で入力してください。")
         return amount
 
 

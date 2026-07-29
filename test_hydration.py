@@ -47,12 +47,12 @@ class HydrationManagerTest(unittest.TestCase):
         self.assertEqual(self.hydration.get_amount("2026-07-25", "user1"), 100)
         self.assertEqual(self.hydration.get_amount("2026-07-25", "user2"), 0)
 
-    def test_amounts_accumulate_in_one_hundred_ml_units(self):
-        self.hydration.add(300, "2026-07-25")
-        self.hydration.add(500, "2026-07-25")
-        self.assertEqual(self.hydration.get_amount("2026-07-25"), 800)
+    def test_any_positive_whole_ml_amount_can_be_added(self):
+        self.hydration.add(250, "2026-07-25")
+        self.hydration.add(37, "2026-07-25")
+        self.assertEqual(self.hydration.get_amount("2026-07-25"), 287)
         with self.assertRaises(ValueError):
-            self.hydration.add(250, "2026-07-25")
+            self.hydration.add(0, "2026-07-25")
 
     def test_goal_is_optional_and_user_scoped(self):
         self.assertIsNone(self.hydration.get_goal("user1"))

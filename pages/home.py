@@ -3,6 +3,7 @@ from nicegui import ui
 from core.auth import log_out, require_login
 from core.data import data
 from core.hydration import hydration
+from core.nutrition import nutrition
 from core.theme import Theme
 from core.utils import smoking_summary
 
@@ -32,6 +33,7 @@ def home():
     page_user_id = data.active_user_id
     summary = smoking_summary(page_user_id)
     hydration_summary = hydration.summary(user_id=page_user_id)
+    nutrition_summary = nutrition.daily_summary(user_id=page_user_id)
     with content:
         ui.label(f"こんにちは、{profile['name']}さん").classes("section-kicker q-mb-sm")
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
@@ -46,7 +48,10 @@ def home():
         for habit in HABITS:
             subtitle = (
                 f"{summary['days']}日続いています" if habit["title"] == "禁煙"
-                else "今日の記録を残す" if habit["title"] == "筋トレ"
+                else (
+                    f"今日 {nutrition_summary['calories']}kcal"
+                    f" / {nutrition_summary['protein']}gタンパク質"
+                ) if habit["title"] == "筋トレ"
                 else (
                     f"{hydration_summary['amount']} / {hydration_summary['goal']}ml"
                     if hydration_summary["goal"]

@@ -6,6 +6,7 @@ from nicegui import ui
 from core.auth import require_login
 from core.calories import nutrition_settings
 from core.data import BODY_PARTS, data
+from core.hydration import hydration
 from core.nutrition import nutrition
 from core.theme import Theme
 from core.utils import days_ago
@@ -14,15 +15,32 @@ from core.utils import days_ago
 PART_COLORS = {"胸": "#CF6C6C", "背中": "#668BC9", "脚": "#5F9A73", "肩": "#C9A64B", "腕": "#9271B8", "腹筋": "#D88B50"}
 
 
-def record_dialog(record_date, parts):
-    with ui.dialog() as dialog, ui.card().classes("surface-card w-72 q-pa-lg"):
+def record_dialog(record_date, parts, user_id):
+    with ui.dialog() as dialog, ui.card().classes("surface-card w-96 max-w-full q-pa-lg"):
         ui.label(record_date).classes("text-xl font-bold")
         ui.label("この日の記録").classes("text-grey-7 text-sm q-mb-md")
         if parts:
             for part in parts:
                 ui.label(f"●  {part}").style(f"color: {PART_COLORS[part]}").classes("text-lg font-bold q-mb-xs")
         else:
-            ui.label("記録はありません").classes("text-grey-7")
+            ui.label("筋トレ記録はありません").classes("text-grey-7")
+        meals = nutrition.get_meal_records(record_date, user_id)
+        totals = nutrition.daily_summary(record_date, user_id)
+        water = hydration.summary(record_date, user_id)["amount"]
+        ui.separator().classes("q-my-md")
+        ui.label("食事").classes("font-bold")
+        if meals:
+            for meal in meals:
+                ui.label(
+                    f"{meal.get('meal_period', 'その他')}・{meal['food_name']} "
+                    f"{meal['calories']}kcal / {meal['protein']}g"
+                ).classes("text-sm text-grey-7")
+        else:
+            ui.label("食事記録はありません").classes("text-sm text-grey-7")
+        ui.label(
+            f"合計 {totals['calories']}kcal・タンパク質 {totals['protein']}g"
+        ).classes("font-bold q-mt-sm")
+        ui.label(f"水分 {water}ml").classes("font-bold q-mt-sm")
         ui.button("閉じる", on_click=dialog.close).props("flat").classes("w-full q-mt-md")
     dialog.open()
 
@@ -113,9 +131,10 @@ def workout():
                     with ui.row().classes("items-center no-wrap"):
                         ui.button("今日", on_click=go_today).props("flat dense")
                         ui.button(icon="chevron_right", on_click=lambda: change_month(1)).props("flat round")
-                with ui.element("div").classes("grid grid-cols-7 gap-1 w-full"):
+                with ui.element("div").classes("grid grid-cols-8 gap-1 w-full"):
                     for weekday in ("月", "火", "水", "木", "金", "土", "日"):
                         ui.label(weekday).classes("text-center text-grey-7 text-xs")
+                    ui.label("週報").classes("text-center text-grey-7 text-xs")
                     for week in calendar.monthcalendar(display_month[0].year, display_month[0].month):
                         for number in week:
                             if not number:
@@ -124,7 +143,7 @@ def workout():
                             current = date(display_month[0].year, display_month[0].month, number)
                             text_date, parts = current.isoformat(), records.get(current.isoformat(), [])
                             with ui.card().classes("calendar-day q-pa-xs cursor-pointer" + (" today-calendar-day" if current == today else "")).on(
-                                "click", lambda _, d=text_date, p=parts: record_dialog(d, p)
+                                "click", lambda _, d=text_date, p=parts: record_dialog(d, p, page_user_id)
                             ):
                                 ui.label(str(number)).classes(
                                     "today-date-number" if current == today
@@ -134,6 +153,29 @@ def workout():
                                     with ui.row().classes("gap-1 q-mt-xs flex-wrap"):
                                         for part in parts:
                                             ui.element("span").style(f"background:{PART_COLORS[part]};width:8px;height:8px;border-radius:999px")
+                        week_days = [
+                            date(display_month[0].year, display_month[0].month, number)
+                            for number in week if number
+                        ]
+                        week_start = week_days[0] - timedelta(days=week_days[0].weekday())
+                        week_end = min(week_start + timedelta(days=6), today)
+                        expenditure = nutrition_settings.estimated_daily_expenditure(page_user_id)
+                        with ui.card().classes("calendar-day q-pa-xs"):
+                            if week_start > today:
+                                ui.label("—").classes("text-xs text-grey-6")
+                            elif expenditure is None:
+                                ui.label("設定\n未完了").classes("text-[10px] text-grey-6 whitespace-pre-line")
+                            else:
+                                totals = nutrition.period_summary(
+                                    week_start.isoformat(), week_end.isoformat(), page_user_id
+                                )
+                                balance = totals["calories"] - expenditure * totals["days"]
+                                fat = balance / 7200
+                                ui.label(f"{balance:+,.0f}").classes(
+                                    "text-[10px] font-bold "
+                                    + ("text-negative" if balance > 0 else "text-positive")
+                                )
+                                ui.label(f"{fat:+.2f}kg").classes("text-[10px] text-grey-7")
 
         def change_month(offset):
             year, month = display_month[0].year, display_month[0].month + offset
@@ -384,6 +426,9 @@ def workout():
             ui.label(
                 "例：ライス50gを100gなら2個、400gなら8個"
             ).classes("text-xs text-grey-7 q-mb-sm")
+            meal_period = ui.toggle(
+                ["朝", "昼", "夜"], value="朝"
+            ).props("spread no-caps").classes("w-full q-mb-sm")
 
             def save_meal():
                 try:
@@ -392,6 +437,7 @@ def workout():
                         food_select.value,
                         meal_amount.value,
                         page_user_id,
+                        meal_period=meal_period.value,
                     )
                 except (RuntimeError, ValueError) as error:
                     ui.notify(f"保存できませんでした: {error}", type="negative")
@@ -427,6 +473,7 @@ def workout():
                             manual_protein.value,
                             manual_name.value,
                             page_user_id,
+                            meal_period=meal_period.value,
                         )
                     except (RuntimeError, ValueError) as error:
                         ui.notify(f"保存できませんでした: {error}", type="negative")
@@ -451,48 +498,56 @@ def workout():
             if not records:
                 ui.label("この日の食事記録はありません。").classes("text-grey-7")
                 return
-            for record in records:
-                with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
-                    with ui.row().classes("w-full items-center no-wrap"):
-                        with ui.column().classes("gap-0"):
-                            ui.label(record["food_name"]).classes("font-bold")
-                            ui.label(
-                                f"{record['amount']}食・{record['calories']}kcal・"
-                                f"タンパク質 {record['protein']}g"
-                            ).classes("text-sm text-grey-7")
-                        ui.space()
+            for period in ("朝", "昼", "夜", "その他"):
+                period_records = [
+                    record for record in records
+                    if record.get("meal_period", "その他") == period
+                ]
+                if not period_records:
+                    continue
+                ui.label(period).classes("section-kicker q-mt-sm q-mb-xs")
+                for record in period_records:
+                    with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
+                        with ui.row().classes("w-full items-center no-wrap"):
+                            with ui.column().classes("gap-0"):
+                                ui.label(record["food_name"]).classes("font-bold")
+                                ui.label(
+                                    f"{record['amount']}個・{record['calories']}kcal・"
+                                    f"タンパク質 {record['protein']}g"
+                                ).classes("text-sm text-grey-7")
+                            ui.space()
 
-                        def confirm_meal_delete(_, selected=record):
-                            with ui.dialog() as dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
-                                ui.label("この食事を取り消しますか？").classes("text-xl font-bold")
-                                ui.label(selected["food_name"]).classes("text-grey-7 q-mb-md")
+                            def confirm_meal_delete(_, selected=record):
+                                with ui.dialog() as dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
+                                    ui.label("この食事を取り消しますか？").classes("text-xl font-bold")
+                                    ui.label(selected["food_name"]).classes("text-grey-7 q-mb-md")
 
-                                def delete_selected():
-                                    try:
-                                        nutrition.delete_meal(
-                                            selected["id"], page_user_id
-                                        )
-                                    except (RuntimeError, ValueError) as error:
-                                        ui.notify(
-                                            f"取り消せませんでした: {error}",
-                                            type="negative",
-                                        )
-                                        return
-                                    dialog.close()
-                                    meal_list.refresh()
-                                    nutrition_summary.refresh()
-                                    nutrition_history.refresh()
-                                    ui.notify("食事記録を取り消しました", type="positive")
+                                    def delete_selected():
+                                        try:
+                                            nutrition.delete_meal(
+                                                selected["id"], page_user_id
+                                            )
+                                        except (RuntimeError, ValueError) as error:
+                                            ui.notify(
+                                                f"取り消せませんでした: {error}",
+                                                type="negative",
+                                            )
+                                            return
+                                        dialog.close()
+                                        meal_list.refresh()
+                                        nutrition_summary.refresh()
+                                        nutrition_history.refresh()
+                                        ui.notify("食事記録を取り消しました", type="positive")
 
-                                with ui.row().classes("w-full gap-2"):
-                                    ui.button("キャンセル", on_click=dialog.close).props("flat").classes("flex-1")
-                                    ui.button("取り消す", icon="undo", on_click=delete_selected).props("color=negative").classes("flex-1")
-                            dialog.open()
+                                    with ui.row().classes("w-full gap-2"):
+                                        ui.button("キャンセル", on_click=dialog.close).props("flat").classes("flex-1")
+                                        ui.button("取り消す", icon="undo", on_click=delete_selected).props("color=negative").classes("flex-1")
+                                dialog.open()
 
-                        ui.button(
-                            icon="undo",
-                            on_click=confirm_meal_delete,
-                        ).props("flat round color=negative")
+                            ui.button(
+                                icon="undo",
+                                on_click=confirm_meal_delete,
+                            ).props("flat round color=negative")
 
         meal_list()
         meal_date.on("change", lambda _: meal_list.refresh())

@@ -59,13 +59,13 @@ def hydration_page():
         with ui.card().classes("surface-card w-full q-pa-lg"):
             ui.label("水分を記録").classes("section-kicker q-mb-sm")
             with ui.row().classes("w-full gap-2 q-mb-md"):
-                for amount in (100, 300, 500):
+                for amount in (100, 250, 500):
                     ui.button(
                         f"+{amount}ml",
                         on_click=lambda _, value=amount: add_amount(value),
                     ).props("outline").classes("flex-1")
             custom_amount = ui.number(
-                "任意入力（ml）", min=100, step=100
+                "任意入力（ml）", min=1, step=1
             ).props("outlined suffix=ml").classes("w-full q-mb-sm")
             ui.button(
                 "記録する",
