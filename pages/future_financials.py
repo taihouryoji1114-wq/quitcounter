@@ -23,7 +23,8 @@ def future_financials():
     <div class="input-grid">
       <label>売上高<input id="sales" inputmode="numeric" value="3000000"></label>
       <label>売上原価<input id="cogs" inputmode="numeric" value="1200000"></label>
-      <label>一般管理費<input id="sga" inputmode="numeric" value="1100000"></label>
+      <label>人件費<input id="personnel" inputmode="numeric" value="700000"></label>
+      <label>その他一般管理費<input id="other-sga" inputmode="numeric" value="400000"></label>
       <label>営業外収益<input id="non-op-income" inputmode="numeric" value="0"></label>
       <label>営業外費用・支払利息<input id="non-op-expense" inputmode="numeric" value="50000"></label>
       <label>目標経常利益<input id="target-profit" inputmode="numeric" value="700000"></label>
@@ -33,7 +34,7 @@ def future_financials():
   <section class="mk-card result-card">
     <div class="mk-head"><div><small>PROFIT</small><h2>利益の流れ</h2></div><span>月間</span></div>
     <div id="profit-summary" class="summary-grid"></div>
-    <div id="profit-map" class="profit-map" aria-label="利益構造図"></div>
+    <div id="profit-map" class="box-map" aria-label="売上を原価、粗利、一般管理費、利益に分解した図"></div>
     <div id="sales-answer" class="answer"></div>
   </section>
 
@@ -50,6 +51,7 @@ def future_financials():
 </div>
 <style>
 #mirai-app{width:100%;display:grid;gap:16px}.mk-card{background:#fff;border:1px solid #E5E9E6;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(39,55,45,.055)}.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.mk-head small{color:#4F7C68;font-weight:800;letter-spacing:.14em}.mk-head h2{font-size:19px;margin:3px 0 0}.mk-head span{color:#7A867F;font-size:11px}.mk-head button{border:0;border-radius:10px;background:#EDF5F0;color:#39745A;padding:9px 14px;font-weight:700}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.input-grid label{color:#68746D;font-size:10px;font-weight:700}.input-grid input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;font-size:14px;outline:none}.input-grid input:focus{border-color:#4F7C68;box-shadow:0 0 0 3px rgba(79,124,104,.1)}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.summary{background:#F5F8F6;border-radius:12px;padding:12px}.summary small{display:block;color:#748078;font-size:9px}.summary b{display:block;margin-top:3px;font-size:15px}.summary.negative b{color:#C84B45}.profit-map{display:grid;gap:7px}.money-row{display:grid;grid-template-columns:84px 1fr 88px;gap:8px;align-items:center;font-size:11px}.money-track{height:30px;background:#F0F2F0;border-radius:7px;overflow:hidden}.money-bar{height:100%;min-width:2px;border-radius:7px;display:flex;align-items:center;padding:0 8px;box-sizing:border-box;color:#fff;font-size:9px;white-space:nowrap}.sales-bar{background:#355F4C}.cost-bar{background:#94A79D}.gross-bar{background:#4F8C70}.sga-bar{background:#C2A56E}.ordinary-bar{background:#4B77B7}.negative-bar{background:#C85C57}.money-value{text-align:right;font-weight:700}.answer{margin-top:18px;border-radius:15px;background:#EAF1FF;padding:16px;color:#244F89}.answer small{display:block;font-size:10px}.answer b{display:block;font-size:22px;margin-top:3px}.answer span{font-size:11px}.compact{margin-bottom:18px}.cash-flow{display:grid;gap:7px}.cash-line{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #EEF0EE;font-size:12px}.cash-line strong{font-size:14px}.cash-line.final{border:0;border-radius:12px;background:#F3F6F4;padding:14px}.cash-line.final strong.negative{color:#C84B45}@media(max-width:520px){.mk-card{padding:18px 15px}.input-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.money-row{grid-template-columns:70px 1fr 78px}.money-track{height:27px}}
+.box-map{height:360px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:#E8ECE9;padding:5px;border-radius:16px;overflow:hidden}.box-column{min-width:0;height:100%;display:flex;flex-direction:column;gap:5px}.box-spacer{min-height:0}.money-box{min-height:34px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-radius:11px;padding:7px;box-sizing:border-box;overflow:hidden;color:#fff}.money-box span{font-size:11px;font-weight:700}.money-box b{font-size:14px;margin-top:3px}.box-sales{height:100%;background:#355F4C}.box-cost{background:#82988D}.box-gross{background:#4F8C70}.box-personnel{background:#B28C53}.box-other{background:#C3A976}.box-profit{background:#4B77B7}.box-loss{background:#C85C57}@media(max-width:520px){.box-map{height:300px;gap:3px;padding:3px}.box-column{gap:3px}.money-box{padding:4px}.money-box span{font-size:9px}.money-box b{font-size:11px}}
 </style>
             ''',
             sanitize=False,
@@ -61,21 +63,21 @@ def future_financials():
   function init(){
     const root=document.getElementById('mirai-app');
     if(!root){setTimeout(init,100);return}
-    const $=id=>document.getElementById(id), ids=['sales','cogs','sga','non-op-income','non-op-expense','target-profit','consumption-tax','corporate-tax','loan-payment','investment'];
+    const $=id=>document.getElementById(id), ids=['sales','cogs','personnel','other-sga','non-op-income','non-op-expense','target-profit','consumption-tax','corporate-tax','loan-payment','investment'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
-    function bar(label,value,max,cls){const width=Math.max(0,Math.min(100,max?value/max*100:0));return `<div class="money-row"><span>${label}</span><div class="money-track"><div class="money-bar ${cls}" style="width:${width}%"></div></div><span class="money-value">${yen(value)}</span></div>`}
+    function box(label,value,share,cls){return `<div class="money-box ${cls}" style="flex:${Math.max(share,.035)}"><span>${label}</span><b>${yen(value)}</b></div>`}
     function update(){
-      const sales=num('sales'),cogs=num('cogs'),sga=num('sga'),noi=num('non-op-income'),noe=num('non-op-expense'),target=num('target-profit');
+      const sales=num('sales'),cogs=num('cogs'),personnel=num('personnel'),otherSga=num('other-sga'),sga=personnel+otherSga,noi=num('non-op-income'),noe=num('non-op-expense'),target=num('target-profit');
       const gross=sales-cogs,operating=gross-sga,ordinary=operating+noi-noe,rate=sales?cogs/sales:0,required=(1-rate)>0?(sga+noe-noi+target)/(1-rate):0;
       $('profit-summary').innerHTML=[['粗利',gross],['営業利益',operating],['経常利益',ordinary]].map(x=>`<div class="summary ${x[1]<0?'negative':''}"><small>${x[0]}</small><b>${yen(x[1])}</b></div>`).join('');
-      const max=Math.max(sales,cogs,Math.abs(gross),sga,Math.abs(ordinary),1);
-      $('profit-map').innerHTML=bar('売上',sales,max,'sales-bar')+bar('原価',cogs,max,'cost-bar')+bar('粗利',Math.max(0,gross),max,gross<0?'negative-bar':'gross-bar')+bar('一般管理費',sga,max,'sga-bar')+bar('経常利益',Math.abs(ordinary),max,ordinary<0?'negative-bar':'ordinary-bar');
+      const base=Math.max(sales,1),costShare=Math.min(cogs/base,1),grossShare=Math.max(gross/base,0),personnelShare=personnel/base,otherShare=otherSga/base,profitShare=Math.max(operating/base,0);
+      $('profit-map').innerHTML=`<div class="box-column">${box('売上',sales,1,'box-sales')}</div><div class="box-column">${box('原価',cogs,costShare,'box-cost')}${box('粗利',gross,grossShare,gross<0?'box-loss':'box-gross')}</div><div class="box-column"><div class="box-spacer" style="flex:${costShare}"></div>${box('人件費',personnel,personnelShare,'box-personnel')}${box('その他経費',otherSga,otherShare,'box-other')}${box(operating<0?'営業損失':'営業利益',Math.abs(operating),Math.max(profitShare,Math.abs(operating)/base),operating<0?'box-loss':'box-profit')}</div>`;
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const ct=num('consumption-tax'),corp=num('corporate-tax'),loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
     }
     ids.forEach(id=>$(id).addEventListener('input',update));
-    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved)ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]})}catch(e){}
+    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-sga').value=Math.round(saved.sga*.35)}}}catch(e){}
     $('save-plan').onclick=()=>{const data={};ids.forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='保存',1400)};
     update();
   }
