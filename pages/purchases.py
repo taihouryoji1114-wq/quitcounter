@@ -75,6 +75,11 @@ def purchases():
             r'''
 <script>
 (() => {
+  function init() {
+  if (!document.getElementById('open-camera')) {
+    setTimeout(init, 100);
+    return;
+  }
   const $=id=>document.getElementById(id), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
   let stream=null, rows=[];
   const today=new Date(); $('delivery-date').value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
@@ -87,6 +92,8 @@ def purchases():
   async function capture(){const v=$('camera-video');if(!v.videoWidth)return;const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0,c.width,c.height);closeCamera();$('reading').classList.remove('hidden');try{const worker=await Tesseract.createWorker('jpn+eng',1,{logger:m=>{if(m.status==='recognizing text')$('progress').textContent=`文字を読み取っています ${Math.round(m.progress*100)}%`}});const result=await worker.recognize(c);await worker.terminate();rows=parseText(result.data.text);if(!rows.length)rows=[{name:'',qty:1,price:0}];$('read-status').textContent=rows[0].name?`${rows.length}件の候補を読み取りました`:'明細を判定できませんでした。入力してください';renderRows();$('capture-card').classList.add('hidden');$('review-card').classList.remove('hidden')}catch(e){rows=[{name:'',qty:1,price:0}];renderRows();$('read-status').textContent='読取ができませんでした。入力してください';$('capture-card').classList.add('hidden');$('review-card').classList.remove('hidden')}finally{c.width=1;c.height=1;$('reading').classList.add('hidden')}}
   function history(){let data=[];try{data=JSON.parse(localStorage.getItem('habitory-purchases')||'[]')}catch(e){}const root=$('history');root.innerHTML=data.length?'':'<div class="empty-history">まだ記録がありません</div>';data.slice(0,12).forEach(x=>{const d=document.createElement('div');d.className='history-card';d.innerHTML=`<b>${x.supplier}</b><small>${x.date} ・ ${x.count}品</small><strong>${yen(x.total)}</strong>`;root.appendChild(d)})}
   $('open-camera').onclick=openCamera;$('close-camera').onclick=closeCamera;$('shutter').onclick=capture;$('retake').onclick=()=>{$('review-card').classList.add('hidden');$('capture-card').classList.remove('hidden')};$('add-item').onclick=()=>{rows.push({name:'',qty:1,price:0});renderRows()};$('save-purchase').onclick=()=>{const record={id:Date.now(),supplier:$('supplier').value.trim()||'仕入先未入力',date:$('delivery-date').value,count:rows.length,total:total(),items:rows};let data=[];try{data=JSON.parse(localStorage.getItem('habitory-purchases')||'[]')}catch(e){}data.unshift(record);localStorage.setItem('habitory-purchases',JSON.stringify(data));history();notify('仕入帳に登録しました');$('review-card').classList.add('hidden');$('capture-card').classList.remove('hidden')};$('clear-history').onclick=()=>{if(confirm('この端末の仕入れ記録をすべて消去しますか？')){localStorage.removeItem('habitory-purchases');history()}};history();
+  }
+  init();
 })();
 </script>
             '''
