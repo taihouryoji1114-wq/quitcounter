@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_login, selected_user_id
 from core.data import data
 from core.reading import reading
 from core.theme import Theme
@@ -22,7 +22,7 @@ def reading_page():
     if not require_login():
         return
     Theme.page("読書")
-    page_user_id = data.active_user_id
+    page_user_id = selected_user_id()
     today = date.today().isoformat()
     content = Theme.shell("読書", "本と過ごした時間を、少しずつ。", back_to="/habitory")
 

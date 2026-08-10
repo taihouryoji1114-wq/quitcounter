@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_login, selected_user_id
 from core.data import data
 from core.theme import Theme
 from core.utils import smoking_summary
@@ -11,7 +11,7 @@ def smoking():
     if not require_login():
         return
     Theme.page("禁煙")
-    page_user_id = data.active_user_id
+    page_user_id = selected_user_id()
     summary = smoking_summary(page_user_id)
     content = Theme.shell("禁煙", "静かな毎日の積み重ね", back_to="/habitory")
     with content:

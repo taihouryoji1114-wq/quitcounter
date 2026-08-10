@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_login, selected_user_id
 from core.calories import ACTIVITY_FACTORS, nutrition_settings
 from core.data import data
 from core.hydration import hydration
@@ -12,7 +12,7 @@ def settings():
     if not require_login():
         return
     Theme.page("設定")
-    page_user_id = data.active_user_id
+    page_user_id = selected_user_id()
     profile = data.get_profile(page_user_id)
     smoking = data.get_smoking(page_user_id)
     hydration_goal = hydration.get_goal(page_user_id)

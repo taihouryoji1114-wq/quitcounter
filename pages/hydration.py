@@ -2,7 +2,7 @@ from datetime import date
 
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_login, selected_user_id
 from core.data import data
 from core.hydration import hydration
 from core.theme import Theme
@@ -13,7 +13,7 @@ def hydration_page():
     if not require_login():
         return
     Theme.page("水分")
-    page_user_id = data.active_user_id
+    page_user_id = selected_user_id()
     today = date.today().isoformat()
     content = Theme.shell("水分", "今日も、こまめにひと息。", back_to="/habitory")
 

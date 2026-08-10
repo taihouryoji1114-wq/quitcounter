@@ -11,6 +11,7 @@ app.add_static_files("/static", str(STATIC_DIR))
 
 # ページ読み込み
 import pages.home
+import pages.calendar_page
 import pages.hydration
 import pages.login
 import pages.portal

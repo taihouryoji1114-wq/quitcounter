@@ -31,3 +31,24 @@ def log_in():
 def log_out():
     app.storage.user.clear()
     ui.navigate.to("/login")
+
+
+def selected_user_id():
+    """Return the profile selected in this browser only."""
+    from core.data import data
+
+    users = data.users.get_users()
+    stored = app.storage.user.get("selected_user_id")
+    if stored in users:
+        return stored
+    default = "user1" if "user1" in users else next(iter(users))
+    app.storage.user["selected_user_id"] = default
+    return default
+
+
+def select_user_for_browser(user_id):
+    from core.data import data
+
+    data.users.get_user(user_id)
+    app.storage.user["selected_user_id"] = user_id
+    return user_id

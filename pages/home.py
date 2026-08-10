@@ -2,7 +2,7 @@ from datetime import date
 
 from nicegui import ui
 
-from core.auth import log_out, require_login
+from core.auth import log_out, require_login, select_user_for_browser, selected_user_id
 from core.data import data
 from core.hydration import hydration
 from core.nutrition import nutrition
@@ -15,6 +15,7 @@ HABITS = (
     {"title": "禁煙", "icon": "🚭", "accent": "#D96C63", "route": "/habitory/smoking"},
     {"title": "筋トレ", "icon": "💪", "accent": "#5B8269", "route": "/habitory/workout"},
     {"title": "読書", "icon": "📚", "accent": "#8B7BB8", "route": "/habitory/reading"},
+    {"title": "カレンダー", "icon": "🗓️", "accent": "#B27A52", "route": "/habitory/calendar"},
     {"title": "水分", "icon": "💧", "accent": "#659BB9", "route": "/habitory/hydration"},
 )
 
@@ -31,9 +32,9 @@ def home():
             ui.button(icon="logout", on_click=log_out).props("flat round").classes("text-grey-8")
 
     content = Theme.shell("Habitory", "育てる、毎日の習慣", action=settings_action)
-    current_user = data.get_current_user()
+    page_user_id = selected_user_id()
+    current_user = data.users.get_user(page_user_id)
     profile = current_user["profile"]
-    page_user_id = data.active_user_id
     summary = smoking_summary(page_user_id)
     hydration_summary = hydration.summary(user_id=page_user_id)
     nutrition_summary = nutrition.daily_summary(user_id=page_user_id)
@@ -45,7 +46,7 @@ def home():
             ui.label("ユーザーを選択").classes("section-kicker q-mb-sm")
             with ui.row().classes("w-full gap-2"):
                 for user_id, user in data.users.get_users().items():
-                    selected = user_id == data.active_user_id
+                    selected = user_id == page_user_id
                     ui.button(
                         user["profile"]["name"],
                         on_click=lambda _, value=user_id: switch_user(value),
@@ -66,6 +67,7 @@ def home():
                     f"今日 {reading_seconds // 60}分"
                     + (f" / 目標 {reading_goal}分" if reading_goal else "")
                 ) if habit["title"] == "読書"
+                else "すべての記録を振り返る" if habit["title"] == "カレンダー"
                 else "近日公開"
             )
             with ui.card().classes("habit-card w-full q-pa-lg q-mb-md cursor-pointer").on(
@@ -80,5 +82,5 @@ def home():
                     ui.icon("chevron_right").style(f"color: {habit['accent']}").classes("text-2xl")
 
     def switch_user(user_id):
-        data.select_user(user_id)
+        select_user_for_browser(user_id)
         ui.navigate.reload()
