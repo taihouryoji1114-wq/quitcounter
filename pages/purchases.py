@@ -104,6 +104,9 @@ def purchase_page():
                 amount_10 = ui.number("10％対象の小計", min=0, step=1, value=0).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full")
+                amount_1 = ui.number(
+                    "1％対象の小計（制度開始後に使用）", min=0, step=1, value=0
+                ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                 exempt = ui.number("非課税・対象外の小計", min=0, step=1, value=0).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full")
@@ -122,6 +125,9 @@ def purchase_page():
                     stated_tax_10 = ui.number("記載されている10％税額", min=0, step=1).props(
                         "outlined prefix=¥ inputmode=numeric"
                     ).classes("w-full")
+                    stated_tax_1 = ui.number("記載されている1％税額", min=0, step=1).props(
+                        "outlined prefix=¥ inputmode=numeric"
+                    ).classes("w-full")
                 tax_result = ui.label().classes(
                     "w-full rounded-xl bg-green-50 text-green-900 q-pa-md font-bold"
                 )
@@ -129,13 +135,15 @@ def purchase_page():
                 def calculate_breakdown(notify=False):
                     try:
                         result = purchases.calculate_tax_breakdown(
-                            amount_8.value,
-                            amount_10.value,
-                            exempt.value,
-                            price_mode.value,
-                            rounding.value,
-                            stated_tax_8.value,
-                            stated_tax_10.value,
+                            amount_8=amount_8.value,
+                            amount_10=amount_10.value,
+                            exempt=exempt.value,
+                            price_mode=price_mode.value,
+                            rounding=rounding.value,
+                            stated_tax_8=stated_tax_8.value,
+                            stated_tax_10=stated_tax_10.value,
+                            amount_1=amount_1.value,
+                            stated_tax_1=stated_tax_1.value,
                         )
                     except ValueError as error:
                         tax_result.text = "金額を入力すると合計を表示します"
@@ -143,12 +151,15 @@ def purchase_page():
                             ui.notify(str(error), type="negative")
                         return None
                     tax_result.text = (
-                        f"消費税 ¥{result['tax_8'] + result['tax_10']:,}　"
+                        f"消費税 ¥{result['tax_1'] + result['tax_8'] + result['tax_10']:,}　"
                         f"支払合計 ¥{result['total']:,}"
                     )
                     return result
 
-                for field in (amount_8, amount_10, exempt, stated_tax_8, stated_tax_10):
+                for field in (
+                    amount_1, amount_8, amount_10, exempt,
+                    stated_tax_1, stated_tax_8, stated_tax_10,
+                ):
                     field.on("update:model-value", lambda _: calculate_breakdown())
                 price_mode.on("update:model-value", lambda _: calculate_breakdown())
                 rounding.on("update:model-value", lambda _: calculate_breakdown())
@@ -188,8 +199,8 @@ def purchase_page():
                     ui.notify(f"保存できませんでした: {error}", type="negative")
                     return
                 amount.value = None
-                amount_8.value = amount_10.value = exempt.value = 0
-                stated_tax_8.value = stated_tax_10.value = None
+                amount_1.value = amount_8.value = amount_10.value = exempt.value = 0
+                stated_tax_1.value = stated_tax_8.value = stated_tax_10.value = None
                 supplier_shortcuts.refresh()
                 totals.refresh()
                 history.refresh()
@@ -263,9 +274,10 @@ def purchase_page():
                             if breakdown:
                                 mode = "税込" if breakdown["price_mode"] == "included" else "税抜"
                                 ui.label(
-                                    f"{mode}・8％ ¥{breakdown['amount_8']:,}・"
+                                    f"{mode}・1％ ¥{breakdown.get('amount_1', 0):,}・"
+                                    f"8％ ¥{breakdown['amount_8']:,}・"
                                     f"10％ ¥{breakdown['amount_10']:,}・"
-                                    f"税 ¥{breakdown['tax_8'] + breakdown['tax_10']:,}"
+                                    f"税 ¥{breakdown.get('tax_1', 0) + breakdown['tax_8'] + breakdown['tax_10']:,}"
                                 ).classes("text-[10px] text-grey-6")
                         ui.space()
                         ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
@@ -307,13 +319,20 @@ def purchase_page():
                                         value=existing.get("price_mode", "included"),
                                     ).props("spread no-caps").classes("w-full")
                                     edit_amount_8 = ui.number(
-                                        "8％対象額", value=existing.get("amount_8", 0),
+                                        "8％対象額",
+                                        value=existing.get(
+                                            "amount_8", selected["total"] if not existing else 0
+                                        ),
                                         min=0, step=1,
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                     edit_amount_10 = ui.number(
                                         "10％対象額",
-                                        value=existing.get("amount_10", selected["total"]),
+                                        value=existing.get("amount_10", 0),
                                         min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    edit_amount_1 = ui.number(
+                                        "1％対象額（制度開始後に使用）",
+                                        value=existing.get("amount_1", 0), min=0, step=1,
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                     edit_exempt = ui.number(
                                         "非課税・対象外額", value=existing.get("exempt", 0),
@@ -331,6 +350,10 @@ def purchase_page():
                                     edit_tax_10 = ui.number(
                                         "納品書記載の10％税額",
                                         value=existing.get("tax_10"), min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    edit_tax_1 = ui.number(
+                                        "納品書記載の1％税額",
+                                        value=existing.get("tax_1"), min=0, step=1,
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                 edit_invoice = ui.select(
                                     {
@@ -350,13 +373,15 @@ def purchase_page():
                                     try:
                                         if edit_mode.value == "tax":
                                             edited_breakdown = purchases.calculate_tax_breakdown(
-                                                edit_amount_8.value,
-                                                edit_amount_10.value,
-                                                edit_exempt.value,
-                                                edit_price_mode.value,
-                                                edit_rounding.value,
-                                                edit_tax_8.value,
-                                                edit_tax_10.value,
+                                                amount_8=edit_amount_8.value,
+                                                amount_10=edit_amount_10.value,
+                                                exempt=edit_exempt.value,
+                                                price_mode=edit_price_mode.value,
+                                                rounding=edit_rounding.value,
+                                                stated_tax_8=edit_tax_8.value,
+                                                stated_tax_10=edit_tax_10.value,
+                                                amount_1=edit_amount_1.value,
+                                                stated_tax_1=edit_tax_1.value,
                                             )
                                             edited_total = edited_breakdown["total"]
                                         else:

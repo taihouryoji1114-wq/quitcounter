@@ -70,6 +70,8 @@ class PurchaseManager:
         rounding="floor",
         stated_tax_8=None,
         stated_tax_10=None,
+        amount_1=0,
+        stated_tax_1=None,
     ):
         """Calculate one invoice's tax once per rate, as required for invoices."""
         if price_mode not in {"included", "excluded"}:
@@ -78,14 +80,19 @@ class PurchaseManager:
             raise ValueError("端数処理を選択してください。")
         amount_8 = self._validate_nonnegative(amount_8, "8％対象額")
         amount_10 = self._validate_nonnegative(amount_10, "10％対象額")
+        amount_1 = self._validate_nonnegative(amount_1, "1％対象額")
         exempt = self._validate_nonnegative(exempt, "非課税・対象外額")
-        if amount_8 + amount_10 + exempt <= 0:
+        if amount_1 + amount_8 + amount_10 + exempt <= 0:
             raise ValueError("税率別の金額を1円以上入力してください。")
 
         if price_mode == "excluded":
+            calculated_1 = self._round_tax(Decimal(amount_1) * Decimal("0.01"), rounding)
             calculated_8 = self._round_tax(Decimal(amount_8) * Decimal("0.08"), rounding)
             calculated_10 = self._round_tax(Decimal(amount_10) * Decimal("0.10"), rounding)
         else:
+            calculated_1 = self._round_tax(
+                Decimal(amount_1) * Decimal(1) / Decimal(101), rounding
+            )
             calculated_8 = self._round_tax(
                 Decimal(amount_8) * Decimal(8) / Decimal(108), rounding
             )
@@ -93,17 +100,20 @@ class PurchaseManager:
                 Decimal(amount_10) * Decimal(10) / Decimal(110), rounding
             )
 
+        tax_1 = self._optional_tax(stated_tax_1, calculated_1, "1％の消費税")
         tax_8 = self._optional_tax(stated_tax_8, calculated_8, "8％の消費税")
         tax_10 = self._optional_tax(stated_tax_10, calculated_10, "10％の消費税")
-        total = amount_8 + amount_10 + exempt
+        total = amount_1 + amount_8 + amount_10 + exempt
         if price_mode == "excluded":
-            total += tax_8 + tax_10
+            total += tax_1 + tax_8 + tax_10
         return {
             "price_mode": price_mode,
             "rounding": rounding,
+            "amount_1": amount_1,
             "amount_8": amount_8,
             "amount_10": amount_10,
             "exempt": exempt,
+            "tax_1": tax_1,
             "tax_8": tax_8,
             "tax_10": tax_10,
             "total": total,
@@ -274,7 +284,10 @@ class PurchaseManager:
             raise ValueError("消費税の内訳が正しくありません。")
         if int(breakdown["total"]) != total:
             raise ValueError("消費税の計算結果と合計金額が一致しません。")
-        return {key: breakdown[key] for key in required}
+        result = {key: breakdown[key] for key in required}
+        result["amount_1"] = breakdown.get("amount_1", 0)
+        result["tax_1"] = breakdown.get("tax_1", 0)
+        return result
 
 
 from core.data import data  # noqa: E402

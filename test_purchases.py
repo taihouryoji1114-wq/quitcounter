@@ -57,6 +57,18 @@ class PurchaseManagerTest(unittest.TestCase):
         self.assertEqual(breakdown["tax_10"], 1000)
         self.assertEqual(breakdown["total"], 22100)
 
+    def test_one_percent_rate_can_be_recorded(self):
+        included = self.purchases.calculate_tax_breakdown(
+            amount_1=10100, price_mode="included"
+        )
+        self.assertEqual(included["tax_1"], 100)
+        self.assertEqual(included["total"], 10100)
+        excluded = self.purchases.calculate_tax_breakdown(
+            amount_1=10000, price_mode="excluded"
+        )
+        self.assertEqual(excluded["tax_1"], 100)
+        self.assertEqual(excluded["total"], 10100)
+
     def test_suppliers_are_reused_without_duplicates(self):
         self.purchases.add("2026-08-10", "市場A", 12000)
         self.purchases.add("2026-08-11", "市場A", 5000)
