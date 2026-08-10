@@ -23,10 +23,9 @@ def sales_page():
     )
 
     with content:
+        calendar_slot = ui.column().classes("w-full")
+
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
-            sales_date = ui.input("日付", value=today.isoformat()).props(
-                "type=date outlined"
-            ).classes("w-full q-mb-sm")
             with ui.card().classes("w-full q-pa-md q-mb-sm").style(
                 "background:#FFF9F1;border:1px solid #F0DFC9;border-radius:18px"
             ):
@@ -72,8 +71,7 @@ def sales_page():
             ).classes("text-[10px] text-grey-6 q-mb-sm")
 
             def save_sales():
-                record_date = str(sales_date.value or "")
-                selected_day[0] = record_date
+                record_date = selected_day[0]
                 try:
                     financials.set_daily_sales(
                         record_date,
@@ -177,7 +175,6 @@ def sales_page():
         def select_sales_day(value=None):
             if value:
                 selected_day[0] = str(value)
-                sales_date.value = selected_day[0]
             records = financials.sales_records(record_date=selected_day[0])
             record = records[0] if records else {}
             lunch_sales.value = record.get("lunch_sales") or None
@@ -231,7 +228,8 @@ def sales_page():
                                 elif recorded:
                                     ui.icon("check", color="positive", size="18px")
 
-        sales_calendar()
+        with calendar_slot:
+            sales_calendar()
 
         @ui.refreshable
         def history():
@@ -283,12 +281,3 @@ def sales_page():
                         )
 
         history()
-
-        sales_date.on_value_change(
-            lambda event: select_sales_day(event.value)
-        )
-        sales_date.on(
-            "change",
-            lambda event: select_sales_day(event.args),
-            js_handler="(event) => emit(event.target.value)",
-        )
