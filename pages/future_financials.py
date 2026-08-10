@@ -2,7 +2,7 @@ from datetime import date
 
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import log_out, require_login
 from core.purchases import purchases
 from core.theme import Theme
 
@@ -12,10 +12,18 @@ def future_financials_home():
     if not require_login():
         return
     Theme.page("未来決算")
+    def exit_action():
+        ui.button(icon="logout", on_click=log_out).props(
+            "flat round aria-label='R-BASEへ戻る'"
+        ).classes(
+            "text-grey-8"
+        ).tooltip("R-BASEへ戻る")
+
     content = Theme.shell(
-        "未来決算",
+        "経営ダッシュボード",
         "毎日の入力から、今月の経営状況を見える化",
-        back_to="/",
+        action=exit_action,
+        brand="未来決算",
     )
     current_month = date.today().strftime("%Y-%m")
     purchase_total = purchases.monthly_total(current_month, kind="cost")
@@ -58,23 +66,7 @@ def future_financials():
         "会社のお金を、利益と資金繰りに分けて見える化",
         back_to="/mirai-kessan",
     )
-    current_month = date.today().strftime("%Y-%m")
-    purchase_total = purchases.monthly_total(current_month, kind="cost")
-    other_expense_total = purchases.monthly_total(current_month, kind="expense")
     with content:
-        with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
-            ui.label("仕入れノート連携").classes("section-kicker")
-            ui.label(
-                f"{current_month.replace('-', '年')}月の仕入れ実績　¥{purchase_total:,}"
-            ).classes("text-xl font-bold q-mt-xs")
-            ui.label(
-                f"その他経費　¥{other_expense_total:,}"
-            ).classes("text-sm font-bold q-mt-xs")
-            ui.label(
-                "今月の仕入れ合計を、下の売上原価へ自動反映しています"
-                if purchase_total else
-                "今月の仕入れを入力すると、売上原価へ自動反映されます"
-            ).classes("text-xs text-grey-7 q-mt-xs")
         ui.html(
             r'''
 <div id="mirai-app">
@@ -82,8 +74,14 @@ def future_financials():
     <div class="mk-head"><div><small>PLAN</small><h2>月間計画を入力</h2></div><button id="save-plan">保存</button></div>
     <div class="input-grid">
       <label>売上高<input id="sales" inputmode="numeric" value="3000000"></label>
-      <label>売上原価<input id="cogs" inputmode="numeric" value="1200000"></label>
-      <label>人件費<input id="personnel" inputmode="numeric" value="700000"></label>
+      <div class="dual-plan-field">
+        <div class="dual-plan-head"><span>売上原価</span><select id="cogs-mode"><option value="rate">比率で入力</option><option value="amount">金額で入力</option></select></div>
+        <div class="dual-plan-inputs"><label>金額<input id="cogs" inputmode="numeric" value="900000"></label><label>売上比率（%）<input id="cogs-rate" inputmode="decimal" value="30"></label></div>
+      </div>
+      <div class="dual-plan-field">
+        <div class="dual-plan-head"><span>人件費</span><select id="personnel-mode"><option value="rate">比率で入力</option><option value="amount">金額で入力</option></select></div>
+        <div class="dual-plan-inputs"><label>金額<input id="personnel" inputmode="numeric" value="750000"></label><label>売上比率（%）<input id="personnel-rate" inputmode="decimal" value="25"></label></div>
+      </div>
       <label>その他一般管理費<input id="other-sga" inputmode="numeric" value="400000"></label>
       <label>営業外収益<input id="non-op-income" inputmode="numeric" value="0"></label>
       <label>営業外費用・支払利息<input id="non-op-expense" inputmode="numeric" value="50000"></label>
@@ -111,7 +109,7 @@ def future_financials():
   </section>
 </div>
 <style>
-#mirai-app{width:100%;display:grid;gap:16px}.mk-card{background:#fff;border:1px solid #E5E9E6;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(39,55,45,.055)}.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.mk-head small{color:#4F7C68;font-weight:800;letter-spacing:.14em}.mk-head h2{font-size:19px;margin:3px 0 0}.mk-head span{color:#7A867F;font-size:11px}.mk-head button{border:0;border-radius:10px;background:#EDF5F0;color:#39745A;padding:9px 14px;font-weight:700}.block-guide{margin:-8px 0 14px;color:#748078;font-size:11px;line-height:1.6}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.input-grid label{color:#68746D;font-size:10px;font-weight:700}.input-grid input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;font-size:14px;outline:none}.input-grid input:focus{border-color:#4F7C68;box-shadow:0 0 0 3px rgba(79,124,104,.1)}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.summary{background:#F5F8F6;border-radius:12px;padding:12px}.summary small{display:block;color:#748078;font-size:9px}.summary b{display:block;margin-top:3px;font-size:15px}.summary.negative b{color:#C84B45}.profit-map{display:grid;gap:7px}.money-row{display:grid;grid-template-columns:84px 1fr 88px;gap:8px;align-items:center;font-size:11px}.money-track{height:30px;background:#F0F2F0;border-radius:7px;overflow:hidden}.money-bar{height:100%;min-width:2px;border-radius:7px;display:flex;align-items:center;padding:0 8px;box-sizing:border-box;color:#fff;font-size:9px;white-space:nowrap}.sales-bar{background:#355F4C}.cost-bar{background:#94A79D}.gross-bar{background:#4F8C70}.sga-bar{background:#C2A56E}.ordinary-bar{background:#4B77B7}.negative-bar{background:#C85C57}.money-value{text-align:right;font-weight:700}.answer{margin-top:18px;border-radius:15px;background:#EAF1FF;padding:16px;color:#244F89}.answer small{display:block;font-size:10px}.answer b{display:block;font-size:22px;margin-top:3px}.answer span{font-size:11px}.compact{margin-bottom:18px}.cash-flow{display:grid;gap:7px}.cash-line{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #EEF0EE;font-size:12px}.cash-line strong{font-size:14px}.cash-line.final{border:0;border-radius:12px;background:#F3F6F4;padding:14px}.cash-line.final strong.negative{color:#C84B45}@media(max-width:520px){.mk-card{padding:18px 15px}.input-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.money-row{grid-template-columns:70px 1fr 78px}.money-track{height:27px}}
+#mirai-app{width:100%;display:grid;gap:16px}.mk-card{background:#fff;border:1px solid #E5E9E6;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(39,55,45,.055)}.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.mk-head small{color:#4F7C68;font-weight:800;letter-spacing:.14em}.mk-head h2{font-size:19px;margin:3px 0 0}.mk-head span{color:#7A867F;font-size:11px}.mk-head button{border:0;border-radius:10px;background:#EDF5F0;color:#39745A;padding:9px 14px;font-weight:700}.block-guide{margin:-8px 0 14px;color:#748078;font-size:11px;line-height:1.6}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.input-grid label{color:#68746D;font-size:10px;font-weight:700}.input-grid input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;font-size:14px;outline:none}.input-grid input:focus{border-color:#4F7C68;box-shadow:0 0 0 3px rgba(79,124,104,.1)}.dual-plan-field{border:1px solid #DDE3DF;border-radius:13px;padding:10px;background:#FAFBFA}.dual-plan-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#68746D;font-size:11px;font-weight:800}.dual-plan-head select{border:1px solid #DDE3DF;border-radius:8px;background:#fff;padding:6px;color:#39745A;font-size:10px;font-weight:700}.dual-plan-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.dual-plan-inputs input:disabled{background:#EFF2F0;color:#68746D}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.summary{background:#F5F8F6;border-radius:12px;padding:12px}.summary small{display:block;color:#748078;font-size:9px}.summary b{display:block;margin-top:3px;font-size:15px}.summary.negative b{color:#C84B45}.profit-map{display:grid;gap:7px}.money-row{display:grid;grid-template-columns:84px 1fr 88px;gap:8px;align-items:center;font-size:11px}.money-track{height:30px;background:#F0F2F0;border-radius:7px;overflow:hidden}.money-bar{height:100%;min-width:2px;border-radius:7px;display:flex;align-items:center;padding:0 8px;box-sizing:border-box;color:#fff;font-size:9px;white-space:nowrap}.sales-bar{background:#355F4C}.cost-bar{background:#94A79D}.gross-bar{background:#4F8C70}.sga-bar{background:#C2A56E}.ordinary-bar{background:#4B77B7}.negative-bar{background:#C85C57}.money-value{text-align:right;font-weight:700}.answer{margin-top:18px;border-radius:15px;background:#EAF1FF;padding:16px;color:#244F89}.answer small{display:block;font-size:10px}.answer b{display:block;font-size:22px;margin-top:3px}.answer span{font-size:11px}.compact{margin-bottom:18px}.cash-flow{display:grid;gap:7px}.cash-line{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #EEF0EE;font-size:12px}.cash-line strong{font-size:14px}.cash-line.final{border:0;border-radius:12px;background:#F3F6F4;padding:14px}.cash-line.final strong.negative{color:#C84B45}@media(max-width:520px){.mk-card{padding:18px 15px}.input-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.money-row{grid-template-columns:70px 1fr 78px}.money-track{height:27px}}
 .box-map{height:360px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:#E8ECE9;padding:5px;border-radius:16px;overflow:hidden}.box-column{min-width:0;height:100%;display:flex;flex-direction:column;gap:5px}.box-spacer{min-height:0}.money-box{min-height:34px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-radius:11px;padding:7px;box-sizing:border-box;overflow:hidden;color:#fff}.money-box span{font-size:11px;font-weight:700}.money-box b{font-size:14px;margin-top:3px}.money-box em{font-size:9px;font-style:normal;margin-top:3px;opacity:.9}.box-sales{height:100%;background:#355F4C}.box-cost{background:#82988D}.box-gross{background:#4F8C70}.box-personnel{background:#B28C53}.box-other{background:#C3A976}.box-profit{background:#4B77B7}.box-loss{background:#C85C57}@media(max-width:520px){.box-map{height:300px;gap:3px;padding:3px}.box-column{gap:3px}.money-box{padding:4px}.money-box span{font-size:9px}.money-box b{font-size:11px}.money-box em{font-size:8px}}
 </style>
             ''',
@@ -124,9 +122,15 @@ def future_financials():
   function init(){
     const root=document.getElementById('mirai-app');
     if(!root){setTimeout(init,100);return}
-    const $=id=>document.getElementById(id), ids=['sales','cogs','personnel','other-sga','non-op-income','non-op-expense','target-profit','consumption-tax','corporate-tax','loan-payment','investment'];
+    const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','other-sga','non-op-income','non-op-expense','target-profit','consumption-tax','corporate-tax','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
     function box(label,value,share,cls,note=''){return `<div class="money-box ${cls}" style="flex:${Math.max(share,.035)}"><span>${label}</span><b>${yen(value)}</b>${note?`<em>${note}</em>`:''}</div>`}
+    function syncPlanField(name){
+      const mode=$(`${name}-mode`).value,sales=num('sales'),amount=$(name),rate=$(`${name}-rate`);
+      if(mode==='rate'){amount.value=Math.round(sales*(Math.max(0,Number(rate.value)||0)/100));amount.disabled=true;rate.disabled=false}
+      else{rate.value=sales?((num(name)/sales)*100).toFixed(1):0;amount.disabled=false;rate.disabled=true}
+    }
+    function syncPlan(){syncPlanField('cogs');syncPlanField('personnel')}
     function update(){
       const sales=num('sales'),cogs=num('cogs'),personnel=num('personnel'),otherSga=num('other-sga'),sga=personnel+otherSga,noi=num('non-op-income'),noe=num('non-op-expense'),target=num('target-profit');
       const gross=sales-cogs,operating=gross-sga,ordinary=operating+noi-noe,rate=sales?cogs/sales:0,required=(1-rate)>0?(sga+noe-noi+target)/(1-rate):0;
@@ -138,43 +142,17 @@ def future_financials():
       const ct=num('consumption-tax'),corp=num('corporate-tax'),loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
     }
-    ids.forEach(id=>$(id).addEventListener('input',update));
-    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-sga').value=Math.round(saved.sga*.35)}}}catch(e){}
-    $('save-plan').onclick=()=>{const data={};ids.forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='保存',1400)};
-    update();
+    ids.filter(id=>!['sales','cogs','cogs-rate','personnel','personnel-rate'].includes(id)).forEach(id=>$(id).addEventListener('input',update));
+    $('sales').addEventListener('input',()=>{syncPlan();update()});
+    ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);update()}));
+    ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);update()}));
+    modes.forEach(id=>$(id).addEventListener('change',()=>{syncPlan();update()}));
+    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['cogs-mode']===undefined)$('cogs-mode').value='amount';if(saved['personnel-mode']===undefined)$('personnel-mode').value='amount';if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-sga').value=Math.round(saved.sga*.35)}}}catch(e){}
+    $('save-plan').onclick=()=>{const data={};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='保存',1400)};
+    syncPlan();update();
   }
   init();
 })();
 </script>
             '''
         )
-        if purchase_total:
-            ui.add_body_html(
-                f'''<script>
-function applyPurchaseTotal(attempt = 0) {{
-  const cogs = document.getElementById('cogs');
-  if (cogs) {{
-    cogs.value = {purchase_total};
-    cogs.dispatchEvent(new Event('input', {{bubbles:true}}));
-  }} else if (attempt < 20) {{
-    setTimeout(() => applyPurchaseTotal(attempt + 1), 100);
-  }}
-}}
-applyPurchaseTotal();
-</script>'''
-            )
-        if other_expense_total:
-            ui.add_body_html(
-                f'''<script>
-function applyOtherExpense(attempt = 0) {{
-  const other = document.getElementById('other-sga');
-  if (other) {{
-    other.value = {other_expense_total};
-    other.dispatchEvent(new Event('input', {{bubbles:true}}));
-  }} else if (attempt < 20) {{
-    setTimeout(() => applyOtherExpense(attempt + 1), 100);
-  }}
-}}
-applyOtherExpense();
-</script>'''
-            )
