@@ -12,6 +12,7 @@ def sales_page():
         return
     Theme.page("売上入力｜未来決算", app_name="mirai-kessan")
     today = today_jst()
+    selected_day = [today.isoformat()]
     content = Theme.shell(
         "売上入力",
         "その日の売上を、1回入力するだけ",
@@ -50,7 +51,7 @@ def sales_page():
             def save_sales():
                 try:
                     financials.set_daily_sales(
-                        sales_date.value,
+                        selected_day[0],
                         lunch_sales=lunch_sales.value,
                         dinner_sales=dinner_sales.value,
                         lunch_customers=lunch_customers.value,
@@ -69,7 +70,7 @@ def sales_page():
 
         @ui.refreshable
         def summary():
-            month = (sales_date.value or today.isoformat())[:7]
+            month = selected_day[0][:7]
             values = financials.monthly_sales_summary(month)
             with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
                 ui.label(f"{month.replace('-', '年')}月の売上実績").classes(
@@ -94,7 +95,7 @@ def sales_page():
 
         @ui.refreshable
         def history():
-            month = (sales_date.value or today.isoformat())[:7]
+            month = selected_day[0][:7]
             ui.label("日別売上").classes("text-xl font-bold q-mt-md q-mb-sm")
             records = financials.sales_records(month=month)
             if not records:
@@ -125,8 +126,23 @@ def sales_page():
 
         history()
 
-        def refresh_month():
+        def select_sales_day(value=None):
+            if value:
+                selected_day[0] = str(value)
+            records = financials.sales_records(record_date=selected_day[0])
+            record = records[0] if records else {}
+            lunch_sales.value = record.get("lunch_sales", 0)
+            dinner_sales.value = record.get("dinner_sales", 0)
+            lunch_customers.value = record.get("lunch_customers", 0)
+            dinner_customers.value = record.get("dinner_customers", 0)
             summary.refresh()
             history.refresh()
 
-        sales_date.on("change", lambda _: refresh_month())
+        sales_date.on_value_change(
+            lambda event: select_sales_day(event.value)
+        )
+        sales_date.on(
+            "change",
+            lambda event: select_sales_day(event.args),
+            js_handler="(event) => emit(event.target.value)",
+        )
