@@ -197,7 +197,10 @@ def future_financials():
     const root=document.getElementById('mirai-app');
     if(!root){setTimeout(init,100);return}
     const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','rent','utilities','advertising','other-expenses','non-op-income','non-op-expense','target-profit','tax-method','corporate-tax-rate','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
+    const moneyIds=['sales','cogs','personnel','rent','utilities','advertising','other-expenses','non-op-income','non-op-expense','target-profit','loan-payment','investment'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
+    const comma=n=>new Intl.NumberFormat('ja-JP',{maximumFractionDigits:0}).format(Math.round(Number(n)||0));
+    const formatMoney=id=>{const field=$(id);if(field&&document.activeElement!==field)field.value=comma(num(id))};
     function box(label,value,share,cls,note=''){const safe=Math.max(.015,Math.abs(share));return `<div class="money-box ${cls}" style="flex:${safe}"><span>${label}</span>${safe>=.07?`<b>${yen(value)}</b>`:''}${note&&safe>=.11?`<em>${note}</em>`:''}</div>`}
     function legend(label,value,rate,color){const rateText=rate===null?'—':`${(rate*100).toFixed(1)}%`;return `<div><span><i style="background:${color}"></i>${label}　${rateText}</span><strong>${yen(value)}</strong></div>`}
     function syncPlanField(name){
@@ -224,12 +227,14 @@ def future_financials():
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const outputTax=Math.floor(sales*10/110),plannedInputTax=Math.floor(cogs*8/108)+Math.floor((rent+utilities+advertising+otherExpenses)*10/110),actualMode=root.dataset.view==='provisional',generalInputTax=actualMode?Number((window.miraiActuals||{}).input_tax||0):plannedInputTax,taxMethod=$('tax-method').value,ct=Math.max(0,taxMethod==='simplified'?Math.floor(outputTax*.4):outputTax-generalInputTax),corpRate=num('corporate-tax-rate'),corp=Math.max(0,Math.round(Math.max(ordinary,0)*corpRate/100));
       const creditExcess=taxMethod==='general'?Math.max(0,generalInputTax-outputTax):0;
-      $('output-tax').value=outputTax;$('input-tax').value=generalInputTax;$('consumption-tax').value=ct;$('tax-credit-excess').value=creditExcess;$('corporate-tax').value=corp;
+      $('output-tax').value=comma(outputTax);$('input-tax').value=comma(generalInputTax);$('consumption-tax').value=comma(ct);$('tax-credit-excess').value=comma(creditExcess);$('corporate-tax').value=comma(corp);
       const estimatedCount=Number((window.miraiActuals||{}).estimated_tax_records||0),taxSource=actualMode?`仕入れノートの税率別税額 ${yen(generalInputTax)}${estimatedCount?`（税率未設定 ${estimatedCount}件は原価8%・経費10%で補完）`:''}`:`計画上の原価8%・管理費10%の支払税 ${yen(generalInputTax)}`;
       $('tax-note').innerHTML=taxMethod==='simplified'?`消費税：税込売上10%として預かった税額 ${yen(outputTax)} × 40%で概算。飲食店のみなし仕入率60%を使用しています。`:`消費税：税込売上10%の預り税 ${yen(outputTax)} − ${taxSource}。給与は対象外、借入元金と支払利息は控除に含めていません。${creditExcess?` 現在は仕入税額が ${yen(creditExcess)} 上回るため、納付見込みは0円です。超過分は今後の預り税との相殺目安として表示しています。`:''}`;
       const loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
+      moneyIds.forEach(formatMoney);
     }
+    moneyIds.forEach(id=>{$(id).addEventListener('focus',event=>{event.target.value=String(event.target.value).replace(/,/g,'');event.target.select()});$(id).addEventListener('blur',()=>{formatMoney(id);update()})});
     ids.filter(id=>!['sales','cogs','cogs-rate','personnel','personnel-rate'].includes(id)).forEach(id=>$(id).addEventListener('input',update));
     $('sales').addEventListener('input',()=>{syncPlan();update()});
     ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);if(id==='cogs')syncPlanField('personnel');update()}));
