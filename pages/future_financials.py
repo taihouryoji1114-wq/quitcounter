@@ -1,4 +1,5 @@
 from datetime import date
+import json
 
 from nicegui import ui
 
@@ -59,7 +60,7 @@ def future_financials_home():
 
         menu_card("売上入力", "その日の売上を記録", "payments", "#B87835", "/mirai-kessan/sales")
         menu_card("仕入れノート", "原価・経費・消費税を記録", "receipt_long", "#246BFD", "/shiire")
-        menu_card("利益ブロック図", "売上から残るお金までを図で確認", "account_tree", "#39745A", "/mirai-kessan/block-map")
+        menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "account_tree", "#39745A", "/mirai-kessan/block-map")
 
 
 @ui.page("/mirai-kessan/block-map")
@@ -68,17 +69,28 @@ def future_financials():
         return
     Theme.page("未来決算")
     content = Theme.shell(
-        "未来決算",
-        "会社のお金を、利益と資金繰りに分けて見える化",
+        "利益シミュレーション",
+        "計画と暫定実績を切り替えて、お金の残り方を確認",
         back_to="/mirai-kessan",
     )
+    current_month = date.today().strftime("%Y-%m")
+    actuals = {
+        "sales": financials.monthly_sales_total(current_month),
+        "cogs": purchases.monthly_total(current_month, kind="cost"),
+        "other": purchases.monthly_total(current_month, kind="expense"),
+    }
     with content:
+        ui.add_body_html(
+            f"<script>window.miraiActuals={json.dumps(actuals)};</script>"
+        )
         ui.html(
             r'''
 <div id="mirai-app">
   <section class="mk-card input-card">
-    <div class="mk-head"><div><small>PLAN</small><h2>月間計画を入力</h2></div><button id="save-plan">保存</button></div>
-    <div class="input-grid">
+    <div class="mk-head"><div><small>SIMULATION</small><h2>月間の利益を試算</h2></div><button id="save-plan">計画を保存</button></div>
+    <div class="view-switch"><button id="view-simulation" class="active">計画シミュレーション</button><button id="view-provisional">暫定実績</button></div>
+    <div id="view-note" class="view-note simulation">入力した計画値で「こうなったら利益はいくら残るか」を試算しています。</div>
+    <div id="plan-fields" class="input-grid">
       <label>売上高<input id="sales" inputmode="numeric" value="3000000"></label>
       <div class="dual-plan-field">
         <div class="dual-plan-head"><span>売上原価</span><select id="cogs-mode"><option value="rate">比率で入力</option><option value="amount">金額で入力</option></select></div>
@@ -116,7 +128,7 @@ def future_financials():
 </div>
 <style>
 #mirai-app{width:100%;display:grid;gap:16px}.mk-card{background:#fff;border:1px solid #E5E9E6;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(39,55,45,.055)}.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.mk-head small{color:#4F7C68;font-weight:800;letter-spacing:.14em}.mk-head h2{font-size:19px;margin:3px 0 0}.mk-head span{color:#7A867F;font-size:11px}.mk-head button{border:0;border-radius:10px;background:#EDF5F0;color:#39745A;padding:9px 14px;font-weight:700}.block-guide{margin:-8px 0 14px;color:#748078;font-size:11px;line-height:1.6}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.input-grid label{color:#68746D;font-size:10px;font-weight:700}.input-grid input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;font-size:14px;outline:none}.input-grid input:focus{border-color:#4F7C68;box-shadow:0 0 0 3px rgba(79,124,104,.1)}.dual-plan-field{border:1px solid #DDE3DF;border-radius:13px;padding:10px;background:#FAFBFA}.dual-plan-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#68746D;font-size:11px;font-weight:800}.dual-plan-head select{border:1px solid #DDE3DF;border-radius:8px;background:#fff;padding:6px;color:#39745A;font-size:10px;font-weight:700}.dual-plan-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.dual-plan-inputs input:disabled{background:#EFF2F0;color:#68746D}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.summary{background:#F5F8F6;border-radius:12px;padding:12px}.summary small{display:block;color:#748078;font-size:9px}.summary b{display:block;margin-top:3px;font-size:15px}.summary.negative b{color:#C84B45}.profit-map{display:grid;gap:7px}.money-row{display:grid;grid-template-columns:84px 1fr 88px;gap:8px;align-items:center;font-size:11px}.money-track{height:30px;background:#F0F2F0;border-radius:7px;overflow:hidden}.money-bar{height:100%;min-width:2px;border-radius:7px;display:flex;align-items:center;padding:0 8px;box-sizing:border-box;color:#fff;font-size:9px;white-space:nowrap}.sales-bar{background:#355F4C}.cost-bar{background:#94A79D}.gross-bar{background:#4F8C70}.sga-bar{background:#C2A56E}.ordinary-bar{background:#4B77B7}.negative-bar{background:#C85C57}.money-value{text-align:right;font-weight:700}.answer{margin-top:18px;border-radius:15px;background:#EAF1FF;padding:16px;color:#244F89}.answer small{display:block;font-size:10px}.answer b{display:block;font-size:22px;margin-top:3px}.answer span{font-size:11px}.compact{margin-bottom:18px}.cash-flow{display:grid;gap:7px}.cash-line{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #EEF0EE;font-size:12px}.cash-line strong{font-size:14px}.cash-line.final{border:0;border-radius:12px;background:#F3F6F4;padding:14px}.cash-line.final strong.negative{color:#C84B45}@media(max-width:520px){.mk-card{padding:18px 15px}.input-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.money-row{grid-template-columns:70px 1fr 78px}.money-track{height:27px}}
-.box-map{display:flex;flex-direction:column;align-items:center;gap:0;background:#F3F6F4;padding:18px 12px;border-radius:18px}.flow-node{min-width:36%;max-width:100%;box-sizing:border-box;border-radius:14px;padding:12px 10px;color:#fff;text-align:center;transition:width .2s ease}.flow-node span{display:block;font-size:11px;font-weight:800}.flow-node b{display:block;font-size:17px;margin-top:2px}.flow-node em{display:block;font-size:9px;font-style:normal;margin-top:2px;opacity:.9}.flow-sales{background:#355F4C}.flow-gross{background:#4F8C70}.flow-remaining{background:#7DA08E}.flow-profit{background:#3F70B5;box-shadow:0 6px 16px rgba(63,112,181,.22)}.flow-loss{background:#C85C57;box-shadow:0 6px 16px rgba(200,92,87,.2)}.flow-deduction{position:relative;width:min(94%,560px);display:grid;grid-template-columns:24px 1fr auto;gap:7px;align-items:center;padding:9px 12px;margin:5px 0;color:#5E6C64;background:#fff;border:1px dashed #CBD4CE;border-radius:12px;font-size:10px}.flow-deduction i{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#FFF0ED;color:#C85C57;font-style:normal;font-size:16px;font-weight:900}.flow-deduction strong{font-size:12px;color:#293A31}.flow-arrow{height:12px;width:2px;background:#AAB8B0;position:relative}.flow-arrow:after{content:'';position:absolute;bottom:-1px;left:-3px;width:7px;height:7px;border-right:2px solid #AAB8B0;border-bottom:2px solid #AAB8B0;transform:rotate(45deg)}@media(max-width:520px){.box-map{padding:14px 8px}.flow-node{min-width:44%;padding:10px 6px}.flow-node span{font-size:10px}.flow-node b{font-size:14px}.flow-deduction{width:96%;padding:8px}.flow-deduction strong{font-size:11px}}
+.view-switch{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#EEF2EF;padding:5px;border-radius:13px;margin-bottom:10px}.view-switch button{border:0;border-radius:9px;background:transparent;padding:9px 5px;color:#718078;font-size:10px;font-weight:800}.view-switch button.active{background:#fff;color:#39745A;box-shadow:0 2px 8px rgba(39,55,45,.08)}.view-note{border-radius:11px;padding:10px 12px;margin-bottom:14px;font-size:10px;line-height:1.55}.view-note.simulation{background:#EAF1FF;color:#315A91}.view-note.provisional{background:#FFF2DB;color:#855D20}.box-map{display:flex;flex-direction:column;align-items:center;gap:0;background:#F3F6F4;padding:18px 12px;border-radius:18px}.flow-node{min-width:0;max-width:100%;box-sizing:border-box;border-radius:14px;padding:12px 6px;color:#fff;text-align:center;transition:width .25s ease;overflow:visible}.flow-node span{display:block;font-size:11px;font-weight:800;white-space:nowrap}.flow-node b{display:block;font-size:17px;margin-top:2px;white-space:nowrap}.flow-node em{display:block;font-size:9px;font-style:normal;margin-top:2px;opacity:.9;white-space:nowrap}.flow-sales{background:#355F4C}.flow-gross{background:#4F8C70}.flow-remaining{background:#7DA08E}.flow-profit{background:#3F70B5;box-shadow:0 6px 16px rgba(63,112,181,.22)}.flow-loss{background:#C85C57;box-shadow:0 6px 16px rgba(200,92,87,.2)}.flow-deduction{position:relative;width:min(94%,560px);display:grid;grid-template-columns:24px 1fr auto;gap:7px;align-items:center;padding:9px 12px;margin:5px 0;color:#5E6C64;background:#fff;border:1px dashed #CBD4CE;border-radius:12px;font-size:10px}.flow-deduction i{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#FFF0ED;color:#C85C57;font-style:normal;font-size:16px;font-weight:900}.flow-deduction strong{font-size:12px;color:#293A31}.flow-arrow{height:12px;width:2px;background:#AAB8B0;position:relative}.flow-arrow:after{content:'';position:absolute;bottom:-1px;left:-3px;width:7px;height:7px;border-right:2px solid #AAB8B0;border-bottom:2px solid #AAB8B0;transform:rotate(45deg)}@media(max-width:520px){.box-map{padding:14px 8px}.flow-node{padding:10px 4px}.flow-node span{font-size:9px}.flow-node b{font-size:13px}.flow-node em{font-size:8px}.flow-deduction{width:96%;padding:8px}.flow-deduction strong{font-size:11px}}
 </style>
             ''',
             sanitize=False,
@@ -130,7 +142,7 @@ def future_financials():
     if(!root){setTimeout(init,100);return}
     const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','other-sga','non-op-income','non-op-expense','target-profit','consumption-tax','corporate-tax','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
-    function flowNode(label,value,share,cls,note=''){const width=Math.max(36,Math.min(100,Math.abs(share)*100));return `<div class="flow-node ${cls}" style="width:${width}%"><span>${label}</span><b>${yen(value)}</b>${note?`<em>${note}</em>`:''}</div>`}
+    function flowNode(label,value,share,cls,note=''){const width=Math.max(8,Math.min(100,Math.abs(share)*100));return `<div class="flow-node ${cls}" style="width:${width}%"><span>${label}</span><b>${yen(value)}</b>${note?`<em>${note}</em>`:''}</div>`}
     function deduction(label,value,note=''){return `<div class="flow-arrow"></div><div class="flow-deduction"><i>−</i><span>${label}${note?`<small>　${note}</small>`:''}</span><strong>${yen(value)}</strong></div><div class="flow-arrow"></div>`}
     function syncPlanField(name){
       const mode=$(`${name}-mode`).value,sales=num('sales'),amount=$(name),rate=$(`${name}-rate`);
@@ -155,7 +167,21 @@ def future_financials():
     ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);update()}));
     modes.forEach(id=>$(id).addEventListener('change',()=>{syncPlan();update()}));
     try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['cogs-mode']===undefined)$('cogs-mode').value='amount';if(saved['personnel-mode']===undefined)$('personnel-mode').value='amount';if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-sga').value=Math.round(saved.sga*.35)}}}catch(e){}
-    $('save-plan').onclick=()=>{const data={};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='保存',1400)};
+    $('save-plan').onclick=()=>{const data={};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='計画を保存',1400)};
+    let simulationData=null;
+    function setView(mode){
+      const provisional=mode==='provisional',fields=$('plan-fields').querySelectorAll('input,select');
+      if(provisional){
+        simulationData={};[...ids,...modes].forEach(id=>simulationData[id]=$(id).value);
+        const actual=window.miraiActuals||{};$('sales').value=actual.sales||0;$('cogs').value=actual.cogs||0;$('cogs-mode').value='amount';$('personnel').value=0;$('personnel-mode').value='amount';$('other-sga').value=actual.other||0;$('non-op-income').value=0;$('non-op-expense').value=0;
+        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent='暫定実績：売上・仕入れ・その他経費は実績です。人件費など未入力の項目は0円のため、確定利益ではありません。';
+      }else{
+        if(simulationData){[...ids,...modes].forEach(id=>{if(simulationData[id]!==undefined)$(id).value=simulationData[id]})}
+        fields.forEach(field=>field.disabled=false);$('save-plan').disabled=false;$('view-note').className='view-note simulation';$('view-note').textContent='入力した計画値で「こうなったら利益はいくら残るか」を試算しています。';syncPlan();
+      }
+      $('view-simulation').classList.toggle('active',!provisional);$('view-provisional').classList.toggle('active',provisional);update();
+    }
+    $('view-simulation').onclick=()=>setView('simulation');$('view-provisional').onclick=()=>setView('provisional');
     syncPlan();update();
   }
   init();

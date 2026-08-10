@@ -24,16 +24,39 @@ def sales_page():
             sales_date = ui.input("日付", value=today.isoformat()).props(
                 "type=date outlined"
             ).classes("w-full q-mb-sm")
-            amount = ui.number("その日の売上", min=0, step=1).props(
-                "outlined prefix=¥ inputmode=numeric"
-            ).classes("w-full q-mb-sm")
+            with ui.card().classes("w-full q-pa-md q-mb-sm").style(
+                "background:#FFF9F1;border:1px solid #F0DFC9;border-radius:18px"
+            ):
+                ui.label("ランチ").classes("font-bold q-mb-sm")
+                lunch_sales = ui.number("売上", min=0, step=1, value=0).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                ).classes("w-full q-mb-sm")
+                lunch_customers = ui.number("人数", min=0, step=1, value=0).props(
+                    "outlined suffix=人 inputmode=numeric"
+                ).classes("w-full")
+            with ui.card().classes("w-full q-pa-md q-mb-sm").style(
+                "background:#F5F3FF;border:1px solid #DDD7F2;border-radius:18px"
+            ):
+                ui.label("ディナー").classes("font-bold q-mb-sm")
+                dinner_sales = ui.number("売上", min=0, step=1, value=0).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                ).classes("w-full q-mb-sm")
+                dinner_customers = ui.number("人数", min=0, step=1, value=0).props(
+                    "outlined suffix=人 inputmode=numeric"
+                ).classes("w-full")
             ui.label(
                 "同じ日をもう一度保存すると、その日の金額を更新します。"
             ).classes("text-[10px] text-grey-6 q-mb-sm")
 
             def save_sales():
                 try:
-                    financials.set_daily_sales(sales_date.value, amount.value)
+                    financials.set_daily_sales(
+                        sales_date.value,
+                        lunch_sales=lunch_sales.value,
+                        dinner_sales=dinner_sales.value,
+                        lunch_customers=lunch_customers.value,
+                        dinner_customers=dinner_customers.value,
+                    )
                 except ValueError as error:
                     ui.notify(f"保存できませんでした: {error}", type="negative")
                     return
@@ -48,13 +71,25 @@ def sales_page():
         @ui.refreshable
         def summary():
             month = (sales_date.value or today.isoformat())[:7]
+            values = financials.monthly_sales_summary(month)
             with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
                 ui.label(f"{month.replace('-', '年')}月の売上実績").classes(
                     "text-xs text-grey-6"
                 )
-                ui.label(f"¥{financials.monthly_sales_total(month):,}").classes(
+                ui.label(f"¥{values['total']:,}").classes(
                     "text-3xl font-bold metric-value q-mt-xs"
                 )
+                with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mt-md"):
+                    for title, sales, customers, spend in (
+                        ("ランチ", values["lunch_sales"], values["lunch_customers"], values["lunch_spend"]),
+                        ("ディナー", values["dinner_sales"], values["dinner_customers"], values["dinner_spend"]),
+                    ):
+                        with ui.element("div").classes("rounded-xl bg-grey-2 q-pa-sm"):
+                            ui.label(title).classes("text-xs text-grey-7")
+                            ui.label(f"¥{sales:,}・{customers}人").classes("font-bold")
+                            ui.label(f"客単価 ¥{spend:,}" if customers else "客単価 —").classes(
+                                "text-[10px] text-grey-6"
+                            )
 
         summary()
 
@@ -72,6 +107,12 @@ def sales_page():
                         ui.label(record["date"].replace("-", "/")).classes("font-bold")
                         ui.space()
                         ui.label(f"¥{record['amount']:,}").classes("text-lg font-bold")
+                        split = "lunch_sales" in record
+                        if split:
+                            ui.label(
+                                f"昼 ¥{record.get('lunch_sales', 0):,}・{record.get('lunch_customers', 0)}人 / "
+                                f"夜 ¥{record.get('dinner_sales', 0):,}・{record.get('dinner_customers', 0)}人"
+                            ).classes("text-[10px] text-grey-6")
 
                         def delete_record(_, selected=record):
                             financials.delete_sales(selected["id"])
