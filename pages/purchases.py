@@ -35,44 +35,42 @@ def purchase_page():
                 values = purchases.suppliers()[:6]
                 if not values:
                     return
-                def open_supplier_editor():
-                    with ui.dialog() as dialog, ui.card().classes(
-                        "surface-card w-80 max-w-full q-pa-lg"
-                    ):
-                        ui.label("仕入れ先候補を編集").classes(
-                            "text-xl font-bold q-mb-xs"
-                        )
-                        ui.label(
-                            "削除しても過去の仕入れ記録と金額は残ります。"
-                        ).classes("text-xs text-grey-6 q-mb-md")
+                with ui.dialog() as editor_dialog, ui.card().classes(
+                    "surface-card w-80 max-w-full q-pa-lg"
+                ):
+                    ui.label("仕入れ先候補を編集").classes(
+                        "text-xl font-bold q-mb-xs"
+                    )
+                    ui.label(
+                        "削除しても過去の仕入れ記録と金額は残ります。"
+                    ).classes("text-xs text-grey-6 q-mb-md")
 
-                        def hide_selected(selected):
-                            purchases.hide_supplier(selected)
-                            dialog.close()
-                            supplier_shortcuts.refresh()
-                            ui.notify("候補から削除しました", type="positive")
+                    def hide_selected(selected):
+                        purchases.hide_supplier(selected)
+                        editor_dialog.close()
+                        supplier_shortcuts.refresh()
+                        ui.notify("候補から削除しました", type="positive")
 
-                        for name in values:
-                            with ui.row().classes(
-                                "w-full items-center no-wrap q-py-xs"
-                            ):
-                                ui.label(name).classes("font-bold")
-                                ui.space()
-
-                                ui.button(
-                                    icon="delete_outline",
-                                    on_click=lambda _, selected=name: hide_selected(selected),
-                                ).props("flat round color=negative")
-                        ui.button("閉じる", on_click=dialog.close).props(
-                            "flat"
-                        ).classes("w-full q-mt-sm")
+                    for name in values:
+                        with ui.row().classes(
+                            "w-full items-center no-wrap q-py-xs"
+                        ):
+                            ui.label(name).classes("font-bold")
+                            ui.space()
+                            ui.button(
+                                icon="delete_outline",
+                                on_click=lambda _, selected=name: hide_selected(selected),
+                            ).props("flat round color=negative")
+                    ui.button("閉じる", on_click=editor_dialog.close).props(
+                        "flat"
+                    ).classes("w-full q-mt-sm")
 
                 with ui.row().classes(
                     "w-full items-center justify-between q-mt-xs"
                 ):
                     ui.label("最近の仕入れ先").classes("text-xs text-grey-6")
                     ui.button(
-                        "候補を編集", icon="edit", on_click=open_supplier_editor
+                        "候補を編集", icon="edit", on_click=editor_dialog.open
                     ).props("flat dense no-caps").classes("text-xs")
                 with ui.row().classes("gap-2 q-mb-sm flex-wrap"):
                     for value in values:
