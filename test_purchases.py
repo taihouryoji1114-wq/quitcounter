@@ -82,6 +82,27 @@ class PurchaseManagerTest(unittest.TestCase):
         reloaded = PurchaseManager(DataManager(self.manager.file_path))
         self.assertEqual(reloaded.records(), [])
 
+    def test_update_purchase_and_tax_breakdown(self):
+        record = self.purchases.add("2026-08-10", "市場A", 3860)
+        breakdown = self.purchases.calculate_tax_breakdown(
+            amount_10=3860,
+            price_mode="included",
+            stated_tax_10=350,
+        )
+        updated = self.purchases.update(
+            record["id"], "2026-08-11", "小次郎", 3860,
+            "cost", breakdown, "registered",
+        )
+        self.assertEqual(updated["supplier"], "小次郎")
+        self.assertEqual(updated["tax_breakdown"]["tax_10"], 350)
+        self.assertEqual(updated["date"], "2026-08-11")
+
+    def test_kojiro_tax_migration_runs_only_once(self):
+        record = self.purchases.add("2026-08-10", "小次郎", 3860)
+        self.assertEqual(self.purchases.migrate_kojiro_tax_20260810(), 1)
+        self.assertEqual(record["tax_breakdown"]["tax_10"], 350)
+        self.assertEqual(self.purchases.migrate_kojiro_tax_20260810(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

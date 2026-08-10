@@ -118,6 +118,70 @@ class PurchaseManager:
         self._data_manager.save()
         return record
 
+    def update(
+        self,
+        record_id,
+        record_date,
+        supplier,
+        total,
+        kind="cost",
+        tax_breakdown=None,
+        invoice_status="unknown",
+    ):
+        records = self._data_manager.data.get("business_purchases", [])
+        record = next((item for item in records if item.get("id") == record_id), None)
+        if record is None:
+            raise ValueError("編集する仕入れ記録が見つかりません。")
+        self._validate_date(record_date)
+        supplier = str(supplier or "").strip()
+        if not supplier:
+            raise ValueError("仕入れ先を入力してください。")
+        total = self._validate_total(total)
+        if kind not in {"cost", "expense"}:
+            raise ValueError("支出の区分を選択してください。")
+        if invoice_status not in {"registered", "unregistered", "unknown"}:
+            raise ValueError("インボイスの区分を選択してください。")
+        record.update({
+            "date": record_date,
+            "supplier": supplier,
+            "total": total,
+            "kind": kind,
+            "invoice_status": invoice_status,
+        })
+        if tax_breakdown:
+            record["tax_breakdown"] = self._validate_tax_breakdown(
+                tax_breakdown, total
+            )
+        else:
+            record.pop("tax_breakdown", None)
+        self._data_manager.save()
+        return record
+
+    def migrate_kojiro_tax_20260810(self):
+        """Correct the known ¥3,860 inclusive-tax Kojiro invoice once."""
+        migration_key = "kojiro_3860_tax_350_20260810"
+        completed = self._data_manager.data.setdefault("business_migrations", [])
+        if migration_key in completed:
+            return 0
+        changed = 0
+        for record in self._data_manager.data.get("business_purchases", []):
+            if record.get("supplier") != "小次郎" or int(record.get("total", 0)) != 3860:
+                continue
+            record["tax_breakdown"] = {
+                "price_mode": "included",
+                "rounding": "floor",
+                "amount_8": 0,
+                "amount_10": 3860,
+                "exempt": 0,
+                "tax_8": 0,
+                "tax_10": 350,
+                "total": 3860,
+            }
+            changed += 1
+        completed.append(migration_key)
+        self._data_manager.save()
+        return changed
+
     def suppliers(self):
         hidden = set(self._data_manager.data.get("business_hidden_suppliers", []))
         result = []
@@ -217,3 +281,4 @@ from core.data import data  # noqa: E402
 
 
 purchases = PurchaseManager(data)
+purchases.migrate_kojiro_tax_20260810()

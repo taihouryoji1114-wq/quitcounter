@@ -270,6 +270,122 @@ def purchase_page():
                         ui.space()
                         ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
 
+                        def open_edit(_, selected=record):
+                            existing = selected.get("tax_breakdown") or {}
+                            with ui.dialog() as edit_dialog, ui.card().classes(
+                                "surface-card w-[420px] max-w-full q-pa-lg"
+                            ):
+                                ui.label("仕入れ記録を編集").classes(
+                                    "text-xl font-bold q-mb-md"
+                                )
+                                edit_date = ui.input(
+                                    "日付", value=selected["date"]
+                                ).props("type=date outlined").classes("w-full")
+                                edit_supplier = ui.input(
+                                    "仕入れ先", value=selected["supplier"]
+                                ).props("outlined").classes("w-full")
+                                edit_mode = ui.toggle(
+                                    {"simple": "合計だけ", "tax": "税率別"},
+                                    value="tax" if existing else "simple",
+                                ).props("spread no-caps").classes("w-full")
+                                edit_total = ui.number(
+                                    "仕入れ合計金額",
+                                    value=selected["total"], min=1, step=1,
+                                ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                edit_total.bind_visibility_from(
+                                    edit_mode, "value",
+                                    backward=lambda value: value == "simple",
+                                )
+                                edit_tax_panel = ui.column().classes("w-full gap-2")
+                                edit_tax_panel.bind_visibility_from(
+                                    edit_mode, "value",
+                                    backward=lambda value: value == "tax",
+                                )
+                                with edit_tax_panel:
+                                    edit_price_mode = ui.toggle(
+                                        {"excluded": "税抜", "included": "税込"},
+                                        value=existing.get("price_mode", "included"),
+                                    ).props("spread no-caps").classes("w-full")
+                                    edit_amount_8 = ui.number(
+                                        "8％対象額", value=existing.get("amount_8", 0),
+                                        min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    edit_amount_10 = ui.number(
+                                        "10％対象額",
+                                        value=existing.get("amount_10", selected["total"]),
+                                        min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    edit_exempt = ui.number(
+                                        "非課税・対象外額", value=existing.get("exempt", 0),
+                                        min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    edit_rounding = ui.select(
+                                        {"floor": "切り捨て", "half_up": "四捨五入", "ceil": "切り上げ"},
+                                        value=existing.get("rounding", "floor"),
+                                        label="端数処理",
+                                    ).props("outlined").classes("w-full")
+                                    edit_tax_8 = ui.number(
+                                        "納品書記載の8％税額",
+                                        value=existing.get("tax_8"), min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    edit_tax_10 = ui.number(
+                                        "納品書記載の10％税額",
+                                        value=existing.get("tax_10"), min=0, step=1,
+                                    ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                edit_invoice = ui.select(
+                                    {
+                                        "registered": "インボイスあり",
+                                        "unregistered": "インボイスなし",
+                                        "unknown": "不明・あとで確認",
+                                    },
+                                    value=selected.get("invoice_status", "unknown"),
+                                    label="インボイス",
+                                ).props("outlined").classes("w-full")
+                                edit_kind = ui.toggle(
+                                    {"cost": "原価", "expense": "その他経費"},
+                                    value=selected.get("kind", "cost"),
+                                ).props("spread no-caps").classes("w-full")
+
+                                def save_edit():
+                                    try:
+                                        if edit_mode.value == "tax":
+                                            edited_breakdown = purchases.calculate_tax_breakdown(
+                                                edit_amount_8.value,
+                                                edit_amount_10.value,
+                                                edit_exempt.value,
+                                                edit_price_mode.value,
+                                                edit_rounding.value,
+                                                edit_tax_8.value,
+                                                edit_tax_10.value,
+                                            )
+                                            edited_total = edited_breakdown["total"]
+                                        else:
+                                            edited_breakdown = None
+                                            edited_total = edit_total.value
+                                        purchases.update(
+                                            selected["id"], edit_date.value,
+                                            edit_supplier.value, edited_total,
+                                            edit_kind.value, edited_breakdown,
+                                            edit_invoice.value,
+                                        )
+                                    except (RuntimeError, ValueError) as error:
+                                        ui.notify(f"変更できませんでした: {error}", type="negative")
+                                        return
+                                    edit_dialog.close()
+                                    supplier_shortcuts.refresh()
+                                    totals.refresh()
+                                    history.refresh()
+                                    ui.notify("仕入れ記録を変更しました", type="positive")
+
+                                with ui.row().classes("w-full gap-2 q-mt-md"):
+                                    ui.button("キャンセル", on_click=edit_dialog.close).props(
+                                        "flat"
+                                    ).classes("flex-1")
+                                    ui.button(
+                                        "変更を保存", icon="save", on_click=save_edit
+                                    ).classes("flex-1")
+                            edit_dialog.open()
+
                         def confirm_delete(_, selected=record):
                             with ui.dialog() as dialog, ui.card().classes(
                                 "surface-card w-80 q-pa-lg"
@@ -297,6 +413,9 @@ def purchase_page():
                                     ).props("color=negative").classes("flex-1")
                             dialog.open()
 
+                        ui.button(icon="edit", on_click=open_edit).props(
+                            "flat round aria-label='編集'"
+                        )
                         ui.button(icon="delete_outline", on_click=confirm_delete).props(
                             "flat round color=negative"
                         )
