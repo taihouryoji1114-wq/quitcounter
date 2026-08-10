@@ -59,7 +59,10 @@ def future_financials_home():
                     ui.icon("chevron_right").classes("text-2xl text-grey-7")
 
         menu_card("売上入力", "その日の売上を記録", "payments", "#B87835", "/mirai-kessan/sales")
-        menu_card("仕入れノート", "原価・経費・消費税を記録", "receipt_long", "#246BFD", "/shiire")
+        menu_card(
+            "仕入れノート", "原価・経費・消費税を記録",
+            "receipt_long", "#246BFD", "/mirai-kessan/shiire",
+        )
         menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "account_tree", "#39745A", "/mirai-kessan/block-map")
 
 

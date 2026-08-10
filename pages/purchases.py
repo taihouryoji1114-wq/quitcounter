@@ -7,11 +7,11 @@ from core.purchases import purchases
 from core.theme import Theme
 
 
-@ui.page("/shiire")
+@ui.page("/mirai-kessan/shiire")
 def purchase_page():
     if not require_login():
         return
-    Theme.page("仕入れノート")
+    Theme.page("仕入れノート", app_name="mirai-kessan")
     today = date.today()
     content = Theme.shell(
         "仕入れノート",
@@ -421,3 +421,9 @@ def purchase_page():
                         )
 
         history()
+
+
+@ui.page("/shiire")
+def legacy_purchase_page():
+    """Keep old bookmarks working while the page lives inside the PWA scope."""
+    ui.navigate.to("/mirai-kessan/shiire")
