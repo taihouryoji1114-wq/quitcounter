@@ -13,7 +13,6 @@ def purchase_page():
         return
     Theme.page("仕入れノート")
     today = date.today()
-    selected_month = [today.strftime("%Y-%m")]
     content = Theme.shell(
         "仕入れノート",
         "日付・仕入れ先・金額だけで、すばやく記録",
@@ -83,10 +82,21 @@ def purchase_page():
             amount = ui.number(
                 "仕入れ合計金額", min=1, step=1
             ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+            purchase_kind = ui.toggle(
+                {"cost": "原価", "expense": "その他経費"}, value="cost"
+            ).props("spread no-caps").classes("w-full q-mb-xs")
+            ui.label(
+                "商品・材料は原価、飲み会代などはその他経費"
+            ).classes("text-[10px] text-grey-6 q-mb-sm")
 
             def save_purchase():
                 try:
-                    purchases.add(purchase_date.value, supplier.value, amount.value)
+                    purchases.add(
+                        purchase_date.value,
+                        supplier.value,
+                        amount.value,
+                        purchase_kind.value,
+                    )
                 except (RuntimeError, ValueError) as error:
                     ui.notify(f"保存できませんでした: {error}", type="negative")
                     return
@@ -104,47 +114,62 @@ def purchase_page():
         def totals():
             day = purchase_date.value or today.isoformat()
             month = day[:7]
+            with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
+                ui.label("選択日の合計").classes("text-xs text-grey-6")
+                ui.label(f"¥{purchases.daily_total(day):,}").classes(
+                    "text-2xl font-bold metric-value q-mt-xs"
+                )
             with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
                 with ui.card().classes("surface-card q-pa-md"):
-                    ui.label("選択日の合計").classes("text-xs text-grey-6")
-                    ui.label(f"¥{purchases.daily_total(day):,}").classes(
-                        "text-2xl font-bold metric-value q-mt-xs"
-                    )
-                with ui.card().classes("surface-card q-pa-md"):
-                    ui.label(f"{month.replace('-', '年')}月の合計").classes(
+                    ui.label(f"{month.replace('-', '年')}月・原価").classes(
                         "text-xs text-grey-6"
                     )
-                    ui.label(f"¥{purchases.monthly_total(month):,}").classes(
-                        "text-2xl font-bold metric-value q-mt-xs"
+                    ui.label(
+                        f"¥{purchases.monthly_total(month, kind='cost'):,}"
+                    ).classes(
+                        "text-xl font-bold metric-value q-mt-xs"
+                    )
+                with ui.card().classes("surface-card q-pa-md"):
+                    ui.label(f"{month.replace('-', '年')}月・その他経費").classes(
+                        "text-xs text-grey-6"
+                    )
+                    ui.label(
+                        f"¥{purchases.monthly_total(month, kind='expense'):,}"
+                    ).classes(
+                        "text-xl font-bold metric-value q-mt-xs"
                     )
 
         totals()
-        purchase_date.on("change", lambda _: totals.refresh())
+        def refresh_selected_day():
+            totals.refresh()
+            history.refresh()
 
-        with ui.row().classes("w-full items-center justify-between q-mt-md q-mb-sm"):
-            ui.label("仕入れ履歴").classes("text-xl font-bold")
-            month_filter = ui.input(
-                "表示月", value=selected_month[0]
-            ).props("type=month outlined dense").classes("w-36")
+        purchase_date.on("change", lambda _: refresh_selected_day())
+
+        ui.label("選択日の仕入れ履歴").classes(
+            "text-xl font-bold q-mt-md q-mb-sm"
+        )
 
         @ui.refreshable
         def history():
-            records = purchases.records(month_filter.value)
+            records = purchases.records(record_date=purchase_date.value)
             if not records:
-                ui.label("この月の仕入れ記録はありません。").classes("text-grey-7")
+                ui.label("この日の仕入れ記録はありません。").classes("text-grey-7")
                 return
-            current_day = None
             for record in records:
-                if record["date"] != current_day:
-                    current_day = record["date"]
-                    ui.label(
-                        f"{current_day.replace('-', '/')}　合計 ¥{purchases.daily_total(current_day):,}"
-                    ).classes("section-kicker q-mt-md q-mb-xs")
                 with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
                     with ui.row().classes("w-full items-center no-wrap"):
                         with ui.column().classes("gap-0"):
                             ui.label(record["supplier"]).classes("font-bold")
-                            ui.label(record["date"]).classes("text-xs text-grey-6")
+                            ui.badge(
+                                "原価"
+                                if record.get("kind", "cost") == "cost"
+                                else "その他経費"
+                            ).props(
+                                "color=primary"
+                                if record.get("kind", "cost") == "cost"
+                                else "color=orange"
+                            )
                         ui.space()
                         ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
 
@@ -180,4 +205,3 @@ def purchase_page():
                         )
 
         history()
-        month_filter.on("change", lambda _: history.refresh())

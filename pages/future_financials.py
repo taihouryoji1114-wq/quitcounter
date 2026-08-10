@@ -18,13 +18,17 @@ def future_financials():
         back_to="/",
     )
     current_month = date.today().strftime("%Y-%m")
-    purchase_total = purchases.monthly_total(current_month)
+    purchase_total = purchases.monthly_total(current_month, kind="cost")
+    other_expense_total = purchases.monthly_total(current_month, kind="expense")
     with content:
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
             ui.label("仕入れノート連携").classes("section-kicker")
             ui.label(
                 f"{current_month.replace('-', '年')}月の仕入れ実績　¥{purchase_total:,}"
             ).classes("text-xl font-bold q-mt-xs")
+            ui.label(
+                f"その他経費　¥{other_expense_total:,}"
+            ).classes("text-sm font-bold q-mt-xs")
             ui.label(
                 "今月の仕入れ合計を、下の売上原価へ自動反映しています"
                 if purchase_total else
@@ -114,5 +118,20 @@ function applyPurchaseTotal(attempt = 0) {{
   }}
 }}
 applyPurchaseTotal();
+</script>'''
+            )
+        if other_expense_total:
+            ui.add_body_html(
+                f'''<script>
+function applyOtherExpense(attempt = 0) {{
+  const other = document.getElementById('other-sga');
+  if (other) {{
+    other.value = {other_expense_total};
+    other.dispatchEvent(new Event('input', {{bubbles:true}}));
+  }} else if (attempt < 20) {{
+    setTimeout(() => applyOtherExpense(attempt + 1), 100);
+  }}
+}}
+applyOtherExpense();
 </script>'''
             )

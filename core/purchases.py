@@ -10,23 +10,33 @@ class PurchaseManager:
     def __init__(self, data_manager):
         self._data_manager = data_manager
 
-    def records(self, month=None):
+    def records(self, month=None, record_date=None, kind=None):
         records = self._data_manager.data.get("business_purchases", [])
         if month:
             records = [item for item in records if item.get("date", "").startswith(month)]
+        if record_date:
+            records = [item for item in records if item.get("date") == record_date]
+        if kind:
+            records = [
+                item for item in records
+                if item.get("kind", "cost") == kind
+            ]
         return sorted(records, key=lambda item: (item["date"], item["id"]), reverse=True)
 
-    def add(self, record_date, supplier, total):
+    def add(self, record_date, supplier, total, kind="cost"):
         self._validate_date(record_date)
         supplier = str(supplier or "").strip()
         if not supplier:
             raise ValueError("仕入れ先を入力してください。")
         total = self._validate_total(total)
+        if kind not in {"cost", "expense"}:
+            raise ValueError("支出の区分を選択してください。")
         record = {
             "id": uuid4().hex,
             "date": record_date,
             "supplier": supplier,
             "total": total,
+            "kind": kind,
         }
         self._data_manager.data.setdefault("business_purchases", []).append(record)
         hidden = self._data_manager.data.get("business_hidden_suppliers", [])
@@ -65,20 +75,23 @@ class PurchaseManager:
             self._data_manager.save()
         return supplier
 
-    def daily_total(self, record_date):
+    def daily_total(self, record_date, kind=None):
         self._validate_date(record_date)
         return sum(
             int(item.get("total", 0))
-            for item in self.records()
+            for item in self.records(kind=kind)
             if item.get("date") == record_date
         )
 
-    def monthly_total(self, month):
+    def monthly_total(self, month, kind=None):
         try:
             datetime.strptime(month, "%Y-%m")
         except (TypeError, ValueError) as error:
             raise ValueError("月は YYYY-MM 形式で指定してください。") from error
-        return sum(int(item.get("total", 0)) for item in self.records(month))
+        return sum(
+            int(item.get("total", 0))
+            for item in self.records(month=month, kind=kind)
+        )
 
     @staticmethod
     def _validate_date(value):

@@ -22,6 +22,17 @@ class PurchaseManagerTest(unittest.TestCase):
         self.assertEqual(self.purchases.daily_total("2026-08-10"), 20000)
         self.assertEqual(self.purchases.monthly_total("2026-08"), 25000)
 
+    def test_cost_and_other_expenses_are_separated(self):
+        self.purchases.add("2026-08-10", "市場A", 12000, "cost")
+        self.purchases.add("2026-08-10", "飲食店", 8000, "expense")
+        self.assertEqual(
+            self.purchases.monthly_total("2026-08", kind="cost"), 12000
+        )
+        self.assertEqual(
+            self.purchases.monthly_total("2026-08", kind="expense"), 8000
+        )
+        self.assertEqual(len(self.purchases.records(record_date="2026-08-10")), 2)
+
     def test_suppliers_are_reused_without_duplicates(self):
         self.purchases.add("2026-08-10", "市場A", 12000)
         self.purchases.add("2026-08-11", "市場A", 5000)
