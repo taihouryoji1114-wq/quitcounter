@@ -85,12 +85,20 @@ def purchase_page():
             amount = ui.number(
                 "仕入れ合計金額", min=1, step=1
             ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+            simple_tax_rate = ui.select(
+                {"8": "8％（食品・通常はこちら）", "10": "10％", "1": "1％（制度開始後）"},
+                value="8",
+                label="消費税率",
+            ).props("outlined").classes("w-full q-mb-sm")
 
             tax_panel = ui.column().classes("w-full gap-2 q-mb-sm")
             tax_panel.bind_visibility_from(
                 entry_mode, "value", backward=lambda value: value == "tax"
             )
             amount.bind_visibility_from(
+                entry_mode, "value", backward=lambda value: value == "simple"
+            )
+            simple_tax_rate.bind_visibility_from(
                 entry_mode, "value", backward=lambda value: value == "simple"
             )
             with tax_panel:
@@ -183,10 +191,20 @@ def purchase_page():
 
             def save_purchase():
                 try:
-                    breakdown = calculate_breakdown(True) if entry_mode.value == "tax" else None
+                    if entry_mode.value == "tax":
+                        breakdown = calculate_breakdown(True)
+                    else:
+                        simple_amounts = {
+                            "amount_1": amount.value if simple_tax_rate.value == "1" else 0,
+                            "amount_8": amount.value if simple_tax_rate.value == "8" else 0,
+                            "amount_10": amount.value if simple_tax_rate.value == "10" else 0,
+                        }
+                        breakdown = purchases.calculate_tax_breakdown(
+                            price_mode="included", **simple_amounts
+                        )
                     if entry_mode.value == "tax" and breakdown is None:
                         return
-                    total = breakdown["total"] if breakdown else amount.value
+                    total = breakdown["total"]
                     purchases.add(
                         purchase_date.value,
                         supplier.value,
@@ -284,6 +302,11 @@ def purchase_page():
 
                         def open_edit(_, selected=record):
                             existing = selected.get("tax_breakdown") or {}
+                            existing_simple_rate = (
+                                "1" if existing.get("amount_1", 0) > 0
+                                else "10" if existing.get("amount_10", 0) > 0
+                                else "8"
+                            )
                             with ui.dialog() as edit_dialog, ui.card().classes(
                                 "surface-card w-[420px] max-w-full q-pa-lg"
                             ):
@@ -305,6 +328,19 @@ def purchase_page():
                                     value=selected["total"], min=1, step=1,
                                 ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                 edit_total.bind_visibility_from(
+                                    edit_mode, "value",
+                                    backward=lambda value: value == "simple",
+                                )
+                                edit_simple_tax_rate = ui.select(
+                                    {
+                                        "8": "8％（食品・通常はこちら）",
+                                        "10": "10％",
+                                        "1": "1％（制度開始後）",
+                                    },
+                                    value=existing_simple_rate,
+                                    label="消費税率",
+                                ).props("outlined").classes("w-full")
+                                edit_simple_tax_rate.bind_visibility_from(
                                     edit_mode, "value",
                                     backward=lambda value: value == "simple",
                                 )
@@ -385,8 +421,15 @@ def purchase_page():
                                             )
                                             edited_total = edited_breakdown["total"]
                                         else:
-                                            edited_breakdown = None
                                             edited_total = edit_total.value
+                                            simple_amounts = {
+                                                "amount_1": edited_total if edit_simple_tax_rate.value == "1" else 0,
+                                                "amount_8": edited_total if edit_simple_tax_rate.value == "8" else 0,
+                                                "amount_10": edited_total if edit_simple_tax_rate.value == "10" else 0,
+                                            }
+                                            edited_breakdown = purchases.calculate_tax_breakdown(
+                                                price_mode="included", **simple_amounts
+                                            )
                                         purchases.update(
                                             selected["id"], edit_date.value,
                                             edit_supplier.value, edited_total,

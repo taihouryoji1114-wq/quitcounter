@@ -231,6 +231,45 @@ class PurchaseManager:
             for item in self.records(month=month, kind=kind)
         )
 
+    def monthly_tax_summary(self, month):
+        """Return invoice-based input tax, estimating only legacy simple records."""
+        try:
+            datetime.strptime(month, "%Y-%m")
+        except (TypeError, ValueError) as error:
+            raise ValueError("月は YYYY-MM 形式で指定してください。") from error
+        result = {
+            "tax_1": 0,
+            "tax_8": 0,
+            "tax_10": 0,
+            "input_tax": 0,
+            "estimated_records": 0,
+            "excluded_unregistered_records": 0,
+        }
+        for record in self.records(month=month):
+            if record.get("invoice_status") == "unregistered":
+                result["excluded_unregistered_records"] += 1
+                continue
+            breakdown = record.get("tax_breakdown")
+            if breakdown:
+                result["tax_1"] += int(breakdown.get("tax_1", 0))
+                result["tax_8"] += int(breakdown.get("tax_8", 0))
+                result["tax_10"] += int(breakdown.get("tax_10", 0))
+                continue
+            total = int(record.get("total", 0))
+            if record.get("kind", "cost") == "cost":
+                result["tax_8"] += self._round_tax(
+                    Decimal(total) * Decimal(8) / Decimal(108), "floor"
+                )
+            else:
+                result["tax_10"] += self._round_tax(
+                    Decimal(total) * Decimal(10) / Decimal(110), "floor"
+                )
+            result["estimated_records"] += 1
+        result["input_tax"] = (
+            result["tax_1"] + result["tax_8"] + result["tax_10"]
+        )
+        return result
+
     @staticmethod
     def _validate_date(value):
         try:
