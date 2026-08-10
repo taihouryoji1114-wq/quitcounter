@@ -97,8 +97,8 @@ def future_financials():
         <div class="dual-plan-inputs"><label>金額<input id="cogs" inputmode="numeric" value="900000"></label><label>売上比率（%）<input id="cogs-rate" inputmode="decimal" value="30"></label></div>
       </div>
       <div class="dual-plan-field">
-        <div class="dual-plan-head"><span>人件費</span><select id="personnel-mode"><option value="rate">比率で入力</option><option value="amount">金額で入力</option></select></div>
-        <div class="dual-plan-inputs"><label>金額<input id="personnel" inputmode="numeric" value="750000"></label><label>売上比率（%）<input id="personnel-rate" inputmode="decimal" value="25"></label></div>
+        <div class="dual-plan-head"><span>人件費</span><select id="personnel-mode"><option value="rate">労働分配率で入力</option><option value="amount">金額で入力</option></select></div>
+        <div class="dual-plan-inputs"><label>金額<input id="personnel" inputmode="numeric" value="750000"></label><label>粗利に対する割合（%）<input id="personnel-rate" inputmode="decimal" value="35"></label></div>
       </div>
       <label>家賃<input id="rent" inputmode="numeric" value="200000"></label>
       <label>水道光熱費<input id="utilities" inputmode="numeric" value="100000"></label>
@@ -114,7 +114,7 @@ def future_financials():
         <label>目標光熱費率（%）<input id="target-utilities-rate" inputmode="decimal" value="5"></label>
         <label>目標広告費率（%）<input id="target-advertising-rate" inputmode="decimal" value="5"></label>
         <label>目標営業利益率（%）<input id="target-operating-rate" inputmode="decimal" value="10"></label>
-      </div><p class="target-help">労働分配率は「人件費 ÷ 粗利」で判定します。計画入力の「売上比率」とは別の指標です。</p></div>
+      </div><p class="target-help">労働分配率は「人件費 ÷ 粗利」です。人件費を比率入力すると、粗利から人件費を自動計算します。</p></div>
     </div>
   </section>
 
@@ -160,9 +160,9 @@ def future_financials():
     function box(label,value,share,cls,note=''){const safe=Math.max(.015,Math.abs(share));return `<div class="money-box ${cls}" style="flex:${safe}"><span>${label}</span>${safe>=.07?`<b>${yen(value)}</b>`:''}${note&&safe>=.11?`<em>${note}</em>`:''}</div>`}
     function legend(label,value,rate,color){return `<div><span><i style="background:${color}"></i>${label}　${(rate*100).toFixed(1)}%</span><strong>${yen(value)}</strong></div>`}
     function syncPlanField(name){
-      const mode=$(`${name}-mode`).value,sales=num('sales'),amount=$(name),rate=$(`${name}-rate`);
-      if(mode==='rate'){amount.value=Math.round(sales*(Math.max(0,Number(rate.value)||0)/100));amount.disabled=true;rate.disabled=false}
-      else{rate.value=sales?((num(name)/sales)*100).toFixed(1):0;amount.disabled=false;rate.disabled=true}
+      const mode=$(`${name}-mode`).value,sales=num('sales'),basis=name==='personnel'?Math.max(0,sales-num('cogs')):sales,amount=$(name),rate=$(`${name}-rate`);
+      if(mode==='rate'){amount.value=Math.round(basis*(Math.max(0,Number(rate.value)||0)/100));amount.disabled=true;rate.disabled=false}
+      else{rate.value=basis?((num(name)/basis)*100).toFixed(1):0;amount.disabled=false;rate.disabled=true}
     }
     function syncPlan(){syncPlanField('cogs');syncPlanField('personnel')}
     function update(){
@@ -174,20 +174,20 @@ def future_financials():
       const personnelShare=personnel/base,rentShare=rent/base,utilitiesShare=utilities/base,advertisingShare=advertising/base,otherShare=otherExpenses/base,visibleProfitShare=Math.max(Math.abs(profitShare),.015);
       $('profit-map').innerHTML=`<div class="box-column">${box('売上',sales,1,'box-sales','100%')}</div><div class="box-column">${box('仕入れ・原価',cogs,costShare,'box-cost',`原価率 ${pct(costShare)}`)}${box(gross<0?'粗利損失':'粗利',gross,Math.max(Math.abs(grossShare),.015),gross<0?'box-loss':'box-gross',`粗利率 ${pct(grossShare)}`)}</div><div class="box-column"><div class="box-spacer" style="flex:${Math.max(costShare,0)}"></div>${box('人件費',personnel,personnelShare,'box-personnel',`分配率 ${pct(laborShare)}`)}${box('家賃',rent,rentShare,'box-rent')}${box('光熱費',utilities,utilitiesShare,'box-utilities')}${box('広告費',advertising,advertisingShare,'box-advertising')}${box('その他',otherExpenses,otherShare,'box-other')}${box(operating<0?'営業損失':'営業利益',Math.abs(operating),visibleProfitShare,operating<0?'box-loss':'box-profit',`利益率 ${pct(profitShare)}`)}</div>`;
       $('block-legend').innerHTML=legend('原価',cogs,costShare,'#82988D')+legend('人件費',personnel,personnelShare,'#4A9FD0')+legend('家賃',rent,rentShare,'#8172B5')+legend('水道光熱費',utilities,utilitiesShare,'#4CB7B4')+legend('広告費',advertising,advertisingShare,'#D8943C')+legend('その他管理費',otherExpenses,otherShare,'#99A29D')+legend(operating<0?'営業損失':'営業利益',operating,profitShare,operating<0?'#C85C57':'#4B77B7');
-      const issues=[{label:'原価率',diff:costShare*100-num('target-cogs-rate')},{label:'労働分配率',diff:laborShare*100-num('target-personnel-rate')},{label:'家賃比率',diff:rent/base*100-num('target-rent-rate')},{label:'水道光熱費率',diff:utilities/base*100-num('target-utilities-rate')},{label:'広告費率',diff:advertising/base*100-num('target-advertising-rate')}].filter(x=>x.diff>0);
-      const profitGap=num('target-operating-rate')-profitShare*100;if(profitGap>0)issues.push({label:'営業利益率',diff:profitGap});issues.sort((a,b)=>b.diff-a.diff);
-      $('diagnosis').innerHTML=issues.length?`<div class="diagnosis-main">⚠️ 最優先で確認：${issues[0].label}（目標との差 ${issues[0].diff.toFixed(1)}ポイント）</div>`:`<div class="diagnosis-main good">✓ 設定した目標比率の範囲内です</div>`;
+      const issues=[{label:'原価率',current:costShare*100,target:num('target-cogs-rate')},{label:'労働分配率',current:laborShare*100,target:num('target-personnel-rate')},{label:'家賃比率',current:rent/base*100,target:num('target-rent-rate')},{label:'水道光熱費率',current:utilities/base*100,target:num('target-utilities-rate')},{label:'広告費率',current:advertising/base*100,target:num('target-advertising-rate')}].map(x=>({...x,diff:x.current-x.target})).filter(x=>x.diff>0);
+      const targetOperating=num('target-operating-rate'),currentOperating=profitShare*100,profitGap=targetOperating-currentOperating;if(profitGap>0)issues.push({label:'営業利益率',current:currentOperating,target:targetOperating,diff:profitGap});issues.sort((a,b)=>b.diff-a.diff);
+      $('diagnosis').innerHTML=issues.length?`<div class="diagnosis-main">⚠️ 最優先で確認：${issues[0].label}<br><span>現在 ${issues[0].current.toFixed(1)}% ／ 目標 ${issues[0].target.toFixed(1)}% ／ 差 ${issues[0].diff.toFixed(1)}%</span></div>`:`<div class="diagnosis-main good">✓ 設定した目標比率の範囲内です</div>`;
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const ct=num('consumption-tax'),corp=num('corporate-tax'),loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
     }
     ids.filter(id=>!['sales','cogs','cogs-rate','personnel','personnel-rate'].includes(id)).forEach(id=>$(id).addEventListener('input',update));
     $('sales').addEventListener('input',()=>{syncPlan();update()});
-    ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);update()}));
-    ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);update()}));
+    ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);if(id==='cogs'&&$('personnel-mode').value==='rate')syncPlanField('personnel');update()}));
+    ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);if(name==='cogs'&&$('personnel-mode').value==='rate')syncPlanField('personnel');update()}));
     modes.forEach(id=>$(id).addEventListener('change',()=>{syncPlan();update()}));
-    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['cogs-mode']===undefined)$('cogs-mode').value='amount';if(saved['personnel-mode']===undefined)$('personnel-mode').value='amount';if(saved['target-personnel-basis']!=='gross-profit')$('target-personnel-rate').value=35;if(saved['other-expenses']===undefined&&saved['other-sga']!==undefined){$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=saved['other-sga']}if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-expenses').value=Math.round(saved.sga*.35)}}}catch(e){}
-    $('save-plan').onclick=()=>{const data={'target-personnel-basis':'gross-profit'};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='計画を保存',1400)};
+    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['cogs-mode']===undefined)$('cogs-mode').value='amount';if(saved['personnel-mode']===undefined)$('personnel-mode').value='amount';if(saved['target-personnel-basis']!=='gross-profit')$('target-personnel-rate').value=35;if(saved['personnel-plan-basis']!=='gross-profit'){const gross=Math.max(0,num('sales')-num('cogs'));$('personnel-rate').value=gross?((num('personnel')/gross)*100).toFixed(1):0}if(saved['other-expenses']===undefined&&saved['other-sga']!==undefined){$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=saved['other-sga']}if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-expenses').value=Math.round(saved.sga*.35)}}}catch(e){}
+    $('save-plan').onclick=()=>{const data={'target-personnel-basis':'gross-profit','personnel-plan-basis':'gross-profit'};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='計画を保存',1400)};
     let simulationData=null;
     function setView(mode){
       const provisional=mode==='provisional',fields=$('plan-fields').querySelectorAll('input,select');
