@@ -16,6 +16,7 @@ def sales_page():
     Theme.page("売上入力｜未来決算", app_name="mirai-kessan")
     today = today_jst()
     selected_day = [today.isoformat()]
+    viewed_month = [today.strftime("%Y-%m")]
     content = Theme.shell(
         "売上入力",
         "その日の売上を、1回入力するだけ",
@@ -192,7 +193,7 @@ def sales_page():
 
         @ui.refreshable
         def sales_calendar():
-            month_text = selected_day[0][:7]
+            month_text = viewed_month[0]
             year, month = (int(part) for part in month_text.split("-"))
             recorded_days = {
                 item["date"] for item in financials.sales_records(month=month_text)
@@ -202,6 +203,20 @@ def sales_page():
                 "text-xs text-grey-6 q-mb-sm"
             )
             with ui.card().classes("surface-card w-full q-pa-sm q-mb-md"):
+                def move_month(offset):
+                    month_index = year * 12 + month - 1 + offset
+                    target_year, target_month_index = divmod(month_index, 12)
+                    viewed_month[0] = f"{target_year:04d}-{target_month_index + 1:02d}"
+                    sales_calendar.refresh()
+
+                with ui.row().classes("w-full items-center justify-between q-mb-sm"):
+                    ui.button("前月", icon="chevron_left", on_click=lambda: move_month(-1)).props(
+                        "flat dense"
+                    )
+                    ui.label(f"{year}年{month}月").classes("font-bold text-lg")
+                    ui.button("翌月", icon="chevron_right", on_click=lambda: move_month(1)).props(
+                        "flat dense icon-right"
+                    )
                 with ui.element("div").classes("grid grid-cols-7 gap-1 w-full"):
                     for weekday in ("月", "火", "水", "木", "金", "土", "日"):
                         ui.label(weekday).classes("text-center text-xs text-grey-6 q-py-xs")
