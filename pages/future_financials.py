@@ -93,11 +93,11 @@ def future_financials():
     <div id="plan-fields" class="input-grid">
       <label>売上高<input id="sales" inputmode="numeric" value="3000000"></label>
       <div class="dual-plan-field">
-        <div class="dual-plan-head"><span>売上原価</span><select id="cogs-mode"><option value="rate">比率で入力</option><option value="amount">金額で入力</option></select></div>
+        <div class="dual-plan-head"><span>売上原価</span><select id="cogs-mode"><option value="amount" selected>金額を固定</option><option value="rate">原価率を固定</option></select></div>
         <div class="dual-plan-inputs"><label>金額<input id="cogs" inputmode="numeric" value="900000"></label><label>売上比率（%）<input id="cogs-rate" inputmode="decimal" value="30"></label></div>
       </div>
       <div class="dual-plan-field">
-        <div class="dual-plan-head"><span>人件費</span><select id="personnel-mode"><option value="rate">労働分配率で入力</option><option value="amount">金額で入力</option></select></div>
+        <div class="dual-plan-head"><span>人件費</span><select id="personnel-mode"><option value="amount" selected>金額を固定</option><option value="rate">労働分配率を固定</option></select></div>
         <div class="dual-plan-inputs"><label>金額<input id="personnel" inputmode="numeric" value="750000"></label><label>粗利に対する割合（%）<input id="personnel-rate" inputmode="decimal" value="35"></label></div>
       </div>
       <label>家賃<input id="rent" inputmode="numeric" value="200000"></label>
@@ -130,10 +130,15 @@ def future_financials():
   </section>
 
   <section class="mk-card cash-card">
-    <div class="mk-head"><div><small>CASH</small><h2>資金繰り</h2></div><span>利益とは別に計算</span></div>
+    <div class="mk-head"><div><small>TAX & CASH</small><h2>税金・資金繰り</h2></div><span>自動概算</span></div>
+    <div class="tax-settings">
+      <label>消費税の計算方式<select id="tax-method"><option value="general">一般課税</option><option value="simplified">簡易課税（飲食店・みなし仕入率60%）</option></select></label>
+      <label>法人税等の概算実効税率（%）<input id="corporate-tax-rate" inputmode="decimal" value="30"></label>
+    </div>
+    <div id="tax-note" class="tax-note"></div>
     <div class="input-grid compact">
-      <label>消費税の支払<input id="consumption-tax" inputmode="numeric" value="120000"></label>
-      <label>法人税等<input id="corporate-tax" inputmode="numeric" value="120000"></label>
+      <label>消費税の納付見込<input id="consumption-tax" inputmode="numeric" value="0" readonly></label>
+      <label>法人税等の見込<input id="corporate-tax" inputmode="numeric" value="0" readonly></label>
       <label>借入金の元金返済<input id="loan-payment" inputmode="numeric" value="200000"></label>
       <label>設備投資・その他<input id="investment" inputmode="numeric" value="0"></label>
     </div>
@@ -148,6 +153,7 @@ def future_financials():
 .block-sales-total{grid-column:1;grid-row:1/3}.block-cost-wide{grid-column:2/4;grid-row:1}.block-gross-total{grid-column:2;grid-row:2}.block-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;gap:5px;overflow:hidden}@media(max-width:520px){.block-breakdown{gap:3px}}
 .legend-title{margin-top:13px;color:#39745A;font-size:10px;font-weight:800}.block-legend{margin-top:6px}
 .box-map{gap:0;padding:0}.money-box{border-radius:0}.block-breakdown{gap:0}.block-sales-total{border-radius:0}.block-cost-wide{border-radius:0}
+.tax-settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.tax-settings label{color:#68746D;font-size:10px;font-weight:700}.tax-settings select,.tax-settings input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;background:#fff;font-size:12px}.tax-note{margin-bottom:12px;padding:10px 12px;border-radius:11px;background:#FFF7E8;color:#75551E;font-size:9px;line-height:1.55}.input-grid input[readonly]{background:#F1F5F2;color:#315A45;font-weight:800}@media(max-width:520px){.tax-settings{grid-template-columns:1fr}}
 </style>
             ''',
             sanitize=False,
@@ -159,7 +165,7 @@ def future_financials():
   function init(){
     const root=document.getElementById('mirai-app');
     if(!root){setTimeout(init,100);return}
-    const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','rent','utilities','advertising','other-expenses','non-op-income','non-op-expense','target-profit','target-cogs-rate','target-personnel-rate','target-rent-rate','target-utilities-rate','target-advertising-rate','target-operating-rate','consumption-tax','corporate-tax','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
+    const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','rent','utilities','advertising','other-expenses','non-op-income','non-op-expense','target-profit','target-cogs-rate','target-personnel-rate','target-rent-rate','target-utilities-rate','target-advertising-rate','target-operating-rate','tax-method','corporate-tax-rate','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
     function box(label,value,share,cls,note=''){const safe=Math.max(.015,Math.abs(share));return `<div class="money-box ${cls}" style="flex:${safe}"><span>${label}</span>${safe>=.07?`<b>${yen(value)}</b>`:''}${note&&safe>=.11?`<em>${note}</em>`:''}</div>`}
     function legend(label,value,rate,color){return `<div><span><i style="background:${color}"></i>${label}　${(rate*100).toFixed(1)}%</span><strong>${yen(value)}</strong></div>`}
@@ -183,16 +189,19 @@ def future_financials():
       const targetOperating=num('target-operating-rate'),currentOperating=profitShare*100,profitGap=targetOperating-currentOperating;if(profitGap>0)issues.push({label:'営業利益率',current:currentOperating,target:targetOperating,diff:profitGap});issues.sort((a,b)=>b.diff-a.diff);
       $('diagnosis').innerHTML=issues.length?`<div class="diagnosis-main">⚠️ 最優先で確認：${issues[0].label}<br><span>現在 ${issues[0].current.toFixed(1)}% ／ 目標 ${issues[0].target.toFixed(1)}% ／ 差 ${issues[0].diff.toFixed(1)}%</span></div>`:`<div class="diagnosis-main good">✓ 設定した目標比率の範囲内です</div>`;
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
-      const ct=num('consumption-tax'),corp=num('corporate-tax'),loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
+      const outputTax=Math.floor(sales*10/110),generalInputTax=Math.floor(cogs*8/108)+Math.floor((rent+utilities+advertising+otherExpenses)*10/110),taxMethod=$('tax-method').value,ct=Math.max(0,taxMethod==='simplified'?Math.floor(outputTax*.4):outputTax-generalInputTax),corpRate=num('corporate-tax-rate'),corp=Math.max(0,Math.round(Math.max(ordinary,0)*corpRate/100));
+      $('consumption-tax').value=ct;$('corporate-tax').value=corp;
+      $('tax-note').innerHTML=taxMethod==='simplified'?`消費税：税込売上10%として預かった税額 ${yen(outputTax)} × 40%で概算。飲食店のみなし仕入率60%を使用しています。`:`消費税：税込売上10%の預り税 ${yen(outputTax)} − 原価8%・管理費10%の支払税 ${yen(generalInputTax)}で概算。人件費・借入元金・利息は仕入税額控除に含めていません。`;
+      const loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
     }
     ids.filter(id=>!['sales','cogs','cogs-rate','personnel','personnel-rate'].includes(id)).forEach(id=>$(id).addEventListener('input',update));
     $('sales').addEventListener('input',()=>{syncPlan();update()});
-    ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);if(id==='cogs'&&$('personnel-mode').value==='rate')syncPlanField('personnel');update()}));
-    ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);if(name==='cogs'&&$('personnel-mode').value==='rate')syncPlanField('personnel');update()}));
+    ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);if(id==='cogs')syncPlanField('personnel');update()}));
+    ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);if(name==='cogs')syncPlanField('personnel');update()}));
     modes.forEach(id=>$(id).addEventListener('change',()=>{syncPlan();update()}));
-    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['cogs-mode']===undefined)$('cogs-mode').value='amount';if(saved['personnel-mode']===undefined)$('personnel-mode').value='amount';if(saved['target-personnel-basis']!=='gross-profit')$('target-personnel-rate').value=35;if(saved['personnel-plan-basis']!=='gross-profit'){const gross=Math.max(0,num('sales')-num('cogs'));$('personnel-rate').value=gross?((num('personnel')/gross)*100).toFixed(1):0}if(saved['other-expenses']===undefined&&saved['other-sga']!==undefined){$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=saved['other-sga']}if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-expenses').value=Math.round(saved.sga*.35)}}}catch(e){}
-    $('save-plan').onclick=()=>{const data={'target-personnel-basis':'gross-profit','personnel-plan-basis':'gross-profit'};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='計画を保存',1400)};
+    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['linkage-version']!=='amount-default-v1'){$('cogs-mode').value='amount';$('personnel-mode').value='amount'}if(saved['target-personnel-basis']!=='gross-profit')$('target-personnel-rate').value=35;if(saved['personnel-plan-basis']!=='gross-profit'){const gross=Math.max(0,num('sales')-num('cogs'));$('personnel-rate').value=gross?((num('personnel')/gross)*100).toFixed(1):0}if(saved['other-expenses']===undefined&&saved['other-sga']!==undefined){$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=saved['other-sga']}if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-expenses').value=Math.round(saved.sga*.35)}}}catch(e){}
+    $('save-plan').onclick=()=>{const data={'target-personnel-basis':'gross-profit','personnel-plan-basis':'gross-profit','linkage-version':'amount-default-v1'};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='計画を保存',1400)};
     let simulationData=null;
     function setView(mode){
       const provisional=mode==='provisional',fields=$('plan-fields').querySelectorAll('input,select');
