@@ -62,6 +62,37 @@ class FinancialManagerTest(unittest.TestCase):
         self.assertEqual(reloaded.get_plan()["sales"], "3000000")
         self.assertEqual(reloaded.get_plan()["cogs-mode"], "rate")
 
+    def test_payment_breakdown_and_fees_are_calculated(self):
+        self.financials.save_payment_fee_rates({
+            "credit": 3.0,
+            "paypay": 2.0,
+            "electronic_money": 1.5,
+            "travel_agency": 5.0,
+        })
+        self.financials.set_daily_sales(
+            "2026-08-04",
+            lunch_sales=10000,
+            dinner_sales=20000,
+            cash_sales=10000,
+            credit_sales=10000,
+            paypay_sales=5000,
+            electronic_money_sales=3000,
+            travel_agency_sales=2000,
+        )
+        summary = self.financials.monthly_payment_summary("2026-08")
+        self.assertEqual(summary["cash_sales"], 10000)
+        self.assertEqual(summary["total_fees"], 300 + 100 + 45 + 100)
+
+    def test_payment_total_must_match_lunch_and_dinner(self):
+        with self.assertRaisesRegex(ValueError, "決済方法別の合計"):
+            self.financials.set_daily_sales(
+                "2026-08-04",
+                lunch_sales=10000,
+                dinner_sales=20000,
+                cash_sales=10000,
+                credit_sales=10000,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

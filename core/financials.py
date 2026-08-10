@@ -7,6 +7,13 @@ from uuid import uuid4
 
 
 class FinancialManager:
+    PAYMENT_FIELDS = (
+        "cash_sales", "credit_sales", "paypay_sales",
+        "electronic_money_sales", "travel_agency_sales",
+    )
+    FEE_RATE_FIELDS = (
+        "credit", "paypay", "electronic_money", "travel_agency",
+    )
     PLAN_FIELDS = {
         "sales", "cogs", "cogs-rate", "cogs-mode", "personnel",
         "personnel-rate", "personnel-mode", "rent", "utilities",
@@ -37,12 +44,33 @@ class FinancialManager:
         dinner_sales=None,
         lunch_customers=None,
         dinner_customers=None,
+        cash_sales=None,
+        credit_sales=None,
+        paypay_sales=None,
+        electronic_money_sales=None,
+        travel_agency_sales=None,
     ):
         self._validate_date(record_date)
         split_entry = any(
             value is not None
             for value in (lunch_sales, dinner_sales, lunch_customers, dinner_customers)
         )
+        payment_values = {
+            "cash_sales": cash_sales,
+            "credit_sales": credit_sales,
+            "paypay_sales": paypay_sales,
+            "electronic_money_sales": electronic_money_sales,
+            "travel_agency_sales": travel_agency_sales,
+        }
+        payment_entry = any(value is not None for value in payment_values.values())
+        if payment_entry:
+            payment_values = {
+                key: self._validate_amount(value or 0)
+                for key, value in payment_values.items()
+            }
+            payment_total = sum(payment_values.values())
+        else:
+            payment_total = None
         if split_entry:
             lunch_sales = self._validate_amount(lunch_sales or 0)
             dinner_sales = self._validate_amount(dinner_sales or 0)
@@ -50,7 +78,13 @@ class FinancialManager:
             dinner_customers = self._validate_count(dinner_customers or 0)
             amount = lunch_sales + dinner_sales
         else:
-            amount = self._validate_amount(amount)
+            amount = payment_total if payment_entry else self._validate_amount(amount)
+        if payment_total is not None:
+            if amount and payment_total != amount:
+                raise ValueError(
+                    "ランチ・ディナーの売上合計と、決済方法別の合計が一致しません。"
+                )
+            amount = payment_total
         records = self._data_manager.data.setdefault("business_sales", [])
         record = next((item for item in records if item.get("date") == record_date), None)
         if record is None:
@@ -71,8 +105,58 @@ class FinancialManager:
                 "dinner_customers",
             ):
                 record.pop(field, None)
+        if payment_entry:
+            record.update(payment_values)
         self._data_manager.save()
         return record
+
+    def get_payment_fee_rates(self):
+        stored = self._data_manager.data.get("business_payment_fee_rates", {})
+        return {
+            key: float(stored.get(key, 0))
+            for key in self.FEE_RATE_FIELDS
+        }
+
+    def save_payment_fee_rates(self, rates):
+        if not isinstance(rates, dict):
+            raise ValueError("決済手数料率の形式が正しくありません。")
+        cleaned = {}
+        for key in self.FEE_RATE_FIELDS:
+            try:
+                value = float(rates.get(key, 0) or 0)
+            except (TypeError, ValueError) as error:
+                raise ValueError("決済手数料率は0〜100％で入力してください。") from error
+            if value < 0 or value > 100:
+                raise ValueError("決済手数料率は0〜100％で入力してください。")
+            cleaned[key] = round(value, 4)
+        self._data_manager.data["business_payment_fee_rates"] = cleaned
+        self._data_manager.save()
+        return dict(cleaned)
+
+    def monthly_payment_summary(self, month):
+        records = self.sales_records(month=month)
+        totals = {
+            field: sum(int(item.get(field, 0)) for item in records)
+            for field in self.PAYMENT_FIELDS
+        }
+        classified = sum(totals.values())
+        totals["unclassified_sales"] = max(
+            0, sum(int(item.get("amount", 0)) for item in records) - classified
+        )
+        rates = self.get_payment_fee_rates()
+        fees = {
+            "credit": round(totals["credit_sales"] * rates["credit"] / 100),
+            "paypay": round(totals["paypay_sales"] * rates["paypay"] / 100),
+            "electronic_money": round(
+                totals["electronic_money_sales"] * rates["electronic_money"] / 100
+            ),
+            "travel_agency": round(
+                totals["travel_agency_sales"] * rates["travel_agency"] / 100
+            ),
+        }
+        totals["fees"] = fees
+        totals["total_fees"] = sum(fees.values())
+        return totals
 
     def get_plan(self):
         plan = self._data_manager.data.get("business_plan", {})
