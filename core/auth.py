@@ -2,6 +2,7 @@
 
 import hmac
 import os
+import unicodedata
 
 from nicegui import app, ui
 
@@ -18,10 +19,15 @@ def require_login():
 
 
 def verify_pin(value):
-    configured = os.environ.get("HABITORY_PIN", "")
+    configured = _normalize_pin(os.environ.get("HABITORY_PIN", ""))
     if not configured:
         return False
-    return hmac.compare_digest(str(value or ""), configured)
+    return hmac.compare_digest(_normalize_pin(value), configured)
+
+
+def _normalize_pin(value):
+    """Treat full-width and half-width digits as the same PIN."""
+    return unicodedata.normalize("NFKC", str(value or "")).strip()
 
 
 def log_in():

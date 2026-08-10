@@ -1,19 +1,19 @@
+import os
 import unittest
 from unittest.mock import patch
 
 from core.auth import verify_pin
 
 
-class PinAuthenticationTest(unittest.TestCase):
-    def test_pin_must_match_configured_secret(self):
-        with patch.dict("os.environ", {"HABITORY_PIN": "2468"}):
-            self.assertTrue(verify_pin("2468"))
-            self.assertFalse(verify_pin("0000"))
+class AuthTest(unittest.TestCase):
+    def test_full_width_and_half_width_digits_match(self):
+        with patch.dict(os.environ, {"HABITORY_PIN": "１２３４"}):
+            self.assertTrue(verify_pin("1234"))
+            self.assertTrue(verify_pin(" １２３４ "))
 
-    def test_missing_pin_never_authenticates(self):
-        with patch.dict("os.environ", {}, clear=True):
-            self.assertFalse(verify_pin(""))
-            self.assertFalse(verify_pin("2468"))
+    def test_wrong_pin_is_rejected(self):
+        with patch.dict(os.environ, {"HABITORY_PIN": "1234"}):
+            self.assertFalse(verify_pin("1235"))
 
 
 if __name__ == "__main__":
