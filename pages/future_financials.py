@@ -8,6 +8,47 @@ from core.theme import Theme
 
 
 @ui.page("/mirai-kessan")
+def future_financials_home():
+    if not require_login():
+        return
+    Theme.page("未来決算")
+    content = Theme.shell(
+        "未来決算",
+        "毎日の入力から、今月の経営状況を見える化",
+        back_to="/",
+    )
+    current_month = date.today().strftime("%Y-%m")
+    purchase_total = purchases.monthly_total(current_month, kind="cost")
+    other_expense_total = purchases.monthly_total(current_month, kind="expense")
+    with content:
+        with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
+            with ui.card().classes("surface-card q-pa-md"):
+                ui.label("今月の原価仕入れ").classes("text-xs text-grey-6")
+                ui.label(f"¥{purchase_total:,}").classes("text-xl font-bold metric-value")
+            with ui.card().classes("surface-card q-pa-md"):
+                ui.label("今月のその他経費").classes("text-xs text-grey-6")
+                ui.label(f"¥{other_expense_total:,}").classes("text-xl font-bold metric-value")
+
+        def menu_card(title, description, icon, color, path):
+            with ui.card().classes(
+                "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+            ).on("click", lambda _, target=path: ui.navigate.to(target)):
+                with ui.row().classes("w-full items-center no-wrap"):
+                    with ui.element("div").classes(
+                        "w-14 h-14 rounded-xl q-mr-md flex items-center justify-center"
+                    ).style(f"background:{color}18;color:{color}"):
+                        ui.icon(icon).classes("text-3xl")
+                    with ui.column().classes("gap-0"):
+                        ui.label(title).classes("text-xl font-bold")
+                        ui.label(description).classes("text-grey-7 q-mt-xs")
+                    ui.space()
+                    ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        menu_card("仕入れノート", "原価・経費・消費税を記録", "receipt_long", "#246BFD", "/shiire")
+        menu_card("利益ブロック図", "売上から残るお金までを図で確認", "account_tree", "#39745A", "/mirai-kessan/block-map")
+
+
+@ui.page("/mirai-kessan/block-map")
 def future_financials():
     if not require_login():
         return
@@ -15,7 +56,7 @@ def future_financials():
     content = Theme.shell(
         "未来決算",
         "会社のお金を、利益と資金繰りに分けて見える化",
-        back_to="/",
+        back_to="/mirai-kessan",
     )
     current_month = date.today().strftime("%Y-%m")
     purchase_total = purchases.monthly_total(current_month, kind="cost")

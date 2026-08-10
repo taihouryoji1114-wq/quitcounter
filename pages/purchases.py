@@ -15,8 +15,8 @@ def purchase_page():
     today = date.today()
     content = Theme.shell(
         "仕入れノート",
-        "日付・仕入れ先・金額だけで、すばやく記録",
-        back_to="/",
+        "普段は合計だけ、必要な時だけ税率別に記録",
+        back_to="/mirai-kessan",
     )
 
     with content:
@@ -79,9 +79,90 @@ def purchase_page():
                         ).props("outline dense no-caps")
 
             supplier_shortcuts()
+            entry_mode = ui.toggle(
+                {"simple": "合計だけ", "tax": "税率を分けて計算"}, value="simple"
+            ).props("spread no-caps").classes("w-full q-mb-sm")
             amount = ui.number(
                 "仕入れ合計金額", min=1, step=1
             ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+
+            tax_panel = ui.column().classes("w-full gap-2 q-mb-sm")
+            tax_panel.bind_visibility_from(
+                entry_mode, "value", backward=lambda value: value == "tax"
+            )
+            amount.bind_visibility_from(
+                entry_mode, "value", backward=lambda value: value == "simple"
+            )
+            with tax_panel:
+                price_mode = ui.toggle(
+                    {"excluded": "税抜の納品書", "included": "税込の納品書"},
+                    value="excluded",
+                ).props("spread no-caps").classes("w-full")
+                amount_8 = ui.number("8％対象の小計", min=0, step=1, value=0).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                ).classes("w-full")
+                amount_10 = ui.number("10％対象の小計", min=0, step=1, value=0).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                ).classes("w-full")
+                exempt = ui.number("非課税・対象外の小計", min=0, step=1, value=0).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                ).classes("w-full")
+                rounding = ui.select(
+                    {"floor": "切り捨て", "half_up": "四捨五入", "ceil": "切り上げ"},
+                    value="floor",
+                    label="納品書の端数処理",
+                ).props("outlined").classes("w-full")
+                with ui.expansion("納品書記載の税額と合わない場合").classes("w-full"):
+                    ui.label("空欄なら自動計算します。記載額が違う時だけ入力してください。").classes(
+                        "text-xs text-grey-6 q-mb-sm"
+                    )
+                    stated_tax_8 = ui.number("記載されている8％税額", min=0, step=1).props(
+                        "outlined prefix=¥ inputmode=numeric"
+                    ).classes("w-full q-mb-sm")
+                    stated_tax_10 = ui.number("記載されている10％税額", min=0, step=1).props(
+                        "outlined prefix=¥ inputmode=numeric"
+                    ).classes("w-full")
+                tax_result = ui.label().classes(
+                    "w-full rounded-xl bg-green-50 text-green-900 q-pa-md font-bold"
+                )
+
+                def calculate_breakdown(notify=False):
+                    try:
+                        result = purchases.calculate_tax_breakdown(
+                            amount_8.value,
+                            amount_10.value,
+                            exempt.value,
+                            price_mode.value,
+                            rounding.value,
+                            stated_tax_8.value,
+                            stated_tax_10.value,
+                        )
+                    except ValueError as error:
+                        tax_result.text = "金額を入力すると合計を表示します"
+                        if notify:
+                            ui.notify(str(error), type="negative")
+                        return None
+                    tax_result.text = (
+                        f"消費税 ¥{result['tax_8'] + result['tax_10']:,}　"
+                        f"支払合計 ¥{result['total']:,}"
+                    )
+                    return result
+
+                for field in (amount_8, amount_10, exempt, stated_tax_8, stated_tax_10):
+                    field.on("update:model-value", lambda _: calculate_breakdown())
+                price_mode.on("update:model-value", lambda _: calculate_breakdown())
+                rounding.on("update:model-value", lambda _: calculate_breakdown())
+                calculate_breakdown()
+
+            invoice_status = ui.select(
+                {
+                    "registered": "インボイスあり",
+                    "unregistered": "インボイスなし",
+                    "unknown": "不明・あとで確認",
+                },
+                value="unknown",
+                label="インボイス",
+            ).props("outlined").classes("w-full q-mb-sm")
             purchase_kind = ui.toggle(
                 {"cost": "原価", "expense": "その他経費"}, value="cost"
             ).props("spread no-caps").classes("w-full q-mb-xs")
@@ -91,16 +172,24 @@ def purchase_page():
 
             def save_purchase():
                 try:
+                    breakdown = calculate_breakdown(True) if entry_mode.value == "tax" else None
+                    if entry_mode.value == "tax" and breakdown is None:
+                        return
+                    total = breakdown["total"] if breakdown else amount.value
                     purchases.add(
                         purchase_date.value,
                         supplier.value,
-                        amount.value,
+                        total,
                         purchase_kind.value,
+                        breakdown,
+                        invoice_status.value,
                     )
                 except (RuntimeError, ValueError) as error:
                     ui.notify(f"保存できませんでした: {error}", type="negative")
                     return
                 amount.value = None
+                amount_8.value = amount_10.value = exempt.value = 0
+                stated_tax_8.value = stated_tax_10.value = None
                 supplier_shortcuts.refresh()
                 totals.refresh()
                 history.refresh()
@@ -170,6 +259,14 @@ def purchase_page():
                                 if record.get("kind", "cost") == "cost"
                                 else "color=orange"
                             )
+                            breakdown = record.get("tax_breakdown")
+                            if breakdown:
+                                mode = "税込" if breakdown["price_mode"] == "included" else "税抜"
+                                ui.label(
+                                    f"{mode}・8％ ¥{breakdown['amount_8']:,}・"
+                                    f"10％ ¥{breakdown['amount_10']:,}・"
+                                    f"税 ¥{breakdown['tax_8'] + breakdown['tax_10']:,}"
+                                ).classes("text-[10px] text-grey-6")
                         ui.space()
                         ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
 

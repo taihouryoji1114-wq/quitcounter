@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, ROUND_CEILING, ROUND_DOWN, ROUND_HALF_UP
 from uuid import uuid4
 
 
@@ -23,7 +24,15 @@ class PurchaseManager:
             ]
         return sorted(records, key=lambda item: (item["date"], item["id"]), reverse=True)
 
-    def add(self, record_date, supplier, total, kind="cost"):
+    def add(
+        self,
+        record_date,
+        supplier,
+        total,
+        kind="cost",
+        tax_breakdown=None,
+        invoice_status="unknown",
+    ):
         self._validate_date(record_date)
         supplier = str(supplier or "").strip()
         if not supplier:
@@ -31,19 +40,74 @@ class PurchaseManager:
         total = self._validate_total(total)
         if kind not in {"cost", "expense"}:
             raise ValueError("支出の区分を選択してください。")
+        if invoice_status not in {"registered", "unregistered", "unknown"}:
+            raise ValueError("インボイスの区分を選択してください。")
         record = {
             "id": uuid4().hex,
             "date": record_date,
             "supplier": supplier,
             "total": total,
             "kind": kind,
+            "invoice_status": invoice_status,
         }
+        if tax_breakdown:
+            record["tax_breakdown"] = self._validate_tax_breakdown(
+                tax_breakdown, total
+            )
         self._data_manager.data.setdefault("business_purchases", []).append(record)
         hidden = self._data_manager.data.get("business_hidden_suppliers", [])
         if supplier in hidden:
             hidden.remove(supplier)
         self._data_manager.save()
         return record
+
+    def calculate_tax_breakdown(
+        self,
+        amount_8=0,
+        amount_10=0,
+        exempt=0,
+        price_mode="excluded",
+        rounding="floor",
+        stated_tax_8=None,
+        stated_tax_10=None,
+    ):
+        """Calculate one invoice's tax once per rate, as required for invoices."""
+        if price_mode not in {"included", "excluded"}:
+            raise ValueError("税込・税抜を選択してください。")
+        if rounding not in {"floor", "half_up", "ceil"}:
+            raise ValueError("端数処理を選択してください。")
+        amount_8 = self._validate_nonnegative(amount_8, "8％対象額")
+        amount_10 = self._validate_nonnegative(amount_10, "10％対象額")
+        exempt = self._validate_nonnegative(exempt, "非課税・対象外額")
+        if amount_8 + amount_10 + exempt <= 0:
+            raise ValueError("税率別の金額を1円以上入力してください。")
+
+        if price_mode == "excluded":
+            calculated_8 = self._round_tax(Decimal(amount_8) * Decimal("0.08"), rounding)
+            calculated_10 = self._round_tax(Decimal(amount_10) * Decimal("0.10"), rounding)
+        else:
+            calculated_8 = self._round_tax(
+                Decimal(amount_8) * Decimal(8) / Decimal(108), rounding
+            )
+            calculated_10 = self._round_tax(
+                Decimal(amount_10) * Decimal(10) / Decimal(110), rounding
+            )
+
+        tax_8 = self._optional_tax(stated_tax_8, calculated_8, "8％の消費税")
+        tax_10 = self._optional_tax(stated_tax_10, calculated_10, "10％の消費税")
+        total = amount_8 + amount_10 + exempt
+        if price_mode == "excluded":
+            total += tax_8 + tax_10
+        return {
+            "price_mode": price_mode,
+            "rounding": rounding,
+            "amount_8": amount_8,
+            "amount_10": amount_10,
+            "exempt": exempt,
+            "tax_8": tax_8,
+            "tax_10": tax_10,
+            "total": total,
+        }
 
     def delete(self, record_id):
         records = self._data_manager.data.get("business_purchases", [])
@@ -109,6 +173,44 @@ class PurchaseManager:
         if numeric <= 0 or not numeric.is_integer():
             raise ValueError("合計金額を1円以上の整数で入力してください。")
         return int(numeric)
+
+    @staticmethod
+    def _validate_nonnegative(value, label):
+        if value in (None, ""):
+            return 0
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label}は0円以上の整数で入力してください。") from error
+        if numeric < 0 or not numeric.is_integer():
+            raise ValueError(f"{label}は0円以上の整数で入力してください。")
+        return int(numeric)
+
+    @staticmethod
+    def _round_tax(value, rounding):
+        modes = {
+            "floor": ROUND_DOWN,
+            "half_up": ROUND_HALF_UP,
+            "ceil": ROUND_CEILING,
+        }
+        return int(value.quantize(Decimal("1"), rounding=modes[rounding]))
+
+    def _optional_tax(self, value, calculated, label):
+        if value in (None, ""):
+            return calculated
+        return self._validate_nonnegative(value, label)
+
+    @staticmethod
+    def _validate_tax_breakdown(breakdown, total):
+        required = {
+            "price_mode", "rounding", "amount_8", "amount_10", "exempt",
+            "tax_8", "tax_10", "total",
+        }
+        if not isinstance(breakdown, dict) or not required.issubset(breakdown):
+            raise ValueError("消費税の内訳が正しくありません。")
+        if int(breakdown["total"]) != total:
+            raise ValueError("消費税の計算結果と合計金額が一致しません。")
+        return {key: breakdown[key] for key in required}
 
 
 from core.data import data  # noqa: E402

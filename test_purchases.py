@@ -33,6 +33,30 @@ class PurchaseManagerTest(unittest.TestCase):
         )
         self.assertEqual(len(self.purchases.records(record_date="2026-08-10")), 2)
 
+    def test_tax_excluded_mixed_rates_are_calculated_per_rate(self):
+        breakdown = self.purchases.calculate_tax_breakdown(
+            amount_8=20000, amount_10=5000, price_mode="excluded"
+        )
+        self.assertEqual(breakdown["tax_8"], 1600)
+        self.assertEqual(breakdown["tax_10"], 500)
+        self.assertEqual(breakdown["total"], 27100)
+        record = self.purchases.add(
+            "2026-08-10", "市場A", 27100, tax_breakdown=breakdown
+        )
+        self.assertEqual(record["tax_breakdown"]["amount_8"], 20000)
+
+    def test_tax_included_and_stated_tax_override(self):
+        breakdown = self.purchases.calculate_tax_breakdown(
+            amount_8=10800,
+            amount_10=11000,
+            exempt=300,
+            price_mode="included",
+            stated_tax_8=799,
+        )
+        self.assertEqual(breakdown["tax_8"], 799)
+        self.assertEqual(breakdown["tax_10"], 1000)
+        self.assertEqual(breakdown["total"], 22100)
+
     def test_suppliers_are_reused_without_duplicates(self):
         self.purchases.add("2026-08-10", "市場A", 12000)
         self.purchases.add("2026-08-11", "市場A", 5000)
