@@ -85,6 +85,32 @@ class ReadingManager:
             total += max(0, round((current - active).total_seconds()))
         return total
 
+    def monthly_summary(self, month, user_id=None, now=None):
+        try:
+            datetime.strptime(month, "%Y-%m")
+        except (TypeError, ValueError) as error:
+            raise ValueError("月は YYYY-MM 形式で指定してください。") from error
+        totals_by_date = {}
+        for session in self.sessions(user_id=user_id):
+            record_date = session.get("date", "")
+            if not record_date.startswith(month):
+                continue
+            totals_by_date[record_date] = (
+                totals_by_date.get(record_date, 0) + int(session.get("seconds", 0))
+            )
+        active = self.active_started_at(user_id)
+        current = now or self.now()
+        if active and active.date().strftime("%Y-%m") == month:
+            record_date = active.date().isoformat()
+            totals_by_date[record_date] = totals_by_date.get(record_date, 0) + max(
+                0, round((current - active).total_seconds())
+            )
+        return {
+            "month": month,
+            "seconds": sum(totals_by_date.values()),
+            "days": sum(1 for seconds in totals_by_date.values() if seconds > 0),
+        }
+
     def get_goal_minutes(self, user_id=None):
         value = self._user(user_id).get("settings", {}).get("reading_goal_minutes")
         return int(value) if value is not None else None

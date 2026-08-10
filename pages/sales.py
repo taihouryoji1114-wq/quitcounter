@@ -28,20 +28,20 @@ def sales_page():
                 "background:#FFF9F1;border:1px solid #F0DFC9;border-radius:18px"
             ):
                 ui.label("ランチ").classes("font-bold q-mb-sm")
-                lunch_sales = ui.number("売上", min=0, step=1, value=0).props(
+                lunch_sales = ui.number("売上", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full q-mb-sm")
-                lunch_customers = ui.number("人数", min=0, step=1, value=0).props(
+                lunch_customers = ui.number("人数", min=0, step=1).props(
                     "outlined suffix=人 inputmode=numeric"
                 ).classes("w-full")
             with ui.card().classes("w-full q-pa-md q-mb-sm").style(
                 "background:#F5F3FF;border:1px solid #DDD7F2;border-radius:18px"
             ):
                 ui.label("ディナー").classes("font-bold q-mb-sm")
-                dinner_sales = ui.number("売上", min=0, step=1, value=0).props(
+                dinner_sales = ui.number("売上", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full q-mb-sm")
-                dinner_customers = ui.number("人数", min=0, step=1, value=0).props(
+                dinner_customers = ui.number("人数", min=0, step=1).props(
                     "outlined suffix=人 inputmode=numeric"
                 ).classes("w-full")
             ui.label(
@@ -95,11 +95,13 @@ def sales_page():
 
         @ui.refreshable
         def history():
-            month = selected_day[0][:7]
-            ui.label("日別売上").classes("text-xl font-bold q-mt-md q-mb-sm")
-            records = financials.sales_records(month=month)
+            day = selected_day[0]
+            ui.label(
+                f"{day.replace('-', '/')} の売上"
+            ).classes("text-xl font-bold q-mt-md q-mb-sm")
+            records = financials.sales_records(record_date=day)
             if not records:
-                ui.label("この月の売上記録はありません。").classes("text-grey-7")
+                ui.label("この日の売上記録はありません。").classes("text-grey-7")
                 return
             for record in records:
                 with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
@@ -131,10 +133,10 @@ def sales_page():
                 selected_day[0] = str(value)
             records = financials.sales_records(record_date=selected_day[0])
             record = records[0] if records else {}
-            lunch_sales.value = record.get("lunch_sales", 0)
-            dinner_sales.value = record.get("dinner_sales", 0)
-            lunch_customers.value = record.get("lunch_customers", 0)
-            dinner_customers.value = record.get("dinner_customers", 0)
+            lunch_sales.value = record.get("lunch_sales") or None
+            dinner_sales.value = record.get("dinner_sales") or None
+            lunch_customers.value = record.get("lunch_customers") or None
+            dinner_customers.value = record.get("dinner_customers") or None
             summary.refresh()
             history.refresh()
 

@@ -25,6 +25,7 @@ def reading_page():
     Theme.page("読書")
     page_user_id = selected_user_id()
     today = today_jst_string()
+    current_month = today[:7]
     content = Theme.shell("読書", "本と過ごした時間を、少しずつ。", back_to="/habitory")
 
     with content:
@@ -59,6 +60,18 @@ def reading_page():
                         "w-full q-mt-md"
                     )
 
+        @ui.refreshable
+        def monthly_card():
+            summary = reading.monthly_summary(current_month, page_user_id)
+            with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
+                ui.label("今月の読書").classes("section-kicker")
+                ui.label(format_duration(summary["seconds"])).classes(
+                    "text-3xl font-bold metric-value q-mt-sm"
+                )
+                ui.label(
+                    f"{current_month.replace('-', '年')}月・読書した日 {summary['days']}日"
+                ).classes("text-grey-7 q-mt-xs")
+
         def start_reading():
             try:
                 reading.start(page_user_id)
@@ -76,9 +89,11 @@ def reading_page():
                 return
             timer_card.refresh()
             session_list.refresh()
+            monthly_card.refresh()
             ui.notify("読書時間を記録しました", type="positive")
 
         timer_card()
+        monthly_card()
 
         with ui.expansion("目標時間を設定", icon="flag").classes(
             "surface-card w-full q-mb-md"

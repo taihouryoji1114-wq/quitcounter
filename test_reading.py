@@ -59,6 +59,16 @@ class ReadingManagerTest(unittest.TestCase):
         self.assertEqual(self.reading.total_seconds("2026-07-29", "user1"), 300)
         self.assertEqual(self.reading.total_seconds("2026-07-30", "user1"), 600)
 
+    def test_monthly_summary_totals_time_and_reading_days(self):
+        first = datetime(2026, 7, 1, 20, 0, tzinfo=JAPAN)
+        second = datetime(2026, 7, 3, 20, 0, tzinfo=JAPAN)
+        for started, minutes in ((first, 20), (second, 40)):
+            self.reading.start("user1", started)
+            self.reading.stop("user1", started + timedelta(minutes=minutes))
+        summary = self.reading.monthly_summary("2026-07", "user1")
+        self.assertEqual(summary["seconds"], 3600)
+        self.assertEqual(summary["days"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
