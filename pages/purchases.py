@@ -262,7 +262,9 @@ def purchase_page():
             totals.refresh()
             history.refresh()
 
-        purchase_date.on("change", lambda _: refresh_selected_day())
+        purchase_date.on(
+            "update:model-value", lambda _: refresh_selected_day()
+        )
 
         ui.label("選択日の仕入れ履歴").classes(
             "text-xl font-bold q-mt-md q-mb-sm"
@@ -291,14 +293,28 @@ def purchase_page():
                             breakdown = record.get("tax_breakdown")
                             if breakdown:
                                 mode = "税込" if breakdown["price_mode"] == "included" else "税抜"
-                                ui.label(
-                                    f"{mode}・1％ ¥{breakdown.get('amount_1', 0):,}・"
-                                    f"8％ ¥{breakdown['amount_8']:,}・"
-                                    f"10％ ¥{breakdown['amount_10']:,}・"
-                                    f"税 ¥{breakdown.get('tax_1', 0) + breakdown['tax_8'] + breakdown['tax_10']:,}"
-                                ).classes("text-[10px] text-grey-6")
+                                ui.label(f"{mode}・消費税の内訳").classes(
+                                    "text-[10px] font-bold text-grey-7 q-mt-xs"
+                                )
+                                tax_lines = []
+                                for rate in (1, 8, 10):
+                                    taxable = int(breakdown.get(f"amount_{rate}", 0))
+                                    tax = int(breakdown.get(f"tax_{rate}", 0))
+                                    if taxable or tax:
+                                        tax_lines.append(
+                                            f"{rate}％対象 ¥{taxable:,}（税 ¥{tax:,}）"
+                                        )
+                                if breakdown.get("exempt", 0):
+                                    tax_lines.append(
+                                        f"非課税・対象外 ¥{int(breakdown['exempt']):,}"
+                                    )
+                                ui.label(" ／ ".join(tax_lines)).classes(
+                                    "text-xs text-grey-7"
+                                )
                         ui.space()
-                        ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
+                        with ui.column().classes("items-end gap-0"):
+                            ui.label("支払合計").classes("text-[9px] text-grey-6")
+                            ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
 
                         def open_edit(_, selected=record):
                             existing = selected.get("tax_breakdown") or {}
