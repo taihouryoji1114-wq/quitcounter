@@ -191,7 +191,7 @@ def future_financials():
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const outputTax=Math.floor(sales*10/110),generalInputTax=Math.floor(cogs*8/108)+Math.floor((rent+utilities+advertising+otherExpenses)*10/110),taxMethod=$('tax-method').value,ct=Math.max(0,taxMethod==='simplified'?Math.floor(outputTax*.4):outputTax-generalInputTax),corpRate=num('corporate-tax-rate'),corp=Math.max(0,Math.round(Math.max(ordinary,0)*corpRate/100));
       $('consumption-tax').value=ct;$('corporate-tax').value=corp;
-      $('tax-note').innerHTML=taxMethod==='simplified'?`消費税：税込売上10%として預かった税額 ${yen(outputTax)} × 40%で概算。飲食店のみなし仕入率60%を使用しています。`:`消費税：税込売上10%の預り税 ${yen(outputTax)} − 原価8%・管理費10%の支払税 ${yen(generalInputTax)}で概算。人件費・借入元金・利息は仕入税額控除に含めていません。`;
+      $('tax-note').innerHTML=taxMethod==='simplified'?`消費税：税込売上10%として預かった税額 ${yen(outputTax)} × 40%で概算。飲食店のみなし仕入率60%を使用しています。`:`消費税：税込売上10%の預り税 ${yen(outputTax)} − 原価8%・管理費10%の支払税 ${yen(generalInputTax)}で概算。給与は消費税の対象外、借入元金は返済、支払利息は非課税なので、仕入税額控除には入りません。`;
       const loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
     }
