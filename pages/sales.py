@@ -1,3 +1,6 @@
+import calendar
+from datetime import date
+
 from nicegui import ui
 
 from core.auth import require_login
@@ -69,9 +72,11 @@ def sales_page():
             ).classes("text-[10px] text-grey-6 q-mb-sm")
 
             def save_sales():
+                record_date = str(sales_date.value or "")
+                selected_day[0] = record_date
                 try:
                     financials.set_daily_sales(
-                        selected_day[0],
+                        record_date,
                         lunch_sales=lunch_sales.value,
                         dinner_sales=dinner_sales.value,
                         lunch_customers=lunch_customers.value,
@@ -87,6 +92,7 @@ def sales_page():
                     return
                 summary.refresh()
                 history.refresh()
+                sales_calendar.refresh()
                 ui.notify("売上を保存しました", type="positive")
 
             ui.button("この日の売上を保存", icon="save", on_click=save_sales).classes(
@@ -168,6 +174,65 @@ def sales_page():
 
         summary()
 
+        def select_sales_day(value=None):
+            if value:
+                selected_day[0] = str(value)
+                sales_date.value = selected_day[0]
+            records = financials.sales_records(record_date=selected_day[0])
+            record = records[0] if records else {}
+            lunch_sales.value = record.get("lunch_sales") or None
+            dinner_sales.value = record.get("dinner_sales") or None
+            lunch_customers.value = record.get("lunch_customers") or None
+            dinner_customers.value = record.get("dinner_customers") or None
+            cash_sales.value = record.get("cash_sales") or None
+            credit_sales.value = record.get("credit_sales") or None
+            paypay_sales.value = record.get("paypay_sales") or None
+            electronic_money_sales.value = record.get("electronic_money_sales") or None
+            travel_agency_sales.value = record.get("travel_agency_sales") or None
+            summary.refresh()
+            history.refresh()
+            sales_calendar.refresh()
+
+        @ui.refreshable
+        def sales_calendar():
+            month_text = selected_day[0][:7]
+            year, month = (int(part) for part in month_text.split("-"))
+            recorded_days = {
+                item["date"] for item in financials.sales_records(month=month_text)
+            }
+            ui.label("売上入力カレンダー").classes("text-xl font-bold q-mt-md q-mb-xs")
+            ui.label("赤い『未』は、今日までで売上が未入力の日です。").classes(
+                "text-xs text-grey-6 q-mb-sm"
+            )
+            with ui.card().classes("surface-card w-full q-pa-sm q-mb-md"):
+                with ui.element("div").classes("grid grid-cols-7 gap-1 w-full"):
+                    for weekday in ("月", "火", "水", "木", "金", "土", "日"):
+                        ui.label(weekday).classes("text-center text-xs text-grey-6 q-py-xs")
+                    for week in calendar.monthcalendar(year, month):
+                        for day_number in week:
+                            if not day_number:
+                                ui.element("div")
+                                continue
+                            day_value = f"{year:04d}-{month:02d}-{day_number:02d}"
+                            day_date = date(year, month, day_number)
+                            recorded = day_value in recorded_days
+                            missing = day_date <= today and not recorded
+                            selected = day_value == selected_day[0]
+                            background = "#EAF5EE" if recorded else "#FDECEC" if missing else "#F7F7F5"
+                            border = "2px solid #355E4B" if selected else "1px solid #E2E4DF"
+                            with ui.element("div").classes(
+                                "q-pa-xs cursor-pointer flex flex-col items-center justify-center"
+                            ).style(
+                                f"min-height:52px;border-radius:12px;background:{background};border:{border}"
+                            ).on("click", lambda _, value=day_value: select_sales_day(value)):
+                                ui.label(str(day_number)).classes("text-xs")
+                                if missing:
+                                    ui.label("未").classes("text-lg font-black text-red-7")
+                                elif recorded:
+                                    ui.icon("check", color="positive", size="18px")
+
+        sales_calendar()
+
         @ui.refreshable
         def history():
             day = selected_day[0]
@@ -210,6 +275,7 @@ def sales_page():
                             financials.delete_sales(selected["id"])
                             summary.refresh()
                             history.refresh()
+                            sales_calendar.refresh()
                             ui.notify("売上記録を削除しました", type="positive")
 
                         ui.button(icon="delete_outline", on_click=delete_record).props(
@@ -217,23 +283,6 @@ def sales_page():
                         )
 
         history()
-
-        def select_sales_day(value=None):
-            if value:
-                selected_day[0] = str(value)
-            records = financials.sales_records(record_date=selected_day[0])
-            record = records[0] if records else {}
-            lunch_sales.value = record.get("lunch_sales") or None
-            dinner_sales.value = record.get("dinner_sales") or None
-            lunch_customers.value = record.get("lunch_customers") or None
-            dinner_customers.value = record.get("dinner_customers") or None
-            cash_sales.value = record.get("cash_sales") or None
-            credit_sales.value = record.get("credit_sales") or None
-            paypay_sales.value = record.get("paypay_sales") or None
-            electronic_money_sales.value = record.get("electronic_money_sales") or None
-            travel_agency_sales.value = record.get("travel_agency_sales") or None
-            summary.refresh()
-            history.refresh()
 
         sales_date.on_value_change(
             lambda event: select_sales_day(event.value)

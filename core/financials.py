@@ -52,7 +52,7 @@ class FinancialManager:
     ):
         self._validate_date(record_date)
         split_entry = any(
-            value is not None
+            value not in (None, "")
             for value in (lunch_sales, dinner_sales, lunch_customers, dinner_customers)
         )
         payment_values = {
@@ -62,7 +62,9 @@ class FinancialManager:
             "electronic_money_sales": electronic_money_sales,
             "travel_agency_sales": travel_agency_sales,
         }
-        payment_entry = any(value is not None for value in payment_values.values())
+        payment_entry = any(
+            value not in (None, "") for value in payment_values.values()
+        )
         if payment_entry:
             payment_values = {
                 key: self._validate_amount(value or 0)

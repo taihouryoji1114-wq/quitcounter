@@ -93,6 +93,20 @@ class FinancialManagerTest(unittest.TestCase):
                 credit_sales=10000,
             )
 
+    def test_blank_payment_fields_do_not_block_sales_save(self):
+        record = self.financials.set_daily_sales(
+            "2026-08-04",
+            lunch_sales=10000,
+            dinner_sales=20000,
+            cash_sales="",
+            credit_sales="",
+            paypay_sales="",
+            electronic_money_sales="",
+            travel_agency_sales="",
+        )
+        self.assertEqual(record["date"], "2026-08-04")
+        self.assertEqual(record["amount"], 30000)
+
 
 if __name__ == "__main__":
     unittest.main()
