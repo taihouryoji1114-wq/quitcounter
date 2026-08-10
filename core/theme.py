@@ -14,11 +14,13 @@ class Theme:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"
             theme_color = "#4F7C68"
-        ui.add_head_html(f"""
+        app_head = f"""
         <link rel="manifest" href="{manifest}">
         <link rel="apple-touch-icon" href="{icon}">
         <link rel="icon" type="image/png" href="{icon}">
         <meta name="theme-color" content="{theme_color}">
+        """
+        shared_styles = """
         <style>
           body { background: #F7F7F5; color: #1D2822; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
           .app-shell { width: min(100%, 680px); margin: 0 auto; padding: 28px 20px 48px; box-sizing: border-box; }
@@ -35,7 +37,8 @@ class Theme:
           .q-btn { border-radius: 14px; min-height: 44px; font-weight: 650; letter-spacing: 0; }
           @media (min-width: 640px) { .app-shell { padding: 40px 32px 64px; } }
         </style>
-        """)
+        """
+        ui.add_head_html(app_head + shared_styles)
 
     @staticmethod
     def shell(title, subtitle, back_to=None, action=None, brand="Habitory"):
