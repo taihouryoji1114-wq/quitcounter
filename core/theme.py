@@ -3,13 +3,22 @@ from nicegui import ui
 
 class Theme:
     @staticmethod
-    def page(title="Habitory"):
+    def page(title="Habitory", app_name="habitory"):
         ui.colors(primary="#4F7C68", secondary="#A7BCAE", positive="#4F7C68")
         ui.page_title(title)
-        ui.add_head_html("""
-        <link rel="manifest" href="/static/manifest.json">
-        <link rel="apple-touch-icon" href="/static/habitory_icon.png">
-        <meta name="theme-color" content="#4F7C68">
+        if app_name == "mirai-kessan":
+            manifest = "/static/mirai-kessan-manifest.json"
+            icon = "/static/mirai_kessan_icon.png"
+            theme_color = "#164A38"
+        else:
+            manifest = "/static/manifest.json"
+            icon = "/static/habitory_icon.png"
+            theme_color = "#4F7C68"
+        ui.add_head_html(f"""
+        <link rel="manifest" href="{manifest}">
+        <link rel="apple-touch-icon" href="{icon}">
+        <link rel="icon" type="image/png" href="{icon}">
+        <meta name="theme-color" content="{theme_color}">
         <style>
           body { background: #F7F7F5; color: #1D2822; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
           .app-shell { width: min(100%, 680px); margin: 0 auto; padding: 28px 20px 48px; box-sizing: border-box; }

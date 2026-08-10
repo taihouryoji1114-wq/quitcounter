@@ -1,0 +1,22 @@
+{
+  "name": "未来決算",
+  "short_name": "未来決算",
+  "description": "日々の数字から未来の経営を見通す",
+  "start_url": "/mirai-kessan",
+  "scope": "/mirai-kessan",
+  "display": "standalone",
+  "background_color": "#F7F7F5",
+  "theme_color": "#164A38",
+  "icons": [
+    {
+      "src": "/static/mirai_kessan_icon_192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/mirai_kessan_icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

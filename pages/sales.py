@@ -11,7 +11,7 @@ from core.theme import Theme
 def sales_page():
     if not require_login():
         return
-    Theme.page("売上入力｜未来決算")
+    Theme.page("売上入力｜未来決算", app_name="mirai-kessan")
     today = date.today()
     content = Theme.shell(
         "売上入力",

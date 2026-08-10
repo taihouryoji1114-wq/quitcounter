@@ -41,10 +41,9 @@ def portal():
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/mirai-kessan")):
             with ui.row().classes("w-full items-center no-wrap"):
-                with ui.element("div").classes(
-                    "w-14 h-14 rounded-xl q-mr-md flex items-center justify-center"
-                ).style("background:#EAF7F0;color:#39745A"):
-                    ui.icon("monitoring").classes("text-3xl")
+                ui.image("/static/mirai_kessan_icon.png").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
                 with ui.column().classes("gap-0"):
                     ui.label("未来決算").classes("text-xl font-bold")
                     ui.label("利益目標から、必要な売上を逆算").classes(

@@ -13,7 +13,7 @@ from core.theme import Theme
 def future_financials_home():
     if not require_login():
         return
-    Theme.page("未来決算")
+    Theme.page("未来決算", app_name="mirai-kessan")
     def exit_action():
         ui.button(icon="logout", on_click=log_out).props(
             "flat round aria-label='R-BASEへ戻る'"
@@ -67,7 +67,7 @@ def future_financials_home():
 def future_financials():
     if not require_login():
         return
-    Theme.page("未来決算")
+    Theme.page("未来決算", app_name="mirai-kessan")
     content = Theme.shell(
         "利益シミュレーション",
         "計画と暫定実績を切り替えて、お金の残り方を確認",
