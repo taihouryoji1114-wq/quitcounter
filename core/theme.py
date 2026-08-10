@@ -29,13 +29,13 @@ class Theme:
         """)
 
     @staticmethod
-    def shell(title, subtitle, back_to=None, action=None):
+    def shell(title, subtitle, back_to=None, action=None, brand="Habitory"):
         with ui.column().classes("app-shell gap-0"):
             with ui.row().classes("w-full items-center justify-between no-wrap q-mb-lg"):
                 if back_to:
                     ui.button("ホーム", icon="arrow_back", on_click=lambda: ui.navigate.to(back_to)).props("flat").classes("text-grey-8")
                 else:
-                    ui.label("Habitory").classes("text-xl font-bold")
+                    ui.label(brand).classes("text-xl font-bold")
                 if action:
                     action()
             ui.label(title).classes("text-4xl font-bold metric-value")

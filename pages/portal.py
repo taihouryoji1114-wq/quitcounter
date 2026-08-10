@@ -8,7 +8,7 @@ from core.theme import Theme
 def portal():
     if not require_login():
         return
-    Theme.page("マイアプリ")
+    Theme.page("R-BASE")
 
     def logout_action():
         ui.button(icon="logout", on_click=log_out).props("flat round").classes(
@@ -16,9 +16,10 @@ def portal():
         )
 
     content = Theme.shell(
-        "マイアプリ",
+        "アプリ一覧",
         "使いたいアプリを選ぶ",
         action=logout_action,
+        brand="R-BASE",
     )
     with content:
         with ui.card().classes(
@@ -62,7 +63,7 @@ def portal():
                     ui.icon("receipt_long").classes("text-3xl")
                 with ui.column().classes("gap-0"):
                     ui.label("仕入れノート").classes("text-xl font-bold")
-                    ui.label("納品書を撮って、そのまま記録").classes(
+                    ui.label("日付・仕入れ先・金額をすばやく記録").classes(
                         "text-grey-7 q-mt-xs"
                     )
                 ui.space()

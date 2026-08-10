@@ -6,7 +6,7 @@ from core.theme import Theme
 
 @ui.page("/login")
 def login():
-    Theme.page("Habitory ログイン")
+    Theme.page("R-BASE ログイン")
     if is_authenticated():
         ui.navigate.to("/")
         return
@@ -14,8 +14,8 @@ def login():
     with ui.column().classes(
         "app-shell min-h-screen justify-center gap-0"
     ):
-        ui.label("Habitory").classes("text-4xl font-bold metric-value")
-        ui.label("あなたの習慣へ、おかえりなさい。").classes(
+        ui.label("R-BASE").classes("text-4xl font-bold metric-value")
+        ui.label("あなたのアプリへ、おかえりなさい。").classes(
             "text-grey-7 q-mt-xs q-mb-xl"
         )
         with ui.card().classes("surface-card w-full q-pa-lg"):

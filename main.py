@@ -23,7 +23,7 @@ import pages.settings
 import pages.workout
 
 ui.run(
-    title="Habitory",
+    title="R-BASE",
     host="0.0.0.0",
     port=int(os.environ.get("PORT", "8080")),
     reload=os.environ.get("RENDER") is None,
