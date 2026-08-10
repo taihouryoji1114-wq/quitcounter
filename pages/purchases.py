@@ -12,6 +12,7 @@ def purchase_page():
         return
     Theme.page("仕入れノート", app_name="mirai-kessan")
     today = today_jst()
+    selected_day = [today.isoformat()]
     content = Theme.shell(
         "仕入れノート",
         "普段は合計だけ、必要な時だけ税率別に記録",
@@ -229,16 +230,18 @@ def purchase_page():
 
         @ui.refreshable
         def totals():
-            day = purchase_date.value or today.isoformat()
+            day = selected_day[0]
             month = day[:7]
             with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
-                ui.label("選択日の合計").classes("text-xs text-grey-6")
+                ui.label(
+                    f"選択日 {day.replace('-', '/')} の合計"
+                ).classes("text-xs text-grey-6")
                 ui.label(f"¥{purchases.daily_total(day):,}").classes(
                     "text-2xl font-bold metric-value q-mt-xs"
                 )
             with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
                 with ui.card().classes("surface-card q-pa-md"):
-                    ui.label(f"{month.replace('-', '年')}月・原価").classes(
+                    ui.label(f"{month.replace('-', '年')}月累計・原価").classes(
                         "text-xs text-grey-6"
                     )
                     ui.label(
@@ -247,7 +250,7 @@ def purchase_page():
                         "text-xl font-bold metric-value q-mt-xs"
                     )
                 with ui.card().classes("surface-card q-pa-md"):
-                    ui.label(f"{month.replace('-', '年')}月・その他経費").classes(
+                    ui.label(f"{month.replace('-', '年')}月累計・その他経費").classes(
                         "text-xs text-grey-6"
                     )
                     ui.label(
@@ -257,21 +260,19 @@ def purchase_page():
                     )
 
         totals()
-        def refresh_selected_day():
+        def refresh_selected_day(value=None):
+            if value:
+                selected_day[0] = str(value)
             totals.refresh()
             history.refresh()
 
-        purchase_date.on(
-            "update:model-value", lambda _: refresh_selected_day()
-        )
-
-        ui.label("選択日の仕入れ履歴").classes(
-            "text-xl font-bold q-mt-md q-mb-sm"
-        )
-
         @ui.refreshable
         def history():
-            records = purchases.records(record_date=purchase_date.value)
+            day = selected_day[0]
+            ui.label(
+                f"{day.replace('-', '/')} の仕入れ履歴"
+            ).classes("text-xl font-bold q-mt-md q-mb-sm")
+            records = purchases.records(record_date=day)
             if not records:
                 ui.label("この日の仕入れ記録はありません。").classes("text-grey-7")
                 return
@@ -504,6 +505,15 @@ def purchase_page():
                         )
 
         history()
+
+        purchase_date.on_value_change(
+            lambda event: refresh_selected_day(event.value)
+        )
+        purchase_date.on(
+            "change",
+            lambda event: refresh_selected_day(event.args),
+            js_handler="(event) => emit(event.target.value)",
+        )
 
 
 @ui.page("/shiire")
