@@ -1,6 +1,9 @@
+from datetime import date
+
 from nicegui import ui
 
 from core.auth import require_login
+from core.purchases import purchases
 from core.theme import Theme
 
 
@@ -14,7 +17,19 @@ def future_financials():
         "会社のお金を、利益と資金繰りに分けて見える化",
         back_to="/",
     )
+    current_month = date.today().strftime("%Y-%m")
+    purchase_total = purchases.monthly_total(current_month)
     with content:
+        with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
+            ui.label("仕入れノート連携").classes("section-kicker")
+            ui.label(
+                f"{current_month.replace('-', '年')}月の仕入れ実績　¥{purchase_total:,}"
+            ).classes("text-xl font-bold q-mt-xs")
+            ui.label(
+                "今月の仕入れ合計を、下の売上原価へ自動反映しています"
+                if purchase_total else
+                "今月の仕入れを入力すると、売上原価へ自動反映されます"
+            ).classes("text-xs text-grey-7 q-mt-xs")
         ui.html(
             r'''
 <div id="mirai-app">
@@ -86,3 +101,18 @@ def future_financials():
 </script>
             '''
         )
+        if purchase_total:
+            ui.add_body_html(
+                f'''<script>
+function applyPurchaseTotal(attempt = 0) {{
+  const cogs = document.getElementById('cogs');
+  if (cogs) {{
+    cogs.value = {purchase_total};
+    cogs.dispatchEvent(new Event('input', {{bubbles:true}}));
+  }} else if (attempt < 20) {{
+    setTimeout(() => applyPurchaseTotal(attempt + 1), 100);
+  }}
+}}
+applyPurchaseTotal();
+</script>'''
+            )
