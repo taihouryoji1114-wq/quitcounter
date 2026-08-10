@@ -124,6 +124,7 @@ def future_financials():
     <div id="profit-summary" class="summary-grid"></div>
     <div id="diagnosis" class="diagnosis"></div>
     <div id="profit-map" class="box-map" aria-label="売上から費用を差し引いて利益が残る流れを表した図"></div>
+    <div id="legend-title" class="legend-title">試算結果の構成比（入力値から自動計算）</div>
     <div id="block-legend" class="block-legend"></div>
     <div id="sales-answer" class="answer"></div>
   </section>
@@ -145,6 +146,7 @@ def future_financials():
 .target-settings{border:2px solid #BFD5C9;background:#F4F9F6;padding:14px;border-radius:16px}.target-title{display:flex;justify-content:space-between;gap:8px;align-items:center;color:#285C45;font-size:12px}.target-title span{font-size:9px;color:#708078}.target-help{margin:10px 0 0;color:#66736C;font-size:9px;line-height:1.55}.house-status{text-align:center;margin-top:7px;font-size:11px;font-weight:900}.house-status.strong{color:#39745A}.house-status.caution{color:#B77822}.house-status.danger{color:#C84B45}
 .box-map{height:380px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:#E8ECE9;padding:5px;border-radius:16px;overflow:hidden}.box-column{min-width:0;height:100%;display:flex;flex-direction:column;gap:5px}.box-spacer{min-height:0}.money-box{min-height:18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-radius:9px;padding:4px;box-sizing:border-box;overflow:hidden;color:#fff}.money-box span{font-size:10px;font-weight:800;line-height:1.2}.money-box b{font-size:12px;margin-top:2px;white-space:nowrap}.money-box em{font-size:8px;font-style:normal;margin-top:2px;opacity:.9;white-space:nowrap}.box-sales{height:100%;background:#355F4C}.box-cost{background:#82988D}.box-gross{background:#4F8C70}.box-personnel{background:#4A9FD0}.box-rent{background:#8172B5}.box-utilities{background:#4CB7B4}.box-advertising{background:#D8943C}.box-other{background:#99A29D}.box-profit{background:#4B77B7}.box-loss{background:#C85C57}.block-legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}.block-legend div{display:flex;justify-content:space-between;gap:6px;padding:7px 9px;background:#F6F8F6;border-radius:8px;font-size:9px}.block-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}.block-legend strong{white-space:nowrap}@media(max-width:520px){.box-map{height:330px;gap:3px;padding:3px}.box-column{gap:3px}.money-box{padding:2px}.money-box span{font-size:8px}.money-box b{font-size:9px}.money-box em{display:none}}
 .block-sales-total{grid-column:1;grid-row:1/3}.block-cost-wide{grid-column:2/4;grid-row:1}.block-gross-total{grid-column:2;grid-row:2}.block-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;gap:5px;overflow:hidden}@media(max-width:520px){.block-breakdown{gap:3px}}
+.legend-title{margin-top:13px;color:#39745A;font-size:10px;font-weight:800}.block-legend{margin-top:6px}
 </style>
             ''',
             sanitize=False,
@@ -196,10 +198,10 @@ def future_financials():
       if(provisional){
         simulationData={};[...ids,...modes].forEach(id=>simulationData[id]=$(id).value);
         const actual=window.miraiActuals||{};$('sales').value=actual.sales||0;$('cogs').value=actual.cogs||0;$('cogs-mode').value='amount';$('personnel').value=0;$('personnel-mode').value='amount';$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=actual.other||0;$('non-op-income').value=0;$('non-op-expense').value=0;
-        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent='暫定実績：売上・仕入れ・その他経費は実績です。人件費など未入力の項目は0円のため、確定利益ではありません。';
+        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent='暫定実績：売上・仕入れ・その他経費は実績です。人件費など未入力の項目は0円のため、確定利益ではありません。';$('legend-title').textContent='現在の実績比率（入力済み実績から自動計算）';
       }else{
         if(simulationData){[...ids,...modes].forEach(id=>{if(simulationData[id]!==undefined)$(id).value=simulationData[id]})}
-        fields.forEach(field=>field.disabled=false);$('save-plan').disabled=false;$('view-note').className='view-note simulation';$('view-note').textContent='入力した計画値で「こうなったら利益はいくら残るか」を試算しています。';syncPlan();
+        fields.forEach(field=>field.disabled=false);$('save-plan').disabled=false;$('view-note').className='view-note simulation';$('view-note').textContent='入力した計画値で「こうなったら利益はいくら残るか」を試算しています。';$('legend-title').textContent='試算結果の構成比（入力値から自動計算）';syncPlan();
       }
       $('view-simulation').classList.toggle('active',!provisional);$('view-provisional').classList.toggle('active',provisional);update();
     }
