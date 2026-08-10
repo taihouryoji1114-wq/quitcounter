@@ -159,7 +159,10 @@ def future_financials():
     <div id="tax-note" class="tax-note"></div>
     <div class="tax-note">法人税等は、現在「プラスの経常利益 × 設定した概算実効税率」で試算しています。会社の所在地・資本金・所得区分・欠損金などを反映した確定申告額ではありません。</div>
     <div class="input-grid compact">
+      <label>売上で預かった消費税<input id="output-tax" inputmode="numeric" value="0" readonly></label>
+      <label>仕入れ等で支払った消費税<input id="input-tax" inputmode="numeric" value="0" readonly></label>
       <label>消費税の納付見込<input id="consumption-tax" inputmode="numeric" value="0" readonly></label>
+      <label>仕入税額の超過分<input id="tax-credit-excess" inputmode="numeric" value="0" readonly></label>
       <label>法人税等の見込<input id="corporate-tax" inputmode="numeric" value="0" readonly></label>
       <label>借入金の元金返済<input id="loan-payment" inputmode="numeric" value="200000"></label>
       <label>設備投資・その他<input id="investment" inputmode="numeric" value="0"></label>
@@ -214,9 +217,10 @@ def future_financials():
       $('block-legend').innerHTML=legend('原価（売上比）',cogs,costShare,'#82988D')+legend('人件費（粗利比・労働分配率）',personnel,laborShare,'#4A9FD0')+legend('家賃（売上比）',rent,rentShare,'#8172B5')+legend('水道光熱費（売上比）',utilities,utilitiesShare,'#4CB7B4')+legend('広告費（売上比）',advertising,advertisingShare,'#D8943C')+legend('その他管理費（売上比）',otherExpenses,otherShare,'#99A29D')+legend(operating<0?'営業損失（売上比）':'営業利益（売上比）',operating,profitShare,operating<0?'#C85C57':'#4B77B7');
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const outputTax=Math.floor(sales*10/110),plannedInputTax=Math.floor(cogs*8/108)+Math.floor((rent+utilities+advertising+otherExpenses)*10/110),actualMode=root.dataset.view==='provisional',generalInputTax=actualMode?Number((window.miraiActuals||{}).input_tax||0):plannedInputTax,taxMethod=$('tax-method').value,ct=Math.max(0,taxMethod==='simplified'?Math.floor(outputTax*.4):outputTax-generalInputTax),corpRate=num('corporate-tax-rate'),corp=Math.max(0,Math.round(Math.max(ordinary,0)*corpRate/100));
-      $('consumption-tax').value=ct;$('corporate-tax').value=corp;
+      const creditExcess=taxMethod==='general'?Math.max(0,generalInputTax-outputTax):0;
+      $('output-tax').value=outputTax;$('input-tax').value=generalInputTax;$('consumption-tax').value=ct;$('tax-credit-excess').value=creditExcess;$('corporate-tax').value=corp;
       const estimatedCount=Number((window.miraiActuals||{}).estimated_tax_records||0),taxSource=actualMode?`仕入れノートの税率別税額 ${yen(generalInputTax)}${estimatedCount?`（税率未設定 ${estimatedCount}件は原価8%・経費10%で補完）`:''}`:`計画上の原価8%・管理費10%の支払税 ${yen(generalInputTax)}`;
-      $('tax-note').innerHTML=taxMethod==='simplified'?`消費税：税込売上10%として預かった税額 ${yen(outputTax)} × 40%で概算。飲食店のみなし仕入率60%を使用しています。`:`消費税：税込売上10%の預り税 ${yen(outputTax)} − ${taxSource}。給与は対象外、借入元金と支払利息は控除に含めていません。`;
+      $('tax-note').innerHTML=taxMethod==='simplified'?`消費税：税込売上10%として預かった税額 ${yen(outputTax)} × 40%で概算。飲食店のみなし仕入率60%を使用しています。`:`消費税：税込売上10%の預り税 ${yen(outputTax)} − ${taxSource}。給与は対象外、借入元金と支払利息は控除に含めていません。${creditExcess?` 現在は仕入税額が ${yen(creditExcess)} 上回るため、納付見込みは0円です。超過分は今後の預り税との相殺目安として表示しています。`:''}`;
       const loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;
     }
