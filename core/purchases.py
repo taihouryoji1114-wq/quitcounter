@@ -29,6 +29,9 @@ class PurchaseManager:
             "total": total,
         }
         self._data_manager.data.setdefault("business_purchases", []).append(record)
+        hidden = self._data_manager.data.get("business_hidden_suppliers", [])
+        if supplier in hidden:
+            hidden.remove(supplier)
         self._data_manager.save()
         return record
 
@@ -42,12 +45,25 @@ class PurchaseManager:
         return record
 
     def suppliers(self):
+        hidden = set(self._data_manager.data.get("business_hidden_suppliers", []))
         result = []
         for record in self.records():
             supplier = record.get("supplier")
-            if supplier and supplier not in result:
+            if supplier and supplier not in hidden and supplier not in result:
                 result.append(supplier)
         return result
+
+    def hide_supplier(self, supplier):
+        supplier = str(supplier or "").strip()
+        if not supplier:
+            raise ValueError("削除する仕入れ先を選択してください。")
+        hidden = self._data_manager.data.setdefault(
+            "business_hidden_suppliers", []
+        )
+        if supplier not in hidden:
+            hidden.append(supplier)
+            self._data_manager.save()
+        return supplier
 
     def daily_total(self, record_date):
         self._validate_date(record_date)

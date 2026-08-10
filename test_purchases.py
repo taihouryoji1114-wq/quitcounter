@@ -28,6 +28,19 @@ class PurchaseManagerTest(unittest.TestCase):
         self.purchases.add("2026-08-12", "市場B", 3000)
         self.assertEqual(self.purchases.suppliers(), ["市場B", "市場A"])
 
+    def test_supplier_suggestion_can_be_hidden_without_deleting_records(self):
+        self.purchases.add("2026-08-10", "入力ミス", 12000)
+        self.purchases.hide_supplier("入力ミス")
+        self.assertEqual(self.purchases.suppliers(), [])
+        self.assertEqual(len(self.purchases.records()), 1)
+        self.assertEqual(self.purchases.monthly_total("2026-08"), 12000)
+
+    def test_hidden_supplier_returns_when_used_again(self):
+        self.purchases.add("2026-08-10", "市場A", 12000)
+        self.purchases.hide_supplier("市場A")
+        self.purchases.add("2026-08-11", "市場A", 5000)
+        self.assertEqual(self.purchases.suppliers(), ["市場A"])
+
     def test_record_can_be_deleted_and_data_is_persistent(self):
         record = self.purchases.add("2026-08-10", "市場A", 12000)
         self.purchases.delete(record["id"])
