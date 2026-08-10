@@ -1,9 +1,10 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from nicegui import ui
 
 from core.auth import require_login, selected_user_id
-from core.calories import nutrition_settings
+from core.calories import calculate_period_expenditure, nutrition_settings
+from core.clock import now_jst, today_jst
 from core.data import BODY_PARTS, data
 from core.nutrition import nutrition
 from core.theme import Theme
@@ -18,7 +19,7 @@ def workout():
         return
     Theme.page("筋トレ")
     page_user_id = selected_user_id()
-    today = date.today()
+    today = today_jst()
     content = Theme.shell("筋トレ", "今日の自分に、ひとつ記録を。", back_to="/habitory")
     with content:
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-xl"):
@@ -162,10 +163,13 @@ def workout():
                                 ui.label("未設定").classes("text-sm font-bold text-grey-6")
                                 ui.label("設定画面へ").classes("text-xs text-grey-6")
                             else:
-                                balance = (
-                                    totals["calories"]
-                                    - expenditure * totals["days"]
+                                estimated_burn = calculate_period_expenditure(
+                                    expenditure,
+                                    start_date,
+                                    today.isoformat(),
+                                    now=now_jst(),
                                 )
+                                balance = totals["calories"] - estimated_burn
                                 ui.label(f"{balance:+,.0f}").classes(
                                     "text-lg font-bold metric-value "
                                     + (
@@ -174,6 +178,10 @@ def workout():
                                     )
                                 )
                                 ui.label("kcal").classes("text-xs text-grey-6")
+                if expenditure is not None:
+                    ui.label(
+                        "今日の消費分は、現在時刻までで按分した推定値です。"
+                    ).classes("text-[10px] text-grey-6 q-mt-md")
 
         nutrition_history()
 

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from uuid import uuid4
+
+from core.clock import today_jst_string
 
 
 class NutritionManager:
@@ -171,7 +173,7 @@ class NutritionManager:
         return record
 
     def daily_summary(self, record_date=None, user_id=None):
-        record_date = record_date or date.today().isoformat()
+        record_date = record_date or today_jst_string()
         records = self.get_meal_records(record_date, user_id)
         return {
             "date": record_date,

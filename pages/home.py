@@ -1,8 +1,7 @@
-from datetime import date
-
 from nicegui import ui
 
 from core.auth import log_out, require_login, select_user_for_browser, selected_user_id
+from core.clock import today_jst_string
 from core.data import data
 from core.hydration import hydration
 from core.nutrition import nutrition
@@ -38,7 +37,7 @@ def home():
     summary = smoking_summary(page_user_id)
     hydration_summary = hydration.summary(user_id=page_user_id)
     nutrition_summary = nutrition.daily_summary(user_id=page_user_id)
-    reading_seconds = reading.total_seconds(date.today().isoformat(), page_user_id)
+    reading_seconds = reading.total_seconds(today_jst_string(), page_user_id)
     reading_goal = reading.get_goal_minutes(page_user_id)
     with content:
         ui.label(f"こんにちは、{profile['name']}さん").classes("section-kicker q-mb-sm")

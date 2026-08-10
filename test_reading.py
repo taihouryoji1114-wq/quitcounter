@@ -52,6 +52,13 @@ class ReadingManagerTest(unittest.TestCase):
         self.assertEqual(self.reading.get_goal_minutes("user1"), 30)
         self.assertIsNone(self.reading.get_goal_minutes("user2"))
 
+    def test_session_crossing_midnight_is_split_between_dates(self):
+        started = datetime(2026, 7, 29, 23, 55, tzinfo=JAPAN)
+        self.reading.start("user1", started)
+        self.reading.stop("user1", started + timedelta(minutes=15))
+        self.assertEqual(self.reading.total_seconds("2026-07-29", "user1"), 300)
+        self.assertEqual(self.reading.total_seconds("2026-07-30", "user1"), 600)
+
 
 if __name__ == "__main__":
     unittest.main()

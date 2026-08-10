@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -43,18 +43,33 @@ class ReadingManager:
             raise ValueError("読書は開始されていません。")
         started = datetime.fromisoformat(started_value)
         ended = now or self.now()
-        seconds = max(1, round((ended - started).total_seconds()))
-        session = {
+        if ended < started:
+            ended = started
+        created = []
+        cursor = started
+        while cursor.date() < ended.date():
+            boundary = datetime.combine(
+                cursor.date() + timedelta(days=1), time.min,
+                tzinfo=cursor.tzinfo,
+            )
+            created.append(self._session(cursor, boundary))
+            cursor = boundary
+        if ended > cursor or not created:
+            created.append(self._session(cursor, ended))
+        user.setdefault("reading_sessions", []).extend(created)
+        user.pop("reading_active_started_at", None)
+        self._data_manager.save()
+        return created[-1]
+
+    @staticmethod
+    def _session(started, ended):
+        return {
             "id": uuid4().hex,
             "date": started.date().isoformat(),
             "started_at": started.isoformat(),
             "ended_at": ended.isoformat(),
-            "seconds": seconds,
+            "seconds": max(1, round((ended - started).total_seconds())),
         }
-        user.setdefault("reading_sessions", []).append(session)
-        user.pop("reading_active_started_at", None)
-        self._data_manager.save()
-        return session
 
     def sessions(self, record_date=None, user_id=None):
         records = self._user(user_id).get("reading_sessions", [])

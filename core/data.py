@@ -289,7 +289,9 @@ class DataManager:
 
     @staticmethod
     def date_string_today():
-        return datetime.now().date().isoformat()
+        from core.clock import today_jst_string
+
+        return today_jst_string()
 
     @staticmethod
     def validate_smoking(smoking):

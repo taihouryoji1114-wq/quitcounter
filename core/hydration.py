@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
+
+from core.clock import today_jst_string
 
 
 class HydrationManager:
@@ -19,7 +21,7 @@ class HydrationManager:
         return sorted(records, key=lambda record: record["date"])
 
     def get_amount(self, record_date=None, user_id=None):
-        record_date = record_date or date.today().isoformat()
+        record_date = record_date or today_jst_string()
         self._validate_date(record_date)
         record = next(
             (
@@ -33,7 +35,7 @@ class HydrationManager:
 
     def add(self, amount, record_date=None, user_id=None):
         amount = self._validate_amount(amount)
-        record_date = record_date or date.today().isoformat()
+        record_date = record_date or today_jst_string()
         self._validate_date(record_date)
 
         # Resolve the owner once so another tab switching users cannot redirect
@@ -55,7 +57,7 @@ class HydrationManager:
         return record
 
     def undo_last(self, record_date=None, user_id=None):
-        record_date = record_date or date.today().isoformat()
+        record_date = record_date or today_jst_string()
         self._validate_date(record_date)
         user = self._user(user_id)
         records = user.get("hydration_records", [])

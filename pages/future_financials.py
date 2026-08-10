@@ -1,9 +1,9 @@
-from datetime import date
 import json
 
 from nicegui import ui
 
 from core.auth import log_out, require_login
+from core.clock import today_jst
 from core.financials import financials
 from core.purchases import purchases
 from core.theme import Theme
@@ -27,7 +27,7 @@ def future_financials_home():
         action=exit_action,
         brand="未来決算",
     )
-    current_month = date.today().strftime("%Y-%m")
+    current_month = today_jst().strftime("%Y-%m")
     purchase_total = purchases.monthly_total(current_month, kind="cost")
     other_expense_total = purchases.monthly_total(current_month, kind="expense")
     sales_total = financials.monthly_sales_total(current_month)
@@ -76,7 +76,7 @@ def future_financials():
         "計画と暫定実績を切り替えて、お金の残り方を確認",
         back_to="/mirai-kessan",
     )
-    current_month = date.today().strftime("%Y-%m")
+    current_month = today_jst().strftime("%Y-%m")
     purchase_tax = purchases.monthly_tax_summary(current_month)
     actuals = {
         "sales": financials.monthly_sales_total(current_month),
@@ -89,8 +89,29 @@ def future_financials():
         ],
     }
     with content:
+        async def save_plan_to_server():
+            plan = await ui.run_javascript(
+                """(() => {
+                    const root = document.getElementById('mirai-app');
+                    return root && root._collectPlan ? root._collectPlan() : null;
+                })()""",
+                timeout=5.0,
+            )
+            try:
+                financials.save_plan(plan)
+            except ValueError as error:
+                ui.notify(str(error), type="negative")
+                return
+            ui.notify("月間計画を保存しました", type="positive")
+
+        ui.button(on_click=save_plan_to_server).props(
+            "id=save-plan-server aria-label='月間計画をサーバーへ保存'"
+        ).classes("hidden")
         ui.add_body_html(
-            f"<script>window.miraiActuals={json.dumps(actuals)};</script>"
+            "<script>"
+            f"window.miraiActuals={json.dumps(actuals)};"
+            f"window.miraiSavedPlan={json.dumps(financials.get_plan())};"
+            "</script>"
         )
         ui.html(
             r'''
@@ -152,7 +173,7 @@ def future_financials():
 .target-settings{display:none}.house-status{text-align:center;margin-top:7px;font-size:11px;font-weight:900}.house-status.strong{color:#39745A}.house-status.caution{color:#B77822}.house-status.danger{color:#C84B45}
 .box-map{height:380px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:#E8ECE9;padding:5px;border-radius:16px;overflow:hidden}.box-column{min-width:0;height:100%;display:flex;flex-direction:column;gap:5px}.box-spacer{min-height:0}.money-box{min-height:18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-radius:9px;padding:4px;box-sizing:border-box;overflow:hidden;color:#fff}.money-box span{font-size:10px;font-weight:800;line-height:1.2}.money-box b{font-size:12px;margin-top:2px;white-space:nowrap}.money-box em{font-size:8px;font-style:normal;margin-top:2px;opacity:.9;white-space:nowrap}.box-sales{height:100%;background:#355F4C}.box-cost{background:#82988D}.box-gross{background:#4F8C70}.box-personnel{background:#4A9FD0}.box-rent{background:#8172B5}.box-utilities{background:#4CB7B4}.box-advertising{background:#D8943C}.box-other{background:#99A29D}.box-profit{background:#4B77B7}.box-loss{background:#C85C57}.block-legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}.block-legend div{display:flex;justify-content:space-between;gap:6px;padding:7px 9px;background:#F6F8F6;border-radius:8px;font-size:9px}.block-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}.block-legend strong{white-space:nowrap}@media(max-width:520px){.box-map{height:330px;gap:3px;padding:3px}.box-column{gap:3px}.money-box{padding:2px}.money-box span{font-size:8px}.money-box b{font-size:9px}.money-box em{display:none}}
 .block-sales-total{grid-column:1;grid-row:1/3}.block-cost-wide{grid-column:2/4;grid-row:1}.block-gross-total{grid-column:2;grid-row:2}.block-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;gap:5px;overflow:hidden}@media(max-width:520px){.block-breakdown{gap:3px}}
-.legend-title{margin-top:13px;color:#39745A;font-size:10px;font-weight:800}.block-legend{margin-top:6px}
+.legend-title{margin-top:13px;color:#39745A;font-size:10px;font-weight:800}.block-legend{margin-top:6px}.map-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#68746D;background:#F5F8F6;font-size:12px;font-weight:700}
 .box-map{gap:0;padding:0}.money-box{border-radius:0}.block-breakdown{gap:0}.block-sales-total{border-radius:0}.block-cost-wide{border-radius:0}
 .tax-settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.tax-settings label{color:#68746D;font-size:10px;font-weight:700}.tax-settings select,.tax-settings input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;background:#fff;font-size:12px}.tax-note{margin-bottom:12px;padding:10px 12px;border-radius:11px;background:#FFF7E8;color:#75551E;font-size:9px;line-height:1.55}.input-grid input[readonly]{background:#F1F5F2;color:#315A45;font-weight:800}@media(max-width:520px){.tax-settings{grid-template-columns:1fr}}
 </style>
@@ -169,7 +190,7 @@ def future_financials():
     const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','rent','utilities','advertising','other-expenses','non-op-income','non-op-expense','target-profit','tax-method','corporate-tax-rate','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
     function box(label,value,share,cls,note=''){const safe=Math.max(.015,Math.abs(share));return `<div class="money-box ${cls}" style="flex:${safe}"><span>${label}</span>${safe>=.07?`<b>${yen(value)}</b>`:''}${note&&safe>=.11?`<em>${note}</em>`:''}</div>`}
-    function legend(label,value,rate,color){return `<div><span><i style="background:${color}"></i>${label}　${(rate*100).toFixed(1)}%</span><strong>${yen(value)}</strong></div>`}
+    function legend(label,value,rate,color){const rateText=rate===null?'—':`${(rate*100).toFixed(1)}%`;return `<div><span><i style="background:${color}"></i>${label}　${rateText}</span><strong>${yen(value)}</strong></div>`}
     function syncPlanField(name){
       const mode=$(`${name}-mode`).value,sales=num('sales'),basis=name==='personnel'?Math.max(0,sales-num('cogs')):sales,amount=$(name),rate=$(`${name}-rate`);
       if(mode==='rate'){amount.value=Math.round(basis*(Math.max(0,Number(rate.value)||0)/100));amount.disabled=true;rate.disabled=false}
@@ -178,13 +199,18 @@ def future_financials():
     function syncPlan(){syncPlanField('cogs');syncPlanField('personnel')}
     function update(){
       const sales=num('sales'),cogs=num('cogs'),personnel=num('personnel'),rent=num('rent'),utilities=num('utilities'),advertising=num('advertising'),otherExpenses=num('other-expenses'),otherSga=rent+utilities+advertising+otherExpenses,sga=personnel+otherSga,noi=num('non-op-income'),noe=num('non-op-expense'),target=num('target-profit');
-      const gross=sales-cogs,operating=gross-sga,ordinary=operating+noi-noe,rate=sales?cogs/sales:0,required=(1-rate)>0?(sga+noe-noi+target)/(1-rate):0;
+      const gross=sales-cogs,operating=gross-sga,ordinary=operating+noi-noe,rate=sales?cogs/sales:0;
+      const fixedOther=otherSga+noe-noi+target,personnelRate=Math.max(0,Number($('personnel-rate').value)||0)/100;
+      const requiredGross=$('personnel-mode').value==='rate'?(personnelRate<1?fixedOther/(1-personnelRate):0):personnel+fixedOther;
+      const cogsRate=Math.max(0,Number($('cogs-rate').value)||0)/100;
+      const required=$('cogs-mode').value==='rate'?(cogsRate<1?requiredGross/(1-cogsRate):0):requiredGross+cogs;
       $('profit-summary').innerHTML=[['粗利',gross],['営業利益',operating],['経常利益',ordinary]].map(x=>`<div class="summary ${x[1]<0?'negative':''}"><small>${x[0]}</small><b>${yen(x[1])}</b></div>`).join('');
-      const base=Math.max(sales,1),costShare=Math.min(cogs/base,1),grossShare=gross/base,profitShare=operating/base;
-      const pct=n=>`${(n*100).toFixed(1)}%`, laborShare=gross>0?personnel/gross:0;
-      const personnelShare=personnel/base,rentShare=rent/base,utilitiesShare=utilities/base,advertisingShare=advertising/base,otherShare=otherExpenses/base,grossBase=Math.max(gross,1),personnelOfGross=personnel/grossBase,rentOfGross=rent/grossBase,utilitiesOfGross=utilities/grossBase,advertisingOfGross=advertising/grossBase,otherOfGross=otherExpenses/grossBase,profitOfGross=Math.max(Math.abs(operating)/grossBase,.015);
-      $('profit-map').style.gridTemplateRows=`${Math.max(costShare,.015)}fr ${Math.max(Math.abs(grossShare),.015)}fr`;
-      $('profit-map').innerHTML=`${box('売上',sales,1,'box-sales block-sales-total','100%')}${box('仕入れ・原価',cogs,costShare,'box-cost block-cost-wide',`原価率 ${pct(costShare)}`)}${box(gross<0?'粗利損失':'粗利',gross,Math.max(Math.abs(grossShare),.015),`${gross<0?'box-loss':'box-gross'} block-gross-total`,`粗利率 ${pct(grossShare)}`)}<div class="block-breakdown">${box('人件費',personnel,personnelOfGross,'box-personnel',`分配率 ${pct(laborShare)}`)}${box('家賃',rent,rentOfGross,'box-rent')}${box('光熱費',utilities,utilitiesOfGross,'box-utilities')}${box('広告費',advertising,advertisingOfGross,'box-advertising')}${box('その他',otherExpenses,otherOfGross,'box-other')}${box(operating<0?'営業損失':'営業利益',Math.abs(operating),profitOfGross,operating<0?'box-loss':'box-profit',`利益率 ${pct(profitShare)}`)}</div>`;
+      const base=sales||1,costShare=sales?cogs/base:null,grossShare=sales?gross/base:null,profitShare=sales?operating/base:null;
+      const pct=n=>n===null?'—':`${(n*100).toFixed(1)}%`, laborShare=gross>0?personnel/gross:null;
+      const personnelShare=sales?personnel/base:null,rentShare=sales?rent/base:null,utilitiesShare=sales?utilities/base:null,advertisingShare=sales?advertising/base:null,otherShare=sales?otherExpenses/base:null,grossBase=Math.max(gross,1),personnelOfGross=personnel/grossBase,rentOfGross=rent/grossBase,utilitiesOfGross=utilities/grossBase,advertisingOfGross=advertising/grossBase,otherOfGross=otherExpenses/grossBase,profitOfGross=Math.max(Math.abs(operating)/grossBase,.015);
+      if(sales<=0){$('profit-map').style.gridTemplateRows='1fr';$('profit-map').innerHTML='<div class="map-empty" style="grid-column:1/-1">売上を入力すると、費用と利益の比率を表示します</div>'}
+      else if(gross<0){$('profit-map').style.gridTemplateRows='1fr';$('profit-map').innerHTML='<div class="map-empty" style="grid-column:1/-1">原価が売上を上回っています。入力値を確認してください</div>'}
+      else{$('profit-map').style.gridTemplateRows=`${Math.max(costShare,.015)}fr ${Math.max(grossShare,.015)}fr`;$('profit-map').innerHTML=`${box('売上',sales,1,'box-sales block-sales-total','100%')}${box('仕入れ・原価',cogs,costShare,'box-cost block-cost-wide',`原価率 ${pct(costShare)}`)}${box('粗利',gross,Math.max(grossShare,.015),'box-gross block-gross-total',`粗利率 ${pct(grossShare)}`)}<div class="block-breakdown">${box('人件費',personnel,personnelOfGross,'box-personnel',`分配率 ${pct(laborShare)}`)}${box('家賃',rent,rentOfGross,'box-rent')}${box('光熱費',utilities,utilitiesOfGross,'box-utilities')}${box('広告費',advertising,advertisingOfGross,'box-advertising')}${box('その他',otherExpenses,otherOfGross,'box-other')}${box(operating<0?'営業損失':'営業利益',Math.abs(operating),profitOfGross,operating<0?'box-loss':'box-profit',`利益率 ${pct(profitShare)}`)}</div>`}
       $('block-legend').innerHTML=legend('原価（売上比）',cogs,costShare,'#82988D')+legend('人件費（粗利比・労働分配率）',personnel,laborShare,'#4A9FD0')+legend('家賃（売上比）',rent,rentShare,'#8172B5')+legend('水道光熱費（売上比）',utilities,utilitiesShare,'#4CB7B4')+legend('広告費（売上比）',advertising,advertisingShare,'#D8943C')+legend('その他管理費（売上比）',otherExpenses,otherShare,'#99A29D')+legend(operating<0?'営業損失（売上比）':'営業利益（売上比）',operating,profitShare,operating<0?'#C85C57':'#4B77B7');
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const outputTax=Math.floor(sales*10/110),plannedInputTax=Math.floor(cogs*8/108)+Math.floor((rent+utilities+advertising+otherExpenses)*10/110),actualMode=root.dataset.view==='provisional',generalInputTax=actualMode?Number((window.miraiActuals||{}).input_tax||0):plannedInputTax,taxMethod=$('tax-method').value,ct=Math.max(0,taxMethod==='simplified'?Math.floor(outputTax*.4):outputTax-generalInputTax),corpRate=num('corporate-tax-rate'),corp=Math.max(0,Math.round(Math.max(ordinary,0)*corpRate/100));
@@ -199,8 +225,9 @@ def future_financials():
     ['cogs','personnel'].forEach(id=>$(id).addEventListener('input',()=>{if($(`${id}-mode`).value==='amount')syncPlanField(id);if(id==='cogs')syncPlanField('personnel');update()}));
     ['cogs-rate','personnel-rate'].forEach(id=>$(id).addEventListener('input',()=>{const name=id.replace('-rate','');if($(`${name}-mode`).value==='rate')syncPlanField(name);if(name==='cogs')syncPlanField('personnel');update()}));
     modes.forEach(id=>$(id).addEventListener('change',()=>{syncPlan();update()}));
-    try{const saved=JSON.parse(localStorage.getItem('habitory-future-plan')||'null');if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['linkage-version']!=='amount-default-v1'){$('cogs-mode').value='amount';$('personnel-mode').value='amount'}if(saved['personnel-plan-basis']!=='gross-profit'){const gross=Math.max(0,num('sales')-num('cogs'));$('personnel-rate').value=gross?((num('personnel')/gross)*100).toFixed(1):0}if(saved['other-expenses']===undefined&&saved['other-sga']!==undefined){$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=saved['other-sga']}if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-expenses').value=Math.round(saved.sga*.35)}}}catch(e){}
-    $('save-plan').onclick=()=>{const data={'personnel-plan-basis':'gross-profit','linkage-version':'amount-default-v1'};[...ids,...modes].forEach(id=>data[id]=$(id).value);localStorage.setItem('habitory-future-plan',JSON.stringify(data));$('save-plan').textContent='保存しました';setTimeout(()=>$('save-plan').textContent='計画を保存',1400)};
+    try{const local=JSON.parse(localStorage.getItem('habitory-future-plan')||'null'),saved=Object.keys(window.miraiSavedPlan||{}).length?window.miraiSavedPlan:local;if(saved){ids.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});modes.forEach(id=>{if(saved[id]!==undefined)$(id).value=saved[id]});if(saved['linkage-version']!=='amount-default-v1'){$('cogs-mode').value='amount';$('personnel-mode').value='amount'}if(saved['personnel-plan-basis']!=='gross-profit'){const gross=Math.max(0,num('sales')-num('cogs'));$('personnel-rate').value=gross?((num('personnel')/gross)*100).toFixed(1):0}if(saved['other-expenses']===undefined&&saved['other-sga']!==undefined){$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=saved['other-sga']}if(saved.sga!==undefined&&saved.personnel===undefined){$('personnel').value=Math.round(saved.sga*.65);$('other-expenses').value=Math.round(saved.sga*.35)}}}catch(e){}
+    root._collectPlan=()=>{const data={'personnel-plan-basis':'gross-profit','linkage-version':'amount-default-v1'};[...ids,...modes].forEach(id=>data[id]=$(id).value);return data};
+    $('save-plan').onclick=()=>{const bridge=document.getElementById('save-plan-server');if(bridge)bridge.click()};
     let simulationData=null;
     function setView(mode){
       const provisional=mode==='provisional',fields=$('plan-fields').querySelectorAll('input,select');

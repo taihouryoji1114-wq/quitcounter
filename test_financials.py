@@ -43,6 +43,25 @@ class FinancialManagerTest(unittest.TestCase):
         self.assertEqual(summary["lunch_spend"], 3000)
         self.assertEqual(summary["dinner_spend"], 6000)
 
+    def test_legacy_update_clears_old_split_values(self):
+        self.financials.set_daily_sales(
+            "2026-08-10", lunch_sales=100, dinner_sales=200,
+            lunch_customers=1, dinner_customers=2,
+        )
+        record = self.financials.set_daily_sales("2026-08-10", 500)
+        self.assertEqual(record["amount"], 500)
+        self.assertNotIn("lunch_sales", record)
+        self.assertEqual(self.financials.monthly_sales_summary("2026-08")["total"], 500)
+
+    def test_business_plan_is_persistent_and_whitelisted(self):
+        saved = self.financials.save_plan({
+            "sales": "3000000", "cogs-mode": "rate", "unknown": "ignored",
+        })
+        self.assertNotIn("unknown", saved)
+        reloaded = FinancialManager(DataManager(self.manager.file_path))
+        self.assertEqual(reloaded.get_plan()["sales"], "3000000")
+        self.assertEqual(reloaded.get_plan()["cogs-mode"], "rate")
+
 
 if __name__ == "__main__":
     unittest.main()

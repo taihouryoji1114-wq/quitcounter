@@ -1,8 +1,7 @@
-from datetime import date
-
 from nicegui import ui
 
 from core.auth import require_login, selected_user_id
+from core.clock import today_jst_string
 from core.data import data
 from core.hydration import hydration
 from core.theme import Theme
@@ -14,7 +13,7 @@ def hydration_page():
         return
     Theme.page("水分")
     page_user_id = selected_user_id()
-    today = date.today().isoformat()
+    today = today_jst_string()
     content = Theme.shell("水分", "今日も、こまめにひと息。", back_to="/habitory")
 
     with content:

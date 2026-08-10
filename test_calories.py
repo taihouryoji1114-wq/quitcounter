@@ -1,12 +1,15 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from core.calories import (
     ACTIVITY_FACTORS,
     NutritionSettingsManager,
     calculate_daily_expenditure,
+    calculate_period_expenditure,
 )
 from core.data import DataManager
 
@@ -34,6 +37,24 @@ class NutritionSettingsManagerTest(unittest.TestCase):
                 calculate_daily_expenditure(1600, level),
                 round(1600 * factor),
             )
+
+    def test_current_day_expenditure_is_prorated(self):
+        now = datetime(2026, 8, 11, 12, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+        self.assertEqual(
+            calculate_period_expenditure(
+                2000, "2026-08-10", "2026-08-11", now=now
+            ),
+            3000,
+        )
+
+    def test_past_period_uses_full_days(self):
+        now = datetime(2026, 8, 11, 12, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+        self.assertEqual(
+            calculate_period_expenditure(
+                2000, "2026-08-08", "2026-08-10", now=now
+            ),
+            6000,
+        )
 
     def test_optional_values_are_unset_without_error(self):
         saved = self.calories.save_settings()

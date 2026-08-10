@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, time
+
+from core.clock import now_jst, today_jst
+
 
 ACTIVITY_FACTORS = {
     "少ない": 1.2,
@@ -27,6 +31,29 @@ def calculate_daily_expenditure(basal_metabolism, activity_level):
     if activity_level not in ACTIVITY_FACTORS:
         raise ValueError("活動量を選択してください。")
     return round(basal_metabolism * ACTIVITY_FACTORS[activity_level])
+
+
+def calculate_period_expenditure(daily_expenditure, start_date, end_date, now=None):
+    """Estimate expenditure, prorating the current Japan day by elapsed time."""
+    if daily_expenditure is None:
+        return None
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    if start > end:
+        raise ValueError("集計期間の開始日と終了日が正しくありません。")
+    current = now or now_jst()
+    japan_today = current.date() if now is not None else today_jst()
+    if end < japan_today:
+        day_units = (end - start).days + 1
+    elif start > japan_today:
+        day_units = 0
+    else:
+        full_days = max(0, (japan_today - start).days)
+        elapsed = (current - datetime.combine(
+            japan_today, time.min, tzinfo=current.tzinfo
+        )).total_seconds()
+        day_units = full_days + min(1, max(0, elapsed / 86400))
+    return daily_expenditure * day_units
 
 
 class NutritionSettingsManager:

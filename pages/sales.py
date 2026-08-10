@@ -1,8 +1,7 @@
-from datetime import date
-
 from nicegui import ui
 
 from core.auth import require_login
+from core.clock import today_jst
 from core.financials import financials
 from core.theme import Theme
 
@@ -12,7 +11,7 @@ def sales_page():
     if not require_login():
         return
     Theme.page("売上入力｜未来決算", app_name="mirai-kessan")
-    today = date.today()
+    today = today_jst()
     content = Theme.shell(
         "売上入力",
         "その日の売上を、1回入力するだけ",

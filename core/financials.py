@@ -7,6 +7,15 @@ from uuid import uuid4
 
 
 class FinancialManager:
+    PLAN_FIELDS = {
+        "sales", "cogs", "cogs-rate", "cogs-mode", "personnel",
+        "personnel-rate", "personnel-mode", "rent", "utilities",
+        "advertising", "other-expenses", "non-op-income",
+        "non-op-expense", "target-profit", "tax-method",
+        "corporate-tax-rate", "loan-payment", "investment",
+        "personnel-plan-basis", "linkage-version",
+    }
+
     def __init__(self, data_manager):
         self._data_manager = data_manager
 
@@ -56,8 +65,29 @@ class FinancialManager:
                 "lunch_customers": lunch_customers,
                 "dinner_customers": dinner_customers,
             })
+        else:
+            for field in (
+                "lunch_sales", "dinner_sales", "lunch_customers",
+                "dinner_customers",
+            ):
+                record.pop(field, None)
         self._data_manager.save()
         return record
+
+    def get_plan(self):
+        plan = self._data_manager.data.get("business_plan", {})
+        return dict(plan) if isinstance(plan, dict) else {}
+
+    def save_plan(self, plan):
+        if not isinstance(plan, dict):
+            raise ValueError("月間計画の形式が正しくありません。")
+        cleaned = {
+            key: value for key, value in plan.items()
+            if key in self.PLAN_FIELDS and isinstance(value, (str, int, float))
+        }
+        self._data_manager.data["business_plan"] = cleaned
+        self._data_manager.save()
+        return dict(cleaned)
 
     def delete_sales(self, record_id):
         records = self._data_manager.data.get("business_sales", [])

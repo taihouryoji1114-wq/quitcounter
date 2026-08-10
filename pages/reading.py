@@ -1,8 +1,9 @@
-from datetime import date, datetime
+from datetime import datetime
 
 from nicegui import ui
 
 from core.auth import require_login, selected_user_id
+from core.clock import today_jst_string
 from core.data import data
 from core.reading import reading
 from core.theme import Theme
@@ -23,7 +24,7 @@ def reading_page():
         return
     Theme.page("読書")
     page_user_id = selected_user_id()
-    today = date.today().isoformat()
+    today = today_jst_string()
     content = Theme.shell("読書", "本と過ごした時間を、少しずつ。", back_to="/habitory")
 
     with content:

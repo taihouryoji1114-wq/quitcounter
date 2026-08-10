@@ -4,6 +4,7 @@ from datetime import date
 from nicegui import ui
 
 from core.auth import require_login, selected_user_id
+from core.clock import today_jst
 from core.data import data
 from core.hydration import hydration
 from core.nutrition import nutrition
@@ -76,7 +77,7 @@ def calendar_page():
         return
     Theme.page("カレンダー")
     user_id = selected_user_id()
-    today = date.today()
+    today = today_jst()
     display_month = [today.replace(day=1)]
     content = Theme.shell(
         "カレンダー", "毎日の積み重ねを、ひとつの場所で。", back_to="/habitory"
