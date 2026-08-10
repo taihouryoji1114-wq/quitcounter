@@ -3,6 +3,7 @@ from datetime import date
 from nicegui import ui
 
 from core.auth import log_out, require_login
+from core.financials import financials
 from core.purchases import purchases
 from core.theme import Theme
 
@@ -28,8 +29,12 @@ def future_financials_home():
     current_month = date.today().strftime("%Y-%m")
     purchase_total = purchases.monthly_total(current_month, kind="cost")
     other_expense_total = purchases.monthly_total(current_month, kind="expense")
+    sales_total = financials.monthly_sales_total(current_month)
     with content:
         with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
+            with ui.card().classes("surface-card q-pa-md col-span-2"):
+                ui.label("今月の売上実績").classes("text-xs text-grey-6")
+                ui.label(f"¥{sales_total:,}").classes("text-3xl font-bold metric-value")
             with ui.card().classes("surface-card q-pa-md"):
                 ui.label("今月の原価仕入れ").classes("text-xs text-grey-6")
                 ui.label(f"¥{purchase_total:,}").classes("text-xl font-bold metric-value")
@@ -52,6 +57,7 @@ def future_financials_home():
                     ui.space()
                     ui.icon("chevron_right").classes("text-2xl text-grey-7")
 
+        menu_card("売上入力", "その日の売上を記録", "payments", "#B87835", "/mirai-kessan/sales")
         menu_card("仕入れノート", "原価・経費・消費税を記録", "receipt_long", "#246BFD", "/shiire")
         menu_card("利益ブロック図", "売上から残るお金までを図で確認", "account_tree", "#39745A", "/mirai-kessan/block-map")
 
@@ -91,7 +97,7 @@ def future_financials():
 
   <section class="mk-card result-card">
     <div class="mk-head"><div><small>PROFIT</small><h2>R-BASE 利益ブロック図</h2></div><span>月間</span></div>
-    <p class="block-guide">売上が、変動費・粗利・固定費・利益へどう分かれるかを面積で表示します。</p>
+    <p class="block-guide">売上から費用を引くたびに棒が細くなり、最後に残る利益が見える図です。</p>
     <div id="profit-summary" class="summary-grid"></div>
     <div id="profit-map" class="box-map" aria-label="売上を変動費、粗利、人件費、その他固定費、利益に分解した図"></div>
     <div id="sales-answer" class="answer"></div>
@@ -110,7 +116,7 @@ def future_financials():
 </div>
 <style>
 #mirai-app{width:100%;display:grid;gap:16px}.mk-card{background:#fff;border:1px solid #E5E9E6;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(39,55,45,.055)}.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.mk-head small{color:#4F7C68;font-weight:800;letter-spacing:.14em}.mk-head h2{font-size:19px;margin:3px 0 0}.mk-head span{color:#7A867F;font-size:11px}.mk-head button{border:0;border-radius:10px;background:#EDF5F0;color:#39745A;padding:9px 14px;font-weight:700}.block-guide{margin:-8px 0 14px;color:#748078;font-size:11px;line-height:1.6}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.input-grid label{color:#68746D;font-size:10px;font-weight:700}.input-grid input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;font-size:14px;outline:none}.input-grid input:focus{border-color:#4F7C68;box-shadow:0 0 0 3px rgba(79,124,104,.1)}.dual-plan-field{border:1px solid #DDE3DF;border-radius:13px;padding:10px;background:#FAFBFA}.dual-plan-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#68746D;font-size:11px;font-weight:800}.dual-plan-head select{border:1px solid #DDE3DF;border-radius:8px;background:#fff;padding:6px;color:#39745A;font-size:10px;font-weight:700}.dual-plan-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.dual-plan-inputs input:disabled{background:#EFF2F0;color:#68746D}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.summary{background:#F5F8F6;border-radius:12px;padding:12px}.summary small{display:block;color:#748078;font-size:9px}.summary b{display:block;margin-top:3px;font-size:15px}.summary.negative b{color:#C84B45}.profit-map{display:grid;gap:7px}.money-row{display:grid;grid-template-columns:84px 1fr 88px;gap:8px;align-items:center;font-size:11px}.money-track{height:30px;background:#F0F2F0;border-radius:7px;overflow:hidden}.money-bar{height:100%;min-width:2px;border-radius:7px;display:flex;align-items:center;padding:0 8px;box-sizing:border-box;color:#fff;font-size:9px;white-space:nowrap}.sales-bar{background:#355F4C}.cost-bar{background:#94A79D}.gross-bar{background:#4F8C70}.sga-bar{background:#C2A56E}.ordinary-bar{background:#4B77B7}.negative-bar{background:#C85C57}.money-value{text-align:right;font-weight:700}.answer{margin-top:18px;border-radius:15px;background:#EAF1FF;padding:16px;color:#244F89}.answer small{display:block;font-size:10px}.answer b{display:block;font-size:22px;margin-top:3px}.answer span{font-size:11px}.compact{margin-bottom:18px}.cash-flow{display:grid;gap:7px}.cash-line{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #EEF0EE;font-size:12px}.cash-line strong{font-size:14px}.cash-line.final{border:0;border-radius:12px;background:#F3F6F4;padding:14px}.cash-line.final strong.negative{color:#C84B45}@media(max-width:520px){.mk-card{padding:18px 15px}.input-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.money-row{grid-template-columns:70px 1fr 78px}.money-track{height:27px}}
-.box-map{height:360px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:#E8ECE9;padding:5px;border-radius:16px;overflow:hidden}.box-column{min-width:0;height:100%;display:flex;flex-direction:column;gap:5px}.box-spacer{min-height:0}.money-box{min-height:34px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-radius:11px;padding:7px;box-sizing:border-box;overflow:hidden;color:#fff}.money-box span{font-size:11px;font-weight:700}.money-box b{font-size:14px;margin-top:3px}.money-box em{font-size:9px;font-style:normal;margin-top:3px;opacity:.9}.box-sales{height:100%;background:#355F4C}.box-cost{background:#82988D}.box-gross{background:#4F8C70}.box-personnel{background:#B28C53}.box-other{background:#C3A976}.box-profit{background:#4B77B7}.box-loss{background:#C85C57}@media(max-width:520px){.box-map{height:300px;gap:3px;padding:3px}.box-column{gap:3px}.money-box{padding:4px}.money-box span{font-size:9px}.money-box b{font-size:11px}.money-box em{font-size:8px}}
+.box-map{display:flex;flex-direction:column;align-items:center;gap:0;background:#F3F6F4;padding:18px 12px;border-radius:18px}.flow-node{min-width:36%;max-width:100%;box-sizing:border-box;border-radius:14px;padding:12px 10px;color:#fff;text-align:center;transition:width .2s ease}.flow-node span{display:block;font-size:11px;font-weight:800}.flow-node b{display:block;font-size:17px;margin-top:2px}.flow-node em{display:block;font-size:9px;font-style:normal;margin-top:2px;opacity:.9}.flow-sales{background:#355F4C}.flow-gross{background:#4F8C70}.flow-remaining{background:#7DA08E}.flow-profit{background:#3F70B5;box-shadow:0 6px 16px rgba(63,112,181,.22)}.flow-loss{background:#C85C57;box-shadow:0 6px 16px rgba(200,92,87,.2)}.flow-deduction{position:relative;width:min(94%,560px);display:grid;grid-template-columns:24px 1fr auto;gap:7px;align-items:center;padding:9px 12px;margin:5px 0;color:#5E6C64;background:#fff;border:1px dashed #CBD4CE;border-radius:12px;font-size:10px}.flow-deduction i{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#FFF0ED;color:#C85C57;font-style:normal;font-size:16px;font-weight:900}.flow-deduction strong{font-size:12px;color:#293A31}.flow-arrow{height:12px;width:2px;background:#AAB8B0;position:relative}.flow-arrow:after{content:'';position:absolute;bottom:-1px;left:-3px;width:7px;height:7px;border-right:2px solid #AAB8B0;border-bottom:2px solid #AAB8B0;transform:rotate(45deg)}@media(max-width:520px){.box-map{padding:14px 8px}.flow-node{min-width:44%;padding:10px 6px}.flow-node span{font-size:10px}.flow-node b{font-size:14px}.flow-deduction{width:96%;padding:8px}.flow-deduction strong{font-size:11px}}
 </style>
             ''',
             sanitize=False,
@@ -124,7 +130,8 @@ def future_financials():
     if(!root){setTimeout(init,100);return}
     const $=id=>document.getElementById(id), ids=['sales','cogs','cogs-rate','personnel','personnel-rate','other-sga','non-op-income','non-op-expense','target-profit','consumption-tax','corporate-tax','loan-payment','investment'], modes=['cogs-mode','personnel-mode'];
     const num=id=>Math.max(0,Number(String($(id).value).replace(/,/g,''))||0), yen=n=>new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0}).format(n||0);
-    function box(label,value,share,cls,note=''){return `<div class="money-box ${cls}" style="flex:${Math.max(share,.035)}"><span>${label}</span><b>${yen(value)}</b>${note?`<em>${note}</em>`:''}</div>`}
+    function flowNode(label,value,share,cls,note=''){const width=Math.max(36,Math.min(100,Math.abs(share)*100));return `<div class="flow-node ${cls}" style="width:${width}%"><span>${label}</span><b>${yen(value)}</b>${note?`<em>${note}</em>`:''}</div>`}
+    function deduction(label,value,note=''){return `<div class="flow-arrow"></div><div class="flow-deduction"><i>−</i><span>${label}${note?`<small>　${note}</small>`:''}</span><strong>${yen(value)}</strong></div><div class="flow-arrow"></div>`}
     function syncPlanField(name){
       const mode=$(`${name}-mode`).value,sales=num('sales'),amount=$(name),rate=$(`${name}-rate`);
       if(mode==='rate'){amount.value=Math.round(sales*(Math.max(0,Number(rate.value)||0)/100));amount.disabled=true;rate.disabled=false}
@@ -135,9 +142,9 @@ def future_financials():
       const sales=num('sales'),cogs=num('cogs'),personnel=num('personnel'),otherSga=num('other-sga'),sga=personnel+otherSga,noi=num('non-op-income'),noe=num('non-op-expense'),target=num('target-profit');
       const gross=sales-cogs,operating=gross-sga,ordinary=operating+noi-noe,rate=sales?cogs/sales:0,required=(1-rate)>0?(sga+noe-noi+target)/(1-rate):0;
       $('profit-summary').innerHTML=[['粗利',gross],['営業利益',operating],['経常利益',ordinary]].map(x=>`<div class="summary ${x[1]<0?'negative':''}"><small>${x[0]}</small><b>${yen(x[1])}</b></div>`).join('');
-      const base=Math.max(sales,1),costShare=Math.min(cogs/base,1),grossShare=Math.max(gross/base,0),personnelShare=personnel/base,otherShare=otherSga/base,profitShare=Math.max(operating/base,0);
+      const base=Math.max(sales,1),costShare=Math.min(cogs/base,1),grossShare=gross/base,afterPersonnel=gross-personnel,afterPersonnelShare=afterPersonnel/base,profitShare=operating/base;
       const pct=n=>`${(n*100).toFixed(1)}%`, laborShare=gross>0?personnel/gross:0;
-      $('profit-map').innerHTML=`<div class="box-column">${box('売上',sales,1,'box-sales','100%')}</div><div class="box-column">${box('変動費（仕入・原価）',cogs,costShare,'box-cost',`原価率 ${pct(costShare)}`)}${box('粗利',gross,grossShare,gross<0?'box-loss':'box-gross',`粗利率 ${pct(grossShare)}`)}</div><div class="box-column"><div class="box-spacer" style="flex:${costShare}"></div>${box('人件費',personnel,personnelShare,'box-personnel',`労働分配率 ${pct(laborShare)}`)}${box('その他固定費',otherSga,otherShare,'box-other')}${box(operating<0?'営業損失':'営業利益',Math.abs(operating),Math.max(profitShare,Math.abs(operating)/base),operating<0?'box-loss':'box-profit',`営業利益率 ${pct(operating/base)}`)}</div>`;
+      $('profit-map').innerHTML=`${flowNode('売上',sales,1,'flow-sales','100%')}${deduction('変動費（仕入・原価）',cogs,`原価率 ${pct(costShare)}`)}${flowNode(gross<0?'粗利損失':'粗利',gross,grossShare,gross<0?'flow-loss':'flow-gross',`粗利率 ${pct(grossShare)}`)}${deduction('人件費',personnel,`労働分配率 ${pct(laborShare)}`)}${flowNode('人件費を引いた残り',afterPersonnel,afterPersonnelShare,afterPersonnel<0?'flow-loss':'flow-remaining')}${deduction('その他固定費',otherSga)}${flowNode(operating<0?'営業損失':'最終的に残る営業利益',operating,profitShare,operating<0?'flow-loss':'flow-profit',`営業利益率 ${pct(profitShare)}`)}`;
       const gap=Math.max(0,required-sales);$('sales-answer').innerHTML=`<small>目標経常利益 ${yen(target)} に必要な売上</small><b>${yen(required)}</b><span>${gap>0?`現在の計画より ${yen(gap)} 増やす必要があります`:'現在の売上計画で達成圏内です'}</span>`;
       const ct=num('consumption-tax'),corp=num('corporate-tax'),loan=num('loan-payment'),inv=num('investment'),cash=ordinary-corp-ct-loan-inv;
       $('cash-flow').innerHTML=`<div class="cash-line"><span>経常利益からスタート</span><strong>${yen(ordinary)}</strong></div><div class="cash-line"><span>税金の支払</span><strong>− ${yen(ct+corp)}</strong></div><div class="cash-line"><span>借入元金・設備投資</span><strong>− ${yen(loan+inv)}</strong></div><div class="cash-line final"><span>手元資金の増減目安</span><strong class="${cash<0?'negative':''}">${yen(cash)}</strong></div>`;

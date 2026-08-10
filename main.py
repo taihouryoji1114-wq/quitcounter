@@ -17,6 +17,7 @@ import pages.login
 import pages.portal
 import pages.reading
 import pages.purchases
+import pages.sales
 import pages.future_financials
 import pages.smoking
 import pages.settings
