@@ -33,12 +33,8 @@ def future_financials_home():
     sales_total = financials.monthly_sales_total(current_month)
     payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
     advertising_total = financials.get_monthly_advertising(current_month)["total"]
-    known_expenses = (
-        purchase_total + other_expense_total + payment_fees + advertising_total
-    )
-    provisional_balance = sales_total - known_expenses
+    gross_profit = sales_total - purchase_total
     cost_rate = purchase_total / sales_total if sales_total else 0
-    expense_rate = known_expenses / sales_total if sales_total else 0
     month_label = current_month.replace("-", "年") + "月"
     with content:
         with ui.card().classes("w-full q-pa-lg q-mb-md text-white").style(
@@ -56,16 +52,13 @@ def future_financials_home():
                 with ui.element("div").classes("rounded-xl q-pa-sm").style(
                     "background:rgba(255,255,255,.12)"
                 ):
-                    ui.label("入力済み費用").classes("text-[10px] opacity-70")
-                    ui.label(f"¥{known_expenses:,}").classes("font-bold")
+                    ui.label("原価").classes("text-[10px] opacity-70")
+                    ui.label(f"¥{purchase_total:,}").classes("font-bold")
                 with ui.element("div").classes("rounded-xl q-pa-sm").style(
                     "background:rgba(255,255,255,.12)"
                 ):
-                    ui.label("入力済み収支").classes("text-[10px] opacity-70")
-                    ui.label(f"¥{provisional_balance:,}").classes("font-bold")
-            ui.label(
-                "※ 人件費・家賃など未入力の費用は含まない途中経過です"
-            ).classes("text-[9px] opacity-60 q-mt-sm")
+                    ui.label("粗利").classes("text-[10px] opacity-70")
+                    ui.label(f"¥{gross_profit:,}").classes("font-bold")
 
         with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
             for title, value, icon, color in (
@@ -74,25 +67,30 @@ def future_financials_home():
                 ("決済手数料", payment_fees, "credit_card", "#3679A8"),
                 ("広告費", advertising_total, "campaign", "#B14F5E"),
             ):
-                with ui.card().classes("surface-card q-pa-md"):
+                with ui.card().classes("surface-card q-pa-md").style(
+                    f"background:{color}0D"
+                ):
                     with ui.row().classes("items-center gap-2 q-mb-sm"):
                         ui.icon(icon).style(f"color:{color}")
                         ui.label(title).classes("text-[10px] text-grey-6")
                     ui.label(f"¥{value:,}").classes("text-lg font-bold metric-value")
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-lg"):
-            ui.label("今月の比率").classes("text-lg font-bold q-mb-md")
-            for label, rate, color in (
-                ("原価率", cost_rate, "#B87835"),
-                ("入力済み費用率", expense_rate, "#39745A"),
-            ):
-                with ui.row().classes("w-full items-center justify-between"):
-                    ui.label(label).classes("text-xs text-grey-7")
-                    ui.label(f"{rate * 100:.1f}%" if sales_total else "—").classes("text-xs font-bold")
-                bar_color = "orange" if label == "原価率" else "primary"
-                ui.linear_progress(value=min(rate, 1) if sales_total else 0).props(
-                    f"color={bar_color} track-color=grey-3 rounded size=8px"
-                ).classes("q-mb-md")
+            ui.label("重要な経営指標").classes("text-lg font-bold q-mb-md")
+            with ui.element("div").classes("grid grid-cols-2 gap-3 w-full"):
+                with ui.element("div").classes("rounded-2xl q-pa-md").style(
+                    "background:#FFF4E5"
+                ):
+                    ui.label("原価率").classes("text-xs font-bold").style("color:#9A5B18")
+                    ui.label(
+                        f"{cost_rate * 100:.1f}%" if sales_total else "—"
+                    ).classes("text-2xl font-black q-mt-xs").style("color:#8A4D10")
+                with ui.element("div").classes("rounded-2xl q-pa-md").style(
+                    "background:#EAF3FF"
+                ):
+                    ui.label("労働分配率").classes("text-xs font-bold").style("color:#315F91")
+                    ui.label("未入力").classes("text-2xl font-black q-mt-xs").style("color:#244F7F")
+                    ui.label("人件費の登録後に計算").classes("text-[9px] q-mt-xs").style("color:#6685A5")
 
         ui.label("クイックメニュー").classes("text-lg font-bold q-mb-sm")
 
