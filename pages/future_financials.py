@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from nicegui import ui
 
@@ -9,8 +10,21 @@ from core.purchases import purchases
 from core.theme import Theme
 
 
-@ui.page("/mirai-kessan")
-def future_financials_home():
+def _valid_month(value):
+    try:
+        parsed = datetime.strptime(str(value), "%Y-%m")
+    except (TypeError, ValueError):
+        return None
+    return parsed.strftime("%Y-%m") if str(value) == parsed.strftime("%Y-%m") else None
+
+
+def _shift_month(month, amount):
+    parsed = datetime.strptime(month, "%Y-%m")
+    total = parsed.year * 12 + parsed.month - 1 + amount
+    return f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+
+def _render_future_financials_home(selected_month=None):
     if not require_login():
         return
     Theme.page("未来決算", app_name="mirai-kessan")
@@ -27,7 +41,12 @@ def future_financials_home():
         action=exit_action,
         brand="未来決算",
     )
-    current_month = today_jst().strftime("%Y-%m")
+    actual_current_month = today_jst().strftime("%Y-%m")
+    current_month = _valid_month(selected_month) or actual_current_month
+    dashboard_path = (
+        "/mirai-kessan" if current_month == actual_current_month
+        else f"/mirai-kessan/month/{current_month}"
+    )
     purchase_total = purchases.monthly_total(current_month, kind="cost")
     other_expense_total = purchases.monthly_total(current_month, kind="expense")
     sales_total = financials.monthly_sales_total(current_month)
@@ -64,6 +83,27 @@ def future_financials_home():
     completed_monthly_items = len(monthly_entry_items) - len(missing_monthly_items)
     month_label = current_month.replace("-", "年") + "月"
     with content:
+        with ui.card().classes("surface-card w-full q-pa-sm q-mb-sm"):
+            with ui.row().classes("w-full items-center justify-between no-wrap"):
+                ui.button(
+                    icon="chevron_left",
+                    on_click=lambda: ui.navigate.to(
+                        f"/mirai-kessan/month/{_shift_month(current_month, -1)}"
+                    ),
+                ).props("flat round aria-label='前の月'")
+                with ui.column().classes("items-center gap-0"):
+                    ui.label(month_label).classes("text-base font-black")
+                    if current_month != actual_current_month:
+                        ui.button(
+                            "今月へ戻る", on_click=lambda: ui.navigate.to("/mirai-kessan")
+                        ).props("flat dense no-caps").classes("text-[10px]")
+                ui.button(
+                    icon="chevron_right",
+                    on_click=lambda: ui.navigate.to(
+                        f"/mirai-kessan/month/{_shift_month(current_month, 1)}"
+                    ),
+                ).props("flat round aria-label='次の月'")
+
         detail_visible = [False]
         with ui.card().classes("w-full q-pa-lg q-mb-sm text-white cursor-pointer").style(
             "border-radius:28px;border:0;background:linear-gradient(145deg,#123D30 0%,#24664F 58%,#C18A45 145%);"
@@ -153,7 +193,7 @@ def future_financials_home():
                         ui.notify(str(error), type="negative")
                         return
                     ui.notify("月次費用・広告費を保存しました", type="positive")
-                    ui.navigate.to("/mirai-kessan")
+                    ui.navigate.to(dashboard_path)
 
                 ui.button("月次費用・広告費を保存", icon="save", on_click=save_operations).classes(
                     "w-full q-mt-md"
@@ -350,6 +390,16 @@ def future_financials_home():
             "receipt_long", "#246BFD", "/mirai-kessan/shiire",
         )
         menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "account_tree", "#39745A", "/mirai-kessan/block-map")
+
+
+@ui.page("/mirai-kessan")
+def future_financials_home():
+    _render_future_financials_home()
+
+
+@ui.page("/mirai-kessan/month/{selected_month}")
+def future_financials_month(selected_month: str):
+    _render_future_financials_home(selected_month)
 
 
 @ui.page("/mirai-kessan/block-map")
