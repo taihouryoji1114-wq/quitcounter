@@ -198,7 +198,6 @@ def sales_page():
             month = selected_day[0][:7]
             values = financials.monthly_sales_summary(month)
             payments = financials.monthly_payment_summary(month)
-            advertising = financials.get_monthly_advertising(month)
             with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
                 ui.label(f"{month.replace('-', '年')}月の売上実績").classes(
                     "text-xs text-grey-6"
@@ -223,8 +222,7 @@ def sales_page():
                     f"現金 ¥{payments['cash_sales']:,}　カード ¥{payments['credit_sales']:,}　"
                     f"PayPay ¥{payments['paypay_sales']:,}　電子マネー ¥{payments['electronic_money_sales']:,}　"
                     f"旅行社 ¥{payments['travel_agency_sales']:,}　"
-                    f"食べログポイント ¥{payments['tabelog_points_sales']:,}　"
-                    f"ホットペッパーポイント ¥{payments['hotpepper_points_sales']:,}"
+                    f"ポイント ¥{payments['tabelog_points_sales'] + payments['hotpepper_points_sales']:,}"
                 ).classes("text-[10px] text-grey-7 q-mt-xs")
                 if payments["unclassified_sales"]:
                     ui.label(
@@ -233,12 +231,6 @@ def sales_page():
                 ui.label(
                     f"決済手数料見込 ¥{payments['total_fees']:,}"
                 ).classes("font-bold q-mt-sm")
-                ui.label(
-                    f"広告費実績 ¥{advertising['total']:,}"
-                    f"（食べログ ¥{advertising['tabelog']:,} / "
-                    f"ホットペッパー ¥{advertising['hotpepper']:,} / "
-                    f"その他 ¥{advertising['other']:,}）"
-                ).classes("text-xs font-bold q-mt-sm")
 
         summary()
 
@@ -333,33 +325,12 @@ def sales_page():
                 return
             for record in records:
                 with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
-                    with ui.row().classes("w-full items-center no-wrap"):
-                        ui.label(record["date"].replace("-", "/")).classes("font-bold")
+                    with ui.row().classes("w-full items-center no-wrap q-mb-md"):
+                        with ui.column().classes("gap-0"):
+                            ui.label("選択日の売上合計").classes("text-[10px] text-grey-6")
+                            ui.label(record["date"].replace("-", "/")).classes("font-bold")
                         ui.space()
-                        ui.label(f"¥{record['amount']:,}").classes("text-lg font-bold")
-                        split = "lunch_sales" in record
-                        if split:
-                            ui.label(
-                                f"昼 ¥{record.get('lunch_sales', 0):,}・{record.get('lunch_customers', 0)}人 / "
-                                f"夜 ¥{record.get('dinner_sales', 0):,}・{record.get('dinner_customers', 0)}人"
-                            ).classes("text-[10px] text-grey-6")
-                        payment_parts = [
-                            f"{label} ¥{int(record.get(field, 0)):,}"
-                            for label, field in (
-                                ("現金", "cash_sales"),
-                                ("カード", "credit_sales"),
-                                ("PayPay", "paypay_sales"),
-                                ("電子マネー", "electronic_money_sales"),
-                                ("旅行社", "travel_agency_sales"),
-                                ("食べログポイント", "tabelog_points_sales"),
-                                ("ホットペッパーポイント", "hotpepper_points_sales"),
-                            )
-                            if record.get(field, 0)
-                        ]
-                        if payment_parts:
-                            ui.label(" / ".join(payment_parts)).classes(
-                                "text-[10px] text-grey-6"
-                            )
+                        ui.label(f"¥{record['amount']:,}").classes("text-2xl font-bold metric-value")
 
                         def delete_record(_, selected=record):
                             financials.delete_sales(selected["id"])
@@ -371,5 +342,41 @@ def sales_page():
                         ui.button(icon="delete_outline", on_click=delete_record).props(
                             "flat round color=negative"
                         )
+                    ui.label("時間帯別").classes("text-xs font-bold text-grey-7 q-mb-xs")
+                    with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-md"):
+                        for label, sales_field, customer_field, color in (
+                            ("ランチ", "lunch_sales", "lunch_customers", "#FFF5E8"),
+                            ("ディナー", "dinner_sales", "dinner_customers", "#F1EFFF"),
+                        ):
+                            with ui.element("div").classes("rounded-xl q-pa-sm").style(
+                                f"background:{color}"
+                            ):
+                                ui.label(label).classes("text-[10px] text-grey-7")
+                                ui.label(f"¥{int(record.get(sales_field, 0)):,}").classes("font-bold")
+                                customers = record.get(customer_field)
+                                ui.label(
+                                    f"{customers}人" if customers is not None else "人数 未入力"
+                                ).classes("text-[10px] text-grey-6")
+                    ui.label("決済内訳").classes("text-xs font-bold text-grey-7 q-mb-xs")
+                    with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
+                        for label, field in (
+                            ("現金", "cash_sales"),
+                            ("カード", "credit_sales"),
+                            ("PayPay", "paypay_sales"),
+                            ("電子マネー", "electronic_money_sales"),
+                            ("旅行社", "travel_agency_sales"),
+                            ("ポイント", None),
+                        ):
+                            value = (
+                                int(record.get("tabelog_points_sales", 0))
+                                + int(record.get("hotpepper_points_sales", 0))
+                                if field is None else int(record.get(field, 0))
+                            )
+                            if value:
+                                with ui.row().classes(
+                                    "w-full items-center justify-between rounded-lg bg-grey-2 q-px-sm q-py-xs"
+                                ):
+                                    ui.label(label).classes("text-[10px] text-grey-7")
+                                    ui.label(f"¥{value:,}").classes("text-xs font-bold")
 
         history()

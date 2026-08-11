@@ -33,36 +33,81 @@ def future_financials_home():
     sales_total = financials.monthly_sales_total(current_month)
     payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
     advertising_total = financials.get_monthly_advertising(current_month)["total"]
+    known_expenses = (
+        purchase_total + other_expense_total + payment_fees + advertising_total
+    )
+    provisional_balance = sales_total - known_expenses
+    cost_rate = purchase_total / sales_total if sales_total else 0
+    expense_rate = known_expenses / sales_total if sales_total else 0
+    month_label = current_month.replace("-", "年") + "月"
     with content:
+        with ui.card().classes("w-full q-pa-lg q-mb-md text-white").style(
+            "border-radius:28px;border:0;background:linear-gradient(145deg,#123D30 0%,#24664F 58%,#C18A45 145%);"
+            "box-shadow:0 18px 42px rgba(18,61,48,.24)"
+        ):
+            with ui.row().classes("w-full items-center justify-between"):
+                with ui.column().classes("gap-0"):
+                    ui.label(month_label).classes("text-xs opacity-70")
+                    ui.label("今月の経営スナップショット").classes("text-lg font-bold")
+                ui.icon("insights").classes("text-3xl opacity-80")
+            ui.label("売上実績").classes("text-xs opacity-70 q-mt-lg")
+            ui.label(f"¥{sales_total:,}").classes("text-4xl font-black metric-value")
+            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mt-lg"):
+                with ui.element("div").classes("rounded-xl q-pa-sm").style(
+                    "background:rgba(255,255,255,.12)"
+                ):
+                    ui.label("入力済み費用").classes("text-[10px] opacity-70")
+                    ui.label(f"¥{known_expenses:,}").classes("font-bold")
+                with ui.element("div").classes("rounded-xl q-pa-sm").style(
+                    "background:rgba(255,255,255,.12)"
+                ):
+                    ui.label("入力済み収支").classes("text-[10px] opacity-70")
+                    ui.label(f"¥{provisional_balance:,}").classes("font-bold")
+            ui.label(
+                "※ 人件費・家賃など未入力の費用は含まない途中経過です"
+            ).classes("text-[9px] opacity-60 q-mt-sm")
+
         with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
-            with ui.card().classes("surface-card q-pa-md col-span-2"):
-                ui.label("今月の売上実績").classes("text-xs text-grey-6")
-                ui.label(f"¥{sales_total:,}").classes("text-3xl font-bold metric-value")
-            with ui.card().classes("surface-card q-pa-md"):
-                ui.label("今月の原価仕入れ").classes("text-xs text-grey-6")
-                ui.label(f"¥{purchase_total:,}").classes("text-xl font-bold metric-value")
-            with ui.card().classes("surface-card q-pa-md"):
-                ui.label("今月のその他経費").classes("text-xs text-grey-6")
-                ui.label(f"¥{other_expense_total:,}").classes("text-xl font-bold metric-value")
-            with ui.card().classes("surface-card q-pa-md col-span-2"):
-                ui.label("今月の決済手数料見込").classes("text-xs text-grey-6")
-                ui.label(f"¥{payment_fees:,}").classes("text-xl font-bold metric-value")
-            with ui.card().classes("surface-card q-pa-md col-span-2"):
-                ui.label("今月の広告費実績").classes("text-xs text-grey-6")
-                ui.label(f"¥{advertising_total:,}").classes("text-xl font-bold metric-value")
+            for title, value, icon, color in (
+                ("原価仕入れ", purchase_total, "inventory_2", "#B87835"),
+                ("その他経費", other_expense_total, "receipt_long", "#6F63A9"),
+                ("決済手数料", payment_fees, "credit_card", "#3679A8"),
+                ("広告費", advertising_total, "campaign", "#B14F5E"),
+            ):
+                with ui.card().classes("surface-card q-pa-md"):
+                    with ui.row().classes("items-center gap-2 q-mb-sm"):
+                        ui.icon(icon).style(f"color:{color}")
+                        ui.label(title).classes("text-[10px] text-grey-6")
+                    ui.label(f"¥{value:,}").classes("text-lg font-bold metric-value")
+
+        with ui.card().classes("surface-card w-full q-pa-lg q-mb-lg"):
+            ui.label("今月の比率").classes("text-lg font-bold q-mb-md")
+            for label, rate, color in (
+                ("原価率", cost_rate, "#B87835"),
+                ("入力済み費用率", expense_rate, "#39745A"),
+            ):
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label(label).classes("text-xs text-grey-7")
+                    ui.label(f"{rate * 100:.1f}%" if sales_total else "—").classes("text-xs font-bold")
+                bar_color = "orange" if label == "原価率" else "primary"
+                ui.linear_progress(value=min(rate, 1) if sales_total else 0).props(
+                    f"color={bar_color} track-color=grey-3 rounded size=8px"
+                ).classes("q-mb-md")
+
+        ui.label("クイックメニュー").classes("text-lg font-bold q-mb-sm")
 
         def menu_card(title, description, icon, color, path):
             with ui.card().classes(
-                "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+                "habit-card w-full q-pa-md q-mb-sm cursor-pointer"
             ).on("click", lambda _, target=path: ui.navigate.to(target)):
                 with ui.row().classes("w-full items-center no-wrap"):
                     with ui.element("div").classes(
-                        "w-14 h-14 rounded-xl q-mr-md flex items-center justify-center"
+                        "w-12 h-12 rounded-xl q-mr-md flex items-center justify-center"
                     ).style(f"background:{color}18;color:{color}"):
                         ui.icon(icon).classes("text-3xl")
                     with ui.column().classes("gap-0"):
-                        ui.label(title).classes("text-xl font-bold")
-                        ui.label(description).classes("text-grey-7 q-mt-xs")
+                        ui.label(title).classes("text-lg font-bold")
+                        ui.label(description).classes("text-xs text-grey-7 q-mt-xs")
                     ui.space()
                     ui.icon("chevron_right").classes("text-2xl text-grey-7")
 
