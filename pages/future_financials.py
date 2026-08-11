@@ -377,22 +377,30 @@ def _render_future_financials_home(selected_month=None):
             ).on("click", lambda _, target=path: ui.navigate.to(target)):
                 with ui.row().classes("w-full items-center no-wrap"):
                     with ui.element("div").classes(
-                        "w-12 h-12 rounded-xl q-mr-md flex items-center justify-center"
-                    ).style(f"background:{color}18;color:{color}"):
-                        ui.icon(icon).classes("text-3xl")
+                        "quick-menu-icon q-mr-md"
+                    ).style(
+                        f"--icon-color:{color};"
+                        f"background:linear-gradient(145deg,{color},color-mix(in srgb,{color} 72%,#10271E))"
+                    ):
+                        ui.icon(icon).classes("quick-menu-glyph")
                     with ui.column().classes("gap-0"):
                         ui.label(title).classes("text-lg font-bold")
                         ui.label(description).classes("text-xs text-grey-7 q-mt-xs")
                     ui.space()
                     ui.icon("chevron_right").classes("text-2xl text-grey-7")
 
-        menu_card("売上入力", "その日の売上を記録", "payments", "#B87835", "/mirai-kessan/sales")
+        menu_card("売上入力", "その日の売上を記録", "point_of_sale", "#C07B32", "/mirai-kessan/sales")
         menu_card(
             "仕入れノート", "原価・経費・消費税を記録",
-            "receipt_long", "#246BFD", "/mirai-kessan/shiire",
+            "inventory_2", "#3678C8", "/mirai-kessan/shiire",
         )
-        menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "account_tree", "#39745A", "/mirai-kessan/block-map")
-        menu_card("決算分析", "決算書を入力して会社の状態を診断", "monitoring", "#7B5D9B", "/mirai-kessan/financial-analysis")
+        menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "grid_view", "#398061", "/mirai-kessan/block-map")
+        menu_card("決算分析", "決算書を入力して会社の状態を診断", "assessment", "#75599B", "/mirai-kessan/financial-analysis")
+
+        ui.add_css("""
+        .quick-menu-icon{width:52px;height:52px;min-width:52px;max-width:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;box-shadow:0 7px 15px color-mix(in srgb,var(--icon-color) 28%,transparent);border:1px solid rgba(255,255,255,.28)}
+        .quick-menu-glyph{font-size:25px!important;line-height:1!important;width:28px;height:28px;display:flex!important;align-items:center;justify-content:center;overflow:hidden;text-shadow:0 1px 3px rgba(0,0,0,.14)}
+        """)
 
 
 @ui.page("/mirai-kessan")
