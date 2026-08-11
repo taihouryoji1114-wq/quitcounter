@@ -34,7 +34,7 @@ def sales_page():
                 lunch_sales = ui.number("売上", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full q-mb-sm")
-                lunch_customers = ui.number("人数", min=0, step=1).props(
+                lunch_customers = ui.number("人数（任意）", min=0, step=1).props(
                     "outlined suffix=人 inputmode=numeric"
                 ).classes("w-full")
             with ui.card().classes("w-full q-pa-md q-mb-sm").style(

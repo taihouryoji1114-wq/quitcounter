@@ -80,8 +80,14 @@ class FinancialManager:
         if split_entry:
             lunch_sales = self._validate_amount(lunch_sales or 0)
             dinner_sales = self._validate_amount(dinner_sales or 0)
-            lunch_customers = self._validate_count(lunch_customers or 0)
-            dinner_customers = self._validate_count(dinner_customers or 0)
+            lunch_customers_entered = lunch_customers not in (None, "")
+            dinner_customers_entered = dinner_customers not in (None, "")
+            lunch_customers = (
+                self._validate_count(lunch_customers) if lunch_customers_entered else None
+            )
+            dinner_customers = (
+                self._validate_count(dinner_customers) if dinner_customers_entered else None
+            )
             amount = lunch_sales + dinner_sales
         else:
             amount = payment_total if payment_entry else self._validate_amount(amount)
@@ -102,9 +108,15 @@ class FinancialManager:
             record.update({
                 "lunch_sales": lunch_sales,
                 "dinner_sales": dinner_sales,
-                "lunch_customers": lunch_customers,
-                "dinner_customers": dinner_customers,
             })
+            for field, value in (
+                ("lunch_customers", lunch_customers),
+                ("dinner_customers", dinner_customers),
+            ):
+                if value is None:
+                    record.pop(field, None)
+                else:
+                    record[field] = value
         else:
             for field in (
                 "lunch_sales", "dinner_sales", "lunch_customers",
@@ -209,9 +221,7 @@ class FinancialManager:
         if not records:
             return "missing"
         record = records[0]
-        lunch_complete = all(
-            key in record for key in ("lunch_sales", "lunch_customers")
-        )
+        lunch_complete = "lunch_sales" in record
         dinner_complete = all(
             key in record for key in ("dinner_sales", "dinner_customers")
         )

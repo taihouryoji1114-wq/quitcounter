@@ -146,6 +146,22 @@ class FinancialManagerTest(unittest.TestCase):
             self.financials.sales_completion_status("2026-08-04"), "partial"
         )
 
+    def test_lunch_customer_count_is_optional_for_completion(self):
+        record = self.financials.set_daily_sales(
+            "2026-08-04",
+            lunch_sales=10000,
+            lunch_customers=None,
+            dinner_sales=20000,
+            dinner_customers=10,
+            cash_sales=30000,
+            tabelog_lunch_customers=0,
+            tabelog_dinner_customers=0,
+        )
+        self.assertNotIn("lunch_customers", record)
+        self.assertEqual(
+            self.financials.sales_completion_status("2026-08-04"), "complete"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
