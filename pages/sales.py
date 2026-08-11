@@ -67,6 +67,20 @@ def sales_page():
                 travel_agency_sales = ui.number("旅行社", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 )
+                tabelog_points_sales = ui.number("食べログポイント", min=0, step=1).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                )
+            ui.label("食べログポイントは後日振り込まれる売上として扱います。").classes(
+                "text-[10px] text-grey-6 q-mb-sm"
+            )
+            ui.label("食べログ経由で実際に来店した人数").classes("font-bold q-mt-xs q-mb-xs")
+            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-sm"):
+                tabelog_lunch_customers = ui.number("ランチ予約人数", min=0, step=1).props(
+                    "outlined suffix=人 inputmode=numeric"
+                )
+                tabelog_dinner_customers = ui.number("ディナー予約人数", min=0, step=1).props(
+                    "outlined suffix=人 inputmode=numeric"
+                )
             ui.label(
                 "同じ日をもう一度保存すると、その日の金額を更新します。"
             ).classes("text-[10px] text-grey-6 q-mb-sm")
@@ -85,6 +99,9 @@ def sales_page():
                         paypay_sales=paypay_sales.value,
                         electronic_money_sales=electronic_money_sales.value,
                         travel_agency_sales=travel_agency_sales.value,
+                        tabelog_points_sales=tabelog_points_sales.value,
+                        tabelog_lunch_customers=tabelog_lunch_customers.value,
+                        tabelog_dinner_customers=tabelog_dinner_customers.value,
                     )
                 except ValueError as error:
                     ui.notify(f"保存できませんでした: {error}", type="negative")
@@ -114,6 +131,17 @@ def sales_page():
             travel_agency_fee = ui.number(
                 "旅行社手数料", value=fee_rates["travel_agency"], min=0, max=100, step=0.01
             ).props("outlined suffix=% inputmode=decimal").classes("w-full q-mb-sm")
+            tabelog_fees = financials.get_tabelog_booking_fees()
+            ui.label("食べログ予約の集客手数料（税込・1人あたり）").classes(
+                "font-bold q-mt-sm q-mb-xs"
+            )
+            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-sm"):
+                tabelog_lunch_fee = ui.number(
+                    "ランチ", value=tabelog_fees["lunch"], min=0, step=1
+                ).props("outlined prefix=¥ inputmode=numeric")
+                tabelog_dinner_fee = ui.number(
+                    "ディナー", value=tabelog_fees["dinner"], min=0, step=1
+                ).props("outlined prefix=¥ inputmode=numeric")
 
             def save_fee_rates():
                 try:
@@ -123,6 +151,9 @@ def sales_page():
                         "electronic_money": electronic_money_fee.value,
                         "travel_agency": travel_agency_fee.value,
                     })
+                    financials.save_tabelog_booking_fees(
+                        tabelog_lunch_fee.value, tabelog_dinner_fee.value
+                    )
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -161,8 +192,15 @@ def sales_page():
                 ui.label(
                     f"現金 ¥{payments['cash_sales']:,}　カード ¥{payments['credit_sales']:,}　"
                     f"PayPay ¥{payments['paypay_sales']:,}　電子マネー ¥{payments['electronic_money_sales']:,}　"
-                    f"旅行社 ¥{payments['travel_agency_sales']:,}"
+                    f"旅行社 ¥{payments['travel_agency_sales']:,}　"
+                    f"食べログポイント ¥{payments['tabelog_points_sales']:,}"
                 ).classes("text-[10px] text-grey-7 q-mt-xs")
+                if payments["tabelog_lunch_customers"] or payments["tabelog_dinner_customers"]:
+                    ui.label(
+                        f"食べログ来店：昼 {payments['tabelog_lunch_customers']}人・"
+                        f"夜 {payments['tabelog_dinner_customers']}人 / "
+                        f"集客手数料 ¥{payments['fees']['tabelog_booking']:,}"
+                    ).classes("text-[10px] text-grey-7 q-mt-xs")
                 if payments["unclassified_sales"]:
                     ui.label(
                         f"決済内訳未登録 ¥{payments['unclassified_sales']:,}"
@@ -187,6 +225,9 @@ def sales_page():
             paypay_sales.value = record.get("paypay_sales") or None
             electronic_money_sales.value = record.get("electronic_money_sales") or None
             travel_agency_sales.value = record.get("travel_agency_sales") or None
+            tabelog_points_sales.value = record.get("tabelog_points_sales") or None
+            tabelog_lunch_customers.value = record.get("tabelog_lunch_customers") or None
+            tabelog_dinner_customers.value = record.get("tabelog_dinner_customers") or None
             summary.refresh()
             history.refresh()
             sales_calendar.refresh()
@@ -276,6 +317,7 @@ def sales_page():
                                 ("PayPay", "paypay_sales"),
                                 ("電子マネー", "electronic_money_sales"),
                                 ("旅行社", "travel_agency_sales"),
+                                ("食べログポイント", "tabelog_points_sales"),
                             )
                             if record.get(field, 0)
                         ]

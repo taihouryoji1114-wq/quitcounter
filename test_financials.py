@@ -107,6 +107,22 @@ class FinancialManagerTest(unittest.TestCase):
         self.assertEqual(record["date"], "2026-08-04")
         self.assertEqual(record["amount"], 30000)
 
+    def test_tabelog_points_and_booking_fees_are_reflected(self):
+        self.financials.save_tabelog_booking_fees(110, 220)
+        self.financials.set_daily_sales(
+            "2026-08-04",
+            lunch_sales=10000,
+            dinner_sales=20000,
+            cash_sales=25000,
+            tabelog_points_sales=5000,
+            tabelog_lunch_customers=2,
+            tabelog_dinner_customers=3,
+        )
+        summary = self.financials.monthly_payment_summary("2026-08")
+        self.assertEqual(summary["tabelog_points_sales"], 5000)
+        self.assertEqual(summary["fees"]["tabelog_booking"], 880)
+        self.assertEqual(summary["total_fees"], 880)
+
 
 if __name__ == "__main__":
     unittest.main()

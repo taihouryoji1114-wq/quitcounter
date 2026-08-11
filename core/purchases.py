@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal, ROUND_CEILING, ROUND_DOWN, ROUND_HALF_UP
+import unicodedata
 from uuid import uuid4
 
 
@@ -280,7 +281,9 @@ class PurchaseManager:
     @staticmethod
     def _validate_total(value):
         try:
-            numeric = float(value)
+            numeric = float(
+                unicodedata.normalize("NFKC", str(value)).replace(",", "").strip()
+            )
         except (TypeError, ValueError) as error:
             raise ValueError("合計金額を1円以上で入力してください。") from error
         if numeric <= 0 or not numeric.is_integer():
@@ -292,7 +295,9 @@ class PurchaseManager:
         if value in (None, ""):
             return 0
         try:
-            numeric = float(value)
+            numeric = float(
+                unicodedata.normalize("NFKC", str(value)).replace(",", "").strip()
+            )
         except (TypeError, ValueError) as error:
             raise ValueError(f"{label}は0円以上の整数で入力してください。") from error
         if numeric < 0 or not numeric.is_integer():

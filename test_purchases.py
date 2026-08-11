@@ -45,6 +45,16 @@ class PurchaseManagerTest(unittest.TestCase):
         )
         self.assertEqual(record["tax_breakdown"]["amount_8"], 20000)
 
+    def test_mixed_tax_rates_accept_comma_separated_mobile_input(self):
+        breakdown = self.purchases.calculate_tax_breakdown(
+            amount_8="20,000", amount_10="5,000", price_mode="excluded"
+        )
+        record = self.purchases.add(
+            "2026-08-11", "市場A", "27,100", tax_breakdown=breakdown
+        )
+        self.assertEqual(record["total"], 27100)
+        self.assertEqual(record["tax_breakdown"]["tax_8"], 1600)
+
     def test_tax_included_and_stated_tax_override(self):
         breakdown = self.purchases.calculate_tax_breakdown(
             amount_8=10800,
