@@ -32,7 +32,14 @@ def future_financials_home():
     other_expense_total = purchases.monthly_total(current_month, kind="expense")
     sales_total = financials.monthly_sales_total(current_month)
     payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
-    advertising_total = financials.get_monthly_advertising(current_month)["total"]
+    advertising_summary = financials.get_monthly_advertising(current_month)
+    advertising_total = advertising_summary["total"]
+    purchase_tax = purchases.monthly_tax_summary(current_month)
+    output_tax = sales_total * 10 // 110
+    consumption_tax_estimate = max(
+        0,
+        output_tax - purchase_tax["input_tax"] - advertising_summary["input_tax"],
+    )
     gross_profit = sales_total - purchase_total
     cost_rate = purchase_total / sales_total if sales_total else 0
     month_label = current_month.replace("-", "年") + "月"
@@ -62,7 +69,7 @@ def future_financials_home():
 
         with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
             for title, value, icon, color in (
-                ("原価仕入れ", purchase_total, "inventory_2", "#B87835"),
+                ("消費税納付見込", consumption_tax_estimate, "account_balance", "#B87835"),
                 ("その他経費", other_expense_total, "receipt_long", "#6F63A9"),
                 ("決済手数料", payment_fees, "credit_card", "#3679A8"),
                 ("広告費", advertising_total, "campaign", "#B14F5E"),
