@@ -32,6 +32,7 @@ def future_financials_home():
     other_expense_total = purchases.monthly_total(current_month, kind="expense")
     sales_total = financials.monthly_sales_total(current_month)
     payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
+    advertising_total = financials.get_monthly_advertising(current_month)["total"]
     with content:
         with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
             with ui.card().classes("surface-card q-pa-md col-span-2"):
@@ -46,6 +47,9 @@ def future_financials_home():
             with ui.card().classes("surface-card q-pa-md col-span-2"):
                 ui.label("今月の決済手数料見込").classes("text-xs text-grey-6")
                 ui.label(f"¥{payment_fees:,}").classes("text-xl font-bold metric-value")
+            with ui.card().classes("surface-card q-pa-md col-span-2"):
+                ui.label("今月の広告費実績").classes("text-xs text-grey-6")
+                ui.label(f"¥{advertising_total:,}").classes("text-xl font-bold metric-value")
 
         def menu_card(title, description, icon, color, path):
             with ui.card().classes(
@@ -83,12 +87,14 @@ def future_financials():
     current_month = today_jst().strftime("%Y-%m")
     purchase_tax = purchases.monthly_tax_summary(current_month)
     payment_summary = financials.monthly_payment_summary(current_month)
+    advertising_summary = financials.get_monthly_advertising(current_month)
     actuals = {
         "sales": financials.monthly_sales_total(current_month),
         "cogs": purchases.monthly_total(current_month, kind="cost"),
         "other": purchases.monthly_total(current_month, kind="expense"),
         "payment_fees": payment_summary["total_fees"],
-        "input_tax": purchase_tax["input_tax"],
+        "advertising": advertising_summary["total"],
+        "input_tax": purchase_tax["input_tax"] + advertising_summary["input_tax"],
         "estimated_tax_records": purchase_tax["estimated_records"],
         "excluded_unregistered_records": purchase_tax[
             "excluded_unregistered_records"
@@ -249,8 +255,8 @@ def future_financials():
       if(provisional){
         root.dataset.view='provisional';
         simulationData={};[...ids,...modes].forEach(id=>simulationData[id]=$(id).value);
-        const actual=window.miraiActuals||{};$('sales').value=actual.sales||0;$('cogs').value=actual.cogs||0;$('cogs-mode').value='amount';$('personnel').value=0;$('personnel-mode').value='amount';$('rent').value=0;$('utilities').value=0;$('advertising').value=0;$('other-expenses').value=(actual.other||0)+(actual.payment_fees||0);$('non-op-income').value=0;$('non-op-expense').value=0;
-        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent=`暫定実績：売上・仕入れ・その他経費・決済手数料見込（${yen(actual.payment_fees||0)}）を反映しています。人件費など未入力の項目は0円のため、確定利益ではありません。`;$('legend-title').textContent='現在の実際の比率（入力済み実績から自動計算）';
+        const actual=window.miraiActuals||{};$('sales').value=actual.sales||0;$('cogs').value=actual.cogs||0;$('cogs-mode').value='amount';$('personnel').value=0;$('personnel-mode').value='amount';$('rent').value=0;$('utilities').value=0;$('advertising').value=actual.advertising||0;$('other-expenses').value=(actual.other||0)+(actual.payment_fees||0);$('non-op-income').value=0;$('non-op-expense').value=0;
+        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent=`暫定実績：売上・仕入れ・広告費・その他経費・決済手数料見込（${yen(actual.payment_fees||0)}）を反映しています。人件費など未入力の項目は0円のため、確定利益ではありません。`;$('legend-title').textContent='現在の実際の比率（入力済み実績から自動計算）';
       }else{
         root.dataset.view='simulation';
         if(simulationData){[...ids,...modes].forEach(id=>{if(simulationData[id]!==undefined)$(id).value=simulationData[id]})}

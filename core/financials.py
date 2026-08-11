@@ -10,6 +10,7 @@ class FinancialManager:
     PAYMENT_FIELDS = (
         "cash_sales", "credit_sales", "paypay_sales",
         "electronic_money_sales", "travel_agency_sales", "tabelog_points_sales",
+        "hotpepper_points_sales",
     )
     FEE_RATE_FIELDS = (
         "credit", "paypay", "electronic_money", "travel_agency",
@@ -50,8 +51,7 @@ class FinancialManager:
         electronic_money_sales=None,
         travel_agency_sales=None,
         tabelog_points_sales=None,
-        tabelog_lunch_customers=None,
-        tabelog_dinner_customers=None,
+        hotpepper_points_sales=None,
     ):
         self._validate_date(record_date)
         split_entry = any(
@@ -65,6 +65,7 @@ class FinancialManager:
             "electronic_money_sales": electronic_money_sales,
             "travel_agency_sales": travel_agency_sales,
             "tabelog_points_sales": tabelog_points_sales,
+            "hotpepper_points_sales": hotpepper_points_sales,
         }
         payment_entry = any(
             value not in (None, "") for value in payment_values.values()
@@ -125,19 +126,6 @@ class FinancialManager:
                 record.pop(field, None)
         if payment_entry:
             record.update(payment_values)
-        tabelog_customer_entry = any(
-            value not in (None, "")
-            for value in (tabelog_lunch_customers, tabelog_dinner_customers)
-        )
-        if tabelog_customer_entry:
-            record.update({
-                "tabelog_lunch_customers": self._validate_count(
-                    tabelog_lunch_customers or 0
-                ),
-                "tabelog_dinner_customers": self._validate_count(
-                    tabelog_dinner_customers or 0
-                ),
-            })
         self._data_manager.save()
         return record
 
@@ -164,21 +152,32 @@ class FinancialManager:
         self._data_manager.save()
         return dict(cleaned)
 
-    def get_tabelog_booking_fees(self):
-        stored = self._data_manager.data.get("business_tabelog_booking_fees", {})
-        return {
-            "lunch": int(stored.get("lunch", 110)),
-            "dinner": int(stored.get("dinner", 220)),
+    def get_monthly_advertising(self, month):
+        self._validate_month(month)
+        stored = self._data_manager.data.get("business_monthly_advertising", {})
+        values = stored.get(month, {}) if isinstance(stored, dict) else {}
+        result = {
+            key: int(values.get(key, 0))
+            for key in ("tabelog", "hotpepper", "other")
         }
+        result["total"] = sum(result.values())
+        result["input_tax"] = sum(
+            result[key] * 10 // 110 for key in ("tabelog", "hotpepper", "other")
+        )
+        return result
 
-    def save_tabelog_booking_fees(self, lunch, dinner):
+    def save_monthly_advertising(self, month, tabelog=0, hotpepper=0, other=0):
+        self._validate_month(month)
         cleaned = {
-            "lunch": self._validate_amount(lunch),
-            "dinner": self._validate_amount(dinner),
+            "tabelog": self._validate_amount(tabelog or 0),
+            "hotpepper": self._validate_amount(hotpepper or 0),
+            "other": self._validate_amount(other or 0),
         }
-        self._data_manager.data["business_tabelog_booking_fees"] = cleaned
+        self._data_manager.data.setdefault("business_monthly_advertising", {})[
+            month
+        ] = cleaned
         self._data_manager.save()
-        return dict(cleaned)
+        return self.get_monthly_advertising(month)
 
     def monthly_payment_summary(self, month):
         records = self.sales_records(month=month)
@@ -191,13 +190,6 @@ class FinancialManager:
             0, sum(int(item.get("amount", 0)) for item in records) - classified
         )
         rates = self.get_payment_fee_rates()
-        tabelog_rates = self.get_tabelog_booking_fees()
-        totals["tabelog_lunch_customers"] = sum(
-            int(item.get("tabelog_lunch_customers", 0)) for item in records
-        )
-        totals["tabelog_dinner_customers"] = sum(
-            int(item.get("tabelog_dinner_customers", 0)) for item in records
-        )
         fees = {
             "credit": round(totals["credit_sales"] * rates["credit"] / 100),
             "paypay": round(totals["paypay_sales"] * rates["paypay"] / 100),
@@ -206,10 +198,6 @@ class FinancialManager:
             ),
             "travel_agency": round(
                 totals["travel_agency_sales"] * rates["travel_agency"] / 100
-            ),
-            "tabelog_booking": (
-                totals["tabelog_lunch_customers"] * tabelog_rates["lunch"]
-                + totals["tabelog_dinner_customers"] * tabelog_rates["dinner"]
             ),
         }
         totals["fees"] = fees
@@ -225,14 +213,14 @@ class FinancialManager:
         dinner_complete = all(
             key in record for key in ("dinner_sales", "dinner_customers")
         )
-        payment_complete = all(key in record for key in self.PAYMENT_FIELDS)
-        tabelog_complete = all(
-            key in record
-            for key in ("tabelog_lunch_customers", "tabelog_dinner_customers")
+        payment_complete = (
+            any(key in record for key in self.PAYMENT_FIELDS)
+            and sum(int(record.get(key, 0)) for key in self.PAYMENT_FIELDS)
+            == int(record.get("amount", 0))
         )
         return (
             "complete"
-            if all((lunch_complete, dinner_complete, payment_complete, tabelog_complete))
+            if all((lunch_complete, dinner_complete, payment_complete))
             else "partial"
         )
 

@@ -107,23 +107,30 @@ class FinancialManagerTest(unittest.TestCase):
         self.assertEqual(record["date"], "2026-08-04")
         self.assertEqual(record["amount"], 30000)
 
-    def test_tabelog_points_and_booking_fees_are_reflected(self):
-        self.financials.save_tabelog_booking_fees(110, 220)
+    def test_gourmet_site_points_are_reflected_as_sales(self):
         self.financials.set_daily_sales(
             "2026-08-04",
             lunch_sales=10000,
             dinner_sales=20000,
-            cash_sales=25000,
+            cash_sales=24000,
             tabelog_points_sales=5000,
-            tabelog_lunch_customers=2,
-            tabelog_dinner_customers=3,
+            hotpepper_points_sales=1000,
         )
         summary = self.financials.monthly_payment_summary("2026-08")
         self.assertEqual(summary["tabelog_points_sales"], 5000)
-        self.assertEqual(summary["fees"]["tabelog_booking"], 880)
-        self.assertEqual(summary["total_fees"], 880)
+        self.assertEqual(summary["hotpepper_points_sales"], 1000)
+        self.assertEqual(summary["total_fees"], 0)
 
-    def test_sales_completion_requires_four_sections_not_every_payment_method(self):
+    def test_monthly_advertising_is_saved_separately_and_persistent(self):
+        saved = self.financials.save_monthly_advertising(
+            "2026-08", tabelog=12000, hotpepper=18000, other=5000
+        )
+        self.assertEqual(saved["total"], 35000)
+        self.assertEqual(saved["input_tax"], 3180)
+        reloaded = FinancialManager(DataManager(self.manager.file_path))
+        self.assertEqual(reloaded.get_monthly_advertising("2026-08"), saved)
+
+    def test_sales_completion_requires_three_sections_not_every_payment_method(self):
         self.financials.set_daily_sales(
             "2026-08-04",
             lunch_sales=10000,
@@ -131,8 +138,6 @@ class FinancialManagerTest(unittest.TestCase):
             dinner_sales=20000,
             dinner_customers=10,
             cash_sales=30000,
-            tabelog_lunch_customers=0,
-            tabelog_dinner_customers=0,
         )
         self.assertEqual(
             self.financials.sales_completion_status("2026-08-04"), "complete"
@@ -154,8 +159,6 @@ class FinancialManagerTest(unittest.TestCase):
             dinner_sales=20000,
             dinner_customers=10,
             cash_sales=30000,
-            tabelog_lunch_customers=0,
-            tabelog_dinner_customers=0,
         )
         self.assertNotIn("lunch_customers", record)
         self.assertEqual(

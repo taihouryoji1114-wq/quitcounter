@@ -70,25 +70,12 @@ def sales_page():
                 tabelog_points_sales = ui.number("食べログポイント", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 )
-            ui.label("食べログポイントは後日振り込まれる売上として扱います。").classes(
+                hotpepper_points_sales = ui.number("ホットペッパーポイント", min=0, step=1).props(
+                    "outlined prefix=¥ inputmode=numeric"
+                )
+            ui.label("グルメサイトのポイントは後日振り込まれる売上として扱います。").classes(
                 "text-[10px] text-grey-6 q-mb-sm"
             )
-            ui.label("食べログ経由で実際に来店した人数").classes("font-bold q-mt-xs q-mb-xs")
-            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-sm"):
-                tabelog_lunch_customers = ui.number("ランチ予約人数", min=0, step=1).props(
-                    "outlined suffix=人 inputmode=numeric"
-                )
-                tabelog_dinner_customers = ui.number("ディナー予約人数", min=0, step=1).props(
-                    "outlined suffix=人 inputmode=numeric"
-                )
-            ui.button(
-                "食べログ予約なし（0人）",
-                icon="block",
-                on_click=lambda: (
-                    setattr(tabelog_lunch_customers, "value", 0),
-                    setattr(tabelog_dinner_customers, "value", 0),
-                ),
-            ).props("outline no-caps").classes("w-full q-mb-sm")
             ui.label(
                 "同じ日をもう一度保存すると、その日の金額を更新します。"
             ).classes("text-[10px] text-grey-6 q-mb-sm")
@@ -108,8 +95,7 @@ def sales_page():
                         electronic_money_sales=electronic_money_sales.value,
                         travel_agency_sales=travel_agency_sales.value,
                         tabelog_points_sales=tabelog_points_sales.value,
-                        tabelog_lunch_customers=tabelog_lunch_customers.value,
-                        tabelog_dinner_customers=tabelog_dinner_customers.value,
+                        hotpepper_points_sales=hotpepper_points_sales.value,
                     )
                 except ValueError as error:
                     ui.notify(f"保存できませんでした: {error}", type="negative")
@@ -139,18 +125,6 @@ def sales_page():
             travel_agency_fee = ui.number(
                 "旅行社手数料", value=fee_rates["travel_agency"] or None, min=0, max=100, step=0.01
             ).props("outlined suffix=% inputmode=decimal").classes("w-full q-mb-sm")
-            tabelog_fees = financials.get_tabelog_booking_fees()
-            ui.label("食べログ予約の集客手数料（税込・1人あたり）").classes(
-                "font-bold q-mt-sm q-mb-xs"
-            )
-            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-sm"):
-                tabelog_lunch_fee = ui.number(
-                    "ランチ", value=tabelog_fees["lunch"], min=0, step=1
-                ).props("outlined prefix=¥ inputmode=numeric")
-                tabelog_dinner_fee = ui.number(
-                    "ディナー", value=tabelog_fees["dinner"], min=0, step=1
-                ).props("outlined prefix=¥ inputmode=numeric")
-
             def save_fee_rates():
                 try:
                     financials.save_payment_fee_rates({
@@ -159,9 +133,6 @@ def sales_page():
                         "electronic_money": electronic_money_fee.value,
                         "travel_agency": travel_agency_fee.value,
                     })
-                    financials.save_tabelog_booking_fees(
-                        tabelog_lunch_fee.value, tabelog_dinner_fee.value
-                    )
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -172,11 +143,62 @@ def sales_page():
                 "w-full"
             )
 
+        with ui.expansion("月1回の広告費を入力", icon="campaign").classes(
+            "surface-card w-full q-mb-md"
+        ):
+            ui.label("請求書の税込合計を入力してください。").classes(
+                "text-xs text-grey-6 q-mb-sm"
+            )
+            advertising_month = ui.input(
+                "対象月", value=viewed_month[0]
+            ).props("type=month outlined").classes("w-full q-mb-sm")
+            initial_ads = financials.get_monthly_advertising(viewed_month[0])
+            tabelog_ad = ui.number(
+                "食べログの税込請求額", value=initial_ads["tabelog"] or None, min=0, step=1
+            ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+            hotpepper_ad = ui.number(
+                "ホットペッパーの税込請求額", value=initial_ads["hotpepper"] or None, min=0, step=1
+            ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+            other_ad = ui.number(
+                "その他の広告費", value=initial_ads["other"] or None, min=0, step=1
+            ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+
+            def load_advertising_month(value):
+                if not value:
+                    return
+                values = financials.get_monthly_advertising(str(value))
+                tabelog_ad.value = values["tabelog"] or None
+                hotpepper_ad.value = values["hotpepper"] or None
+                other_ad.value = values["other"] or None
+
+            advertising_month.on_value_change(
+                lambda event: load_advertising_month(event.value)
+            )
+
+            def save_advertising():
+                try:
+                    financials.save_monthly_advertising(
+                        str(advertising_month.value),
+                        tabelog_ad.value,
+                        hotpepper_ad.value,
+                        other_ad.value,
+                    )
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                summary.refresh()
+                ui.notify("広告費を保存しました", type="positive")
+
+            ui.button("この月の広告費を保存", icon="save", on_click=save_advertising).classes(
+                "w-full"
+            )
+
         @ui.refreshable
         def summary():
             month = selected_day[0][:7]
             values = financials.monthly_sales_summary(month)
             payments = financials.monthly_payment_summary(month)
+            advertising = financials.get_monthly_advertising(month)
             with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
                 ui.label(f"{month.replace('-', '年')}月の売上実績").classes(
                     "text-xs text-grey-6"
@@ -201,14 +223,9 @@ def sales_page():
                     f"現金 ¥{payments['cash_sales']:,}　カード ¥{payments['credit_sales']:,}　"
                     f"PayPay ¥{payments['paypay_sales']:,}　電子マネー ¥{payments['electronic_money_sales']:,}　"
                     f"旅行社 ¥{payments['travel_agency_sales']:,}　"
-                    f"食べログポイント ¥{payments['tabelog_points_sales']:,}"
+                    f"食べログポイント ¥{payments['tabelog_points_sales']:,}　"
+                    f"ホットペッパーポイント ¥{payments['hotpepper_points_sales']:,}"
                 ).classes("text-[10px] text-grey-7 q-mt-xs")
-                if payments["tabelog_lunch_customers"] or payments["tabelog_dinner_customers"]:
-                    ui.label(
-                        f"食べログ来店：昼 {payments['tabelog_lunch_customers']}人・"
-                        f"夜 {payments['tabelog_dinner_customers']}人 / "
-                        f"集客手数料 ¥{payments['fees']['tabelog_booking']:,}"
-                    ).classes("text-[10px] text-grey-7 q-mt-xs")
                 if payments["unclassified_sales"]:
                     ui.label(
                         f"決済内訳未登録 ¥{payments['unclassified_sales']:,}"
@@ -216,6 +233,12 @@ def sales_page():
                 ui.label(
                     f"決済手数料見込 ¥{payments['total_fees']:,}"
                 ).classes("font-bold q-mt-sm")
+                ui.label(
+                    f"広告費実績 ¥{advertising['total']:,}"
+                    f"（食べログ ¥{advertising['tabelog']:,} / "
+                    f"ホットペッパー ¥{advertising['hotpepper']:,} / "
+                    f"その他 ¥{advertising['other']:,}）"
+                ).classes("text-xs font-bold q-mt-sm")
 
         summary()
 
@@ -234,8 +257,7 @@ def sales_page():
             electronic_money_sales.value = record.get("electronic_money_sales") or None
             travel_agency_sales.value = record.get("travel_agency_sales") or None
             tabelog_points_sales.value = record.get("tabelog_points_sales") or None
-            tabelog_lunch_customers.value = record.get("tabelog_lunch_customers") or None
-            tabelog_dinner_customers.value = record.get("tabelog_dinner_customers") or None
+            hotpepper_points_sales.value = record.get("hotpepper_points_sales") or None
             summary.refresh()
             history.refresh()
             sales_calendar.refresh()
@@ -330,6 +352,7 @@ def sales_page():
                                 ("電子マネー", "electronic_money_sales"),
                                 ("旅行社", "travel_agency_sales"),
                                 ("食べログポイント", "tabelog_points_sales"),
+                                ("ホットペッパーポイント", "hotpepper_points_sales"),
                             )
                             if record.get(field, 0)
                         ]
