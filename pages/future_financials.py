@@ -78,6 +78,7 @@ def _render_future_financials_home(selected_month=None):
         ("水道光熱費", operations["utilities"]),
         ("広告費", advertising_total),
         ("その他管理費", operations["other_admin"]),
+        ("借入元金返済", operations["loan_payment"]),
     )
     missing_monthly_items = [title for title, value in monthly_entry_items if not value]
     completed_monthly_items = len(monthly_entry_items) - len(missing_monthly_items)
@@ -155,10 +156,6 @@ def _render_future_financials_home(selected_month=None):
                     other_admin_input = ui.number(
                         "その他管理費", value=operations["other_admin"] or None, min=0, step=1
                     ).props("outlined prefix=¥ inputmode=numeric")
-                    loan_input = ui.number(
-                        "借入元金返済", value=operations["loan_payment"] or None, min=0, step=1
-                    ).props("outlined prefix=¥ inputmode=numeric")
-
                 ui.label("広告費（請求書の税込合計）").classes(
                     "text-sm font-bold q-mt-md q-mb-sm"
                 )
@@ -172,6 +169,15 @@ def _render_future_financials_home(selected_month=None):
                     other_ad_input = ui.number(
                         "その他の広告費", value=advertising_summary["other"] or None, min=0, step=1
                     ).props("outlined prefix=¥ inputmode=numeric")
+
+                ui.separator().classes("q-my-md")
+                ui.label("資金繰り").classes("text-sm font-bold")
+                ui.label(
+                    "元金返済は経費ではないため、営業利益には含めず手元資金からだけ差し引きます。"
+                ).classes("text-[9px] text-grey-6 q-mb-sm")
+                loan_input = ui.number(
+                    "借入元金返済", value=operations["loan_payment"] or None, min=0, step=1
+                ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
 
                 def save_operations():
                     try:
@@ -192,10 +198,10 @@ def _render_future_financials_home(selected_month=None):
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
                         return
-                    ui.notify("月次費用・広告費を保存しました", type="positive")
+                    ui.notify("月次入力を保存しました", type="positive")
                     ui.navigate.to(dashboard_path)
 
-                ui.button("月次費用・広告費を保存", icon="save", on_click=save_operations).classes(
+                ui.button("月次入力を保存", icon="save", on_click=save_operations).classes(
                     "w-full q-mt-md"
                 )
             with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mt-sm"):
@@ -219,7 +225,7 @@ def _render_future_financials_home(selected_month=None):
             with ui.row().classes("w-full items-center justify-between no-wrap"):
                 with ui.column().classes("gap-0"):
                     ui.label("月次入力の完成度").classes("text-sm font-bold")
-                    ui.label("暫定利益の信頼度を確認").classes("text-[9px] text-grey-6")
+                    ui.label("損益5項目＋資金繰り1項目").classes("text-[9px] text-grey-6")
                 ui.label(f"{completed_monthly_items}/{len(monthly_entry_items)} 項目").classes(
                     "text-lg font-black text-primary"
                 )
@@ -231,7 +237,7 @@ def _render_future_financials_home(selected_month=None):
                 ui.label("未入力：" + "・".join(missing_monthly_items)).classes(
                     "text-[10px] q-mt-sm"
                 ).style("color:#A66A17")
-                ui.label("未入力項目は0円として暫定利益を計算しています").classes(
+                ui.label("未入力項目は0円として暫定利益・資金増減を計算しています").classes(
                     "text-[9px] text-grey-6 q-mt-xs"
                 )
             else:
