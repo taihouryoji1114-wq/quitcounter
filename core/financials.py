@@ -179,6 +179,33 @@ class FinancialManager:
         self._data_manager.save()
         return self.get_monthly_advertising(month)
 
+    def get_monthly_operations(self, month):
+        self._validate_month(month)
+        stored = self._data_manager.data.get("business_monthly_operations", {})
+        values = stored.get(month, {}) if isinstance(stored, dict) else {}
+        return {
+            key: int(values.get(key, 0))
+            for key in ("personnel", "rent", "utilities", "other_admin", "loan_payment")
+        }
+
+    def save_monthly_operations(
+        self, month, personnel=0, rent=0, utilities=0,
+        other_admin=0, loan_payment=0,
+    ):
+        self._validate_month(month)
+        cleaned = {
+            "personnel": self._validate_amount(personnel or 0),
+            "rent": self._validate_amount(rent or 0),
+            "utilities": self._validate_amount(utilities or 0),
+            "other_admin": self._validate_amount(other_admin or 0),
+            "loan_payment": self._validate_amount(loan_payment or 0),
+        }
+        self._data_manager.data.setdefault("business_monthly_operations", {})[
+            month
+        ] = cleaned
+        self._data_manager.save()
+        return self.get_monthly_operations(month)
+
     def monthly_payment_summary(self, month):
         records = self.sales_records(month=month)
         totals = {

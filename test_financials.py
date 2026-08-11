@@ -130,6 +130,15 @@ class FinancialManagerTest(unittest.TestCase):
         reloaded = FinancialManager(DataManager(self.manager.file_path))
         self.assertEqual(reloaded.get_monthly_advertising("2026-08"), saved)
 
+    def test_monthly_operations_are_saved_and_persistent(self):
+        saved = self.financials.save_monthly_operations(
+            "2026-08", personnel=900000, rent=200000,
+            utilities=100000, other_admin=50000, loan_payment=80000,
+        )
+        self.assertEqual(saved["personnel"], 900000)
+        reloaded = FinancialManager(DataManager(self.manager.file_path))
+        self.assertEqual(reloaded.get_monthly_operations("2026-08"), saved)
+
     def test_sales_completion_requires_three_sections_not_every_payment_method(self):
         self.financials.set_daily_sales(
             "2026-08-04",

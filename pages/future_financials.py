@@ -40,14 +40,29 @@ def future_financials_home():
         0,
         output_tax - purchase_tax["input_tax"] - advertising_summary["input_tax"],
     )
+    operations = financials.get_monthly_operations(current_month)
     gross_profit = sales_total - purchase_total
+    operating_costs = (
+        operations["personnel"] + operations["rent"] + operations["utilities"]
+        + operations["other_admin"] + other_expense_total + payment_fees
+        + advertising_total
+    )
+    operating_profit = gross_profit - operating_costs
+    cash_after_tax_and_loan = (
+        operating_profit - consumption_tax_estimate - operations["loan_payment"]
+    )
     cost_rate = purchase_total / sales_total if sales_total else 0
+    labor_rate = operations["personnel"] / gross_profit if gross_profit > 0 else None
     month_label = current_month.replace("-", "年") + "月"
     with content:
-        with ui.card().classes("w-full q-pa-lg q-mb-md text-white").style(
+        detail_visible = [False]
+        with ui.card().classes("w-full q-pa-lg q-mb-sm text-white cursor-pointer").style(
             "border-radius:28px;border:0;background:linear-gradient(145deg,#123D30 0%,#24664F 58%,#C18A45 145%);"
             "box-shadow:0 18px 42px rgba(18,61,48,.24)"
-        ):
+        ).on("click", lambda: (
+            detail_visible.__setitem__(0, not detail_visible[0]),
+            operation_details.set_visibility(detail_visible[0]),
+        )):
             with ui.row().classes("w-full items-center justify-between"):
                 with ui.column().classes("gap-0"):
                     ui.label(month_label).classes("text-xs opacity-70")
@@ -66,21 +81,119 @@ def future_financials_home():
                 ):
                     ui.label("粗利").classes("text-[10px] opacity-70")
                     ui.label(f"¥{gross_profit:,}").classes("font-bold")
+            with ui.row().classes("items-center gap-1 q-mt-sm opacity-70"):
+                ui.label("タップして費用・税金・返済を確認").classes("text-[9px]")
+                ui.icon("expand_more").classes("text-sm")
 
-        with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
-            for title, value, icon, color in (
-                ("消費税納付見込", consumption_tax_estimate, "account_balance", "#B87835"),
-                ("その他経費", other_expense_total, "receipt_long", "#6F63A9"),
-                ("決済手数料", payment_fees, "credit_card", "#3679A8"),
-                ("広告費", advertising_total, "campaign", "#B14F5E"),
-            ):
-                with ui.card().classes("surface-card q-pa-md").style(
-                    f"background:{color}0D"
+        operation_details = ui.column().classes("w-full gap-0 q-mb-md")
+        operation_details.set_visibility(False)
+        with operation_details:
+            with ui.card().classes("surface-card w-full q-pa-lg"):
+                ui.label("月次費用を入力").classes("text-lg font-bold q-mb-xs")
+                ui.label("請求や金額が分かった項目から入力してください。").classes(
+                    "text-xs text-grey-6 q-mb-md"
+                )
+                with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
+                    personnel_input = ui.number(
+                        "人件費", value=operations["personnel"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+                    rent_input = ui.number(
+                        "家賃", value=operations["rent"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+                    utilities_input = ui.number(
+                        "水道光熱費", value=operations["utilities"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+                    other_admin_input = ui.number(
+                        "その他管理費", value=operations["other_admin"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+                    loan_input = ui.number(
+                        "借入元金返済", value=operations["loan_payment"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+
+                def save_operations():
+                    try:
+                        financials.save_monthly_operations(
+                            current_month,
+                            personnel_input.value,
+                            rent_input.value,
+                            utilities_input.value,
+                            other_admin_input.value,
+                            loan_input.value,
+                        )
+                    except ValueError as error:
+                        ui.notify(str(error), type="negative")
+                        return
+                    ui.notify("月次費用を保存しました", type="positive")
+                    ui.navigate.to("/mirai-kessan")
+
+                ui.button("月次費用を保存", icon="save", on_click=save_operations).classes(
+                    "w-full q-mt-md"
+                )
+            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mt-sm"):
+                for title, value, color in (
+                    ("人件費", operations["personnel"], "#EAF3FF"),
+                    ("家賃", operations["rent"], "#F1EDFF"),
+                    ("水道光熱費", operations["utilities"], "#E9F8F5"),
+                    ("広告費", advertising_total, "#FFF0F2"),
+                    ("その他経費・管理費", other_expense_total + operations["other_admin"], "#F4F4F2"),
+                    ("決済手数料", payment_fees, "#EDF5FF"),
+                    ("消費税納付見込", consumption_tax_estimate, "#FFF4E5"),
+                    ("借入元金返済", operations["loan_payment"], "#FCEEEE"),
                 ):
-                    with ui.row().classes("items-center gap-2 q-mb-sm"):
-                        ui.icon(icon).style(f"color:{color}")
-                        ui.label(title).classes("text-[10px] text-grey-6")
-                    ui.label(f"¥{value:,}").classes("text-lg font-bold metric-value")
+                    with ui.element("div").classes("rounded-xl q-pa-sm").style(
+                        f"background:{color}"
+                    ):
+                        ui.label(title).classes("text-[9px] text-grey-7")
+                        ui.label(f"¥{value:,}").classes("text-sm font-bold")
+
+        with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
+            ui.label("暫定実績の利益構造").classes("text-lg font-bold")
+            ui.label("入力済みの実績だけで構成しています").classes(
+                "text-[10px] text-grey-6 q-mb-md"
+            )
+            if sales_total:
+                cost_components = (
+                    ("原価", purchase_total, "#C98A42"),
+                    ("人件費", operations["personnel"], "#4A9FD0"),
+                    ("その他費用", operating_costs - operations["personnel"], "#8B7DB8"),
+                )
+                chart_components = cost_components + (
+                    (("営業利益", operating_profit, "#39745A"),)
+                    if operating_profit >= 0 else ()
+                )
+                legend_components = chart_components + (
+                    (("営業損失", abs(operating_profit), "#C85C57"),)
+                    if operating_profit < 0 else ()
+                )
+                with ui.element("div").classes("w-full flex overflow-hidden q-mb-md").style(
+                    "height:34px;border-radius:12px;background:#EEF0EE"
+                ):
+                    denominator = max(sales_total, sum(value for _, value, _ in chart_components), 1)
+                    for _, value, color in chart_components:
+                        if value:
+                            ui.element("div").style(
+                                f"width:{value / denominator * 100:.3f}%;background:{color};height:100%"
+                            )
+                with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
+                    for title, value, color in legend_components:
+                        with ui.row().classes("w-full items-center justify-between no-wrap"):
+                            with ui.row().classes("items-center gap-1 no-wrap"):
+                                ui.element("div").style(
+                                    f"width:9px;height:9px;border-radius:3px;background:{color}"
+                                )
+                                ui.label(title).classes("text-[10px] text-grey-7")
+                            ui.label(f"¥{value:,}").classes("text-[10px] font-bold")
+                ui.separator().classes("q-my-md")
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label("税金・借入返済後の資金増減目安").classes("text-xs text-grey-7")
+                    ui.label(f"¥{cash_after_tax_and_loan:,}").classes(
+                        "text-lg font-black text-negative" if cash_after_tax_and_loan < 0
+                        else "text-lg font-black text-primary"
+                    )
+            else:
+                ui.label("売上を入力すると図が表示されます").classes(
+                    "text-sm text-grey-6 q-pa-md text-center"
+                )
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-lg"):
             ui.label("重要な経営指標").classes("text-lg font-bold q-mb-md")
@@ -96,8 +209,11 @@ def future_financials_home():
                     "background:#EAF3FF"
                 ):
                     ui.label("労働分配率").classes("text-xs font-bold").style("color:#315F91")
-                    ui.label("未入力").classes("text-2xl font-black q-mt-xs").style("color:#244F7F")
-                    ui.label("人件費の登録後に計算").classes("text-[9px] q-mt-xs").style("color:#6685A5")
+                    ui.label(
+                        f"{labor_rate * 100:.1f}%" if labor_rate is not None else "未入力"
+                    ).classes("text-2xl font-black q-mt-xs").style("color:#244F7F")
+                    if labor_rate is None:
+                        ui.label("人件費の登録後に計算").classes("text-[9px] q-mt-xs").style("color:#6685A5")
 
         ui.label("クイックメニュー").classes("text-lg font-bold q-mb-sm")
 
@@ -180,7 +296,7 @@ def future_financials():
 <div id="mirai-app">
   <section class="mk-card input-card">
     <div class="mk-head"><div><small>SIMULATION</small><h2>月間の利益を試算</h2></div><button id="save-plan">計画を保存</button></div>
-    <div class="view-switch"><button id="view-simulation" class="active">計画シミュレーション</button><button id="view-provisional">暫定実績</button></div>
+    <div class="view-switch"><button id="view-simulation" class="active">計画シミュレーション</button></div>
     <div id="view-note" class="view-note simulation">入力した計画値で「こうなったら利益はいくら残るか」を試算しています。</div>
     <div id="plan-fields" class="input-grid">
       <label>売上高<input id="sales" inputmode="numeric" value="3000000"></label>
@@ -312,9 +428,9 @@ def future_financials():
         if(simulationData){[...ids,...modes].forEach(id=>{if(simulationData[id]!==undefined)$(id).value=simulationData[id]})}
         fields.forEach(field=>field.disabled=false);$('save-plan').disabled=false;$('view-note').className='view-note simulation';$('view-note').textContent='入力した計画値で「こうなったら利益はいくら残るか」を試算しています。';$('legend-title').textContent='試算結果の実際の比率（入力値から自動計算）';syncPlan();
       }
-      $('view-simulation').classList.toggle('active',!provisional);$('view-provisional').classList.toggle('active',provisional);update();
+      $('view-simulation').classList.toggle('active',!provisional);update();
     }
-    $('view-simulation').onclick=()=>setView('simulation');$('view-provisional').onclick=()=>setView('provisional');
+    $('view-simulation').onclick=()=>setView('simulation');
     syncPlan();update();
   }
   init();
