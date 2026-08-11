@@ -46,6 +46,13 @@ class AnnualReportManagerTest(unittest.TestCase):
         self.assertEqual(saved["current"]["retained_earnings"], -2500)
         self.assertEqual(self.reports.calculate(saved["current"])["equity"], -1500)
 
+    def test_previous_period_is_loaded_from_prior_saved_report(self):
+        self.reports.save_report("2025-03", {"sales": 4000, "cash": 800})
+        current = self.reports.save_report("2026-03", {"sales": 5000, "cash": 1000})
+        self.assertEqual(current["previous_period"], "2025-03")
+        self.assertEqual(current["previous"]["sales"], 4000)
+        self.assertEqual(current["previous"]["cash"], 800)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -62,19 +62,33 @@ class AnnualReportManager:
         period = self._period(period)
         reports = self._data_manager.data.get("business_annual_reports", {})
         stored = reports.get(period, {}) if isinstance(reports, dict) else {}
+        prior_periods = sorted(
+            (value for value in reports if value < period), reverse=True
+        ) if isinstance(reports, dict) else []
+        if prior_periods:
+            previous_values = reports.get(prior_periods[0], {}).get("current", {})
+            previous_period = prior_periods[0]
+        else:
+            # Keep compatibility with reports saved by the first two-column version.
+            previous_values = stored.get("previous", {})
+            previous_period = None
         return {
             "period": period,
             "current": {key: self._amount(stored.get("current", {}).get(key, 0)) for key in ALL_FIELDS},
-            "previous": {key: self._amount(stored.get("previous", {}).get(key, 0)) for key in ALL_FIELDS},
+            "previous": {key: self._amount(previous_values.get(key, 0)) for key in ALL_FIELDS},
+            "previous_period": previous_period,
         }
 
-    def save_report(self, period, current, previous):
+    def save_report(self, period, current, previous=None):
         period = self._period(period)
+        reports = self._data_manager.data.setdefault("business_annual_reports", {})
+        if previous is None:
+            previous = reports.get(period, {}).get("previous", {})
         cleaned = {
             "current": {key: self._amount((current or {}).get(key, 0)) for key in ALL_FIELDS},
             "previous": {key: self._amount((previous or {}).get(key, 0)) for key in ALL_FIELDS},
         }
-        self._data_manager.data.setdefault("business_annual_reports", {})[period] = cleaned
+        reports[period] = cleaned
         self._data_manager.save()
         return self.get_report(period)
 

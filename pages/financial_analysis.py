@@ -83,7 +83,7 @@ def _render_analysis(period=None):
     current_result = annual_reports.calculate(report["current"])
     previous_result = annual_reports.calculate(report["previous"])
     has_values = any(report["current"].values())
-    inputs = {"current": {}, "previous": {}}
+    inputs = {}
 
     with content:
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
@@ -101,9 +101,17 @@ def _render_analysis(period=None):
                         ).props("outline dense no-caps")
 
         ui.label("決算書入力").classes("text-xl font-black q-mb-xs")
-        ui.label("日々の入力とは連動しません。当期と前期の決算書をそのまま入力してください。").classes(
+        ui.label("日々の入力とは連動しません。この決算期の数字だけ入力してください。").classes(
             "text-[10px] text-grey-6 q-mb-md"
         )
+        if report.get("previous_period"):
+            ui.label(
+                f"前期比較には、保存済みの{report['previous_period'].replace('-', '年')}月期を自動使用します。"
+            ).classes("text-[10px] text-primary font-bold q-mb-md")
+        else:
+            ui.label("前期比較をする場合は、古い決算期から先に登録してください。").classes(
+                "text-[10px] q-mb-md"
+            ).style("color:#A66A17")
 
         def statement_section(statement_title, sections):
             with ui.expansion(statement_title, icon="description", value=True).classes(
@@ -112,17 +120,13 @@ def _render_analysis(period=None):
                 with ui.element("div").classes("statement-grid statement-head"):
                     ui.label("科目")
                     ui.label("当期")
-                    ui.label("前期")
                 for section_title, fields in sections:
                     ui.label(section_title).classes("text-xs font-black text-primary q-mt-md q-mb-xs")
                     for key, label in fields:
                         with ui.element("div").classes("statement-grid items-center"):
                             ui.label(label).classes("text-[10px] text-grey-8")
-                            inputs["current"][key] = ui.number(
+                            inputs[key] = ui.number(
                                 value=report["current"][key] or None, step=1
-                            ).props("outlined dense prefix=¥ inputmode=numeric")
-                            inputs["previous"][key] = ui.number(
-                                value=report["previous"][key] or None, step=1
                             ).props("outlined dense prefix=¥ inputmode=numeric")
 
         statement_section("貸借対照表", BS_SECTIONS)
@@ -132,8 +136,7 @@ def _render_analysis(period=None):
             try:
                 saved = annual_reports.save_report(
                     str(period_input.value),
-                    {key: field.value for key, field in inputs["current"].items()},
-                    {key: field.value for key, field in inputs["previous"].items()},
+                    {key: field.value for key, field in inputs.items()},
                 )
             except ValueError as error:
                 ui.notify(str(error), type="negative")
@@ -235,11 +238,11 @@ def _render_analysis(period=None):
                 )
 
         ui.add_css("""
-        .statement-grid{width:100%;display:grid;grid-template-columns:minmax(92px,1.15fr) minmax(90px,1fr) minmax(90px,1fr);gap:6px}
+        .statement-grid{width:100%;display:grid;grid-template-columns:minmax(120px,1.15fr) minmax(120px,1fr);gap:8px}
         .statement-head{color:#6D7972;font-size:9px;font-weight:800;margin-bottom:5px}
         .statement-grid .q-field__control{min-height:38px;height:38px}.statement-grid .q-field__native{font-size:11px;padding:0}
         .diagnostic-metric{border-radius:16px;padding:14px;background:#F4F7F5;min-width:0}
-        @media(max-width:520px){.statement-grid{grid-template-columns:minmax(82px,1fr) minmax(86px,1fr) minmax(86px,1fr);gap:4px}.statement-grid .q-field__prefix{display:none}}
+        @media(max-width:520px){.statement-grid{grid-template-columns:minmax(105px,1fr) minmax(120px,1.15fr);gap:6px}}
         """)
 
 
