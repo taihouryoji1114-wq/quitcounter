@@ -241,7 +241,7 @@ def future_financials_home():
                 )
 
         ui.add_css("""
-        .actual-box-map{height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}
+        .actual-box-map{height:420px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}
         .actual-money-box{min-height:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}
         .actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}
         .actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}
@@ -251,7 +251,7 @@ def future_financials_home():
         .actual-block-title{font-size:10px;font-weight:800;line-height:1.15}
         .actual-block-value{font-size:12px;font-weight:800;line-height:1.2;margin-top:2px;white-space:nowrap}
         .actual-block-note{font-size:8px;line-height:1.15;margin-top:2px;opacity:.9;white-space:nowrap}
-        @media(max-width:520px){.actual-box-map{height:300px}.actual-block-title{font-size:8px}.actual-block-value{font-size:9px}.actual-block-note{display:none}}
+        @media(max-width:520px){.actual-box-map{height:390px}.actual-block-title{font-size:9px}.actual-block-value{font-size:10px}.actual-block-note{font-size:7px}}
         """)
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-lg"):
