@@ -229,10 +229,6 @@ def _render_future_financials_home(selected_month=None):
                 ui.label(f"{completed_monthly_items}/{len(monthly_entry_items)} 項目").classes(
                     "text-lg font-black text-primary"
                 )
-            ui.linear_progress(
-                value=completed_monthly_items / len(monthly_entry_items),
-                color="positive" if not missing_monthly_items else "warning",
-            ).classes("q-mt-sm")
             if missing_monthly_items:
                 ui.label("未入力：" + "・".join(missing_monthly_items)).classes(
                     "text-[10px] q-mt-sm"
