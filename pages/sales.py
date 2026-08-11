@@ -81,6 +81,14 @@ def sales_page():
                 tabelog_dinner_customers = ui.number("ディナー予約人数", min=0, step=1).props(
                     "outlined suffix=人 inputmode=numeric"
                 )
+            ui.button(
+                "食べログ予約なし（0人）",
+                icon="block",
+                on_click=lambda: (
+                    setattr(tabelog_lunch_customers, "value", 0),
+                    setattr(tabelog_dinner_customers, "value", 0),
+                ),
+            ).props("outline no-caps").classes("w-full q-mb-sm")
             ui.label(
                 "同じ日をもう一度保存すると、その日の金額を更新します。"
             ).classes("text-[10px] text-grey-6 q-mb-sm")
@@ -120,16 +128,16 @@ def sales_page():
         ):
             fee_rates = financials.get_payment_fee_rates()
             credit_fee = ui.number(
-                "クレジット手数料", value=fee_rates["credit"], min=0, max=100, step=0.01
+                "クレジット手数料", value=fee_rates["credit"] or None, min=0, max=100, step=0.01
             ).props("outlined suffix=% inputmode=decimal").classes("w-full q-mb-sm")
             paypay_fee = ui.number(
-                "PayPay手数料", value=fee_rates["paypay"], min=0, max=100, step=0.01
+                "PayPay手数料", value=fee_rates["paypay"] or None, min=0, max=100, step=0.01
             ).props("outlined suffix=% inputmode=decimal").classes("w-full q-mb-sm")
             electronic_money_fee = ui.number(
-                "電子マネー手数料", value=fee_rates["electronic_money"], min=0, max=100, step=0.01
+                "電子マネー手数料", value=fee_rates["electronic_money"] or None, min=0, max=100, step=0.01
             ).props("outlined suffix=% inputmode=decimal").classes("w-full q-mb-sm")
             travel_agency_fee = ui.number(
-                "旅行社手数料", value=fee_rates["travel_agency"], min=0, max=100, step=0.01
+                "旅行社手数料", value=fee_rates["travel_agency"] or None, min=0, max=100, step=0.01
             ).props("outlined suffix=% inputmode=decimal").classes("w-full q-mb-sm")
             tabelog_fees = financials.get_tabelog_booking_fees()
             ui.label("食べログ予約の集客手数料（税込・1人あたり）").classes(
@@ -236,11 +244,8 @@ def sales_page():
         def sales_calendar():
             month_text = viewed_month[0]
             year, month = (int(part) for part in month_text.split("-"))
-            recorded_days = {
-                item["date"] for item in financials.sales_records(month=month_text)
-            }
             ui.label("売上入力カレンダー").classes("text-xl font-bold q-mt-md q-mb-xs")
-            ui.label("赤い『未』は、今日までで売上が未入力の日です。").classes(
+            ui.label("赤い『未』は未入力、黄色の『途中』は一部だけ入力済みです。").classes(
                 "text-xs text-grey-6 q-mb-sm"
             )
             with ui.card().classes("surface-card w-full q-pa-sm q-mb-md"):
@@ -268,10 +273,15 @@ def sales_page():
                                 continue
                             day_value = f"{year:04d}-{month:02d}-{day_number:02d}"
                             day_date = date(year, month, day_number)
-                            recorded = day_value in recorded_days
-                            missing = day_date <= today and not recorded
+                            status = financials.sales_completion_status(day_value)
+                            complete = status == "complete"
+                            partial = status == "partial"
+                            missing = day_date <= today and status == "missing"
                             selected = day_value == selected_day[0]
-                            background = "#EAF5EE" if recorded else "#FDECEC" if missing else "#F7F7F5"
+                            background = (
+                                "#EAF5EE" if complete else "#FFF3D9" if partial
+                                else "#FDECEC" if missing else "#F7F7F5"
+                            )
                             border = "2px solid #355E4B" if selected else "1px solid #E2E4DF"
                             with ui.element("div").classes(
                                 "q-pa-xs cursor-pointer flex flex-col items-center justify-center"
@@ -281,7 +291,9 @@ def sales_page():
                                 ui.label(str(day_number)).classes("text-xs")
                                 if missing:
                                     ui.label("未").classes("text-lg font-black text-red-7")
-                                elif recorded:
+                                elif partial:
+                                    ui.label("途中").classes("text-xs font-black text-orange-8")
+                                elif complete:
                                     ui.icon("check", color="positive", size="18px")
 
         with calendar_slot:

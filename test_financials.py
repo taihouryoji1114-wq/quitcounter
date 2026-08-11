@@ -123,6 +123,29 @@ class FinancialManagerTest(unittest.TestCase):
         self.assertEqual(summary["fees"]["tabelog_booking"], 880)
         self.assertEqual(summary["total_fees"], 880)
 
+    def test_sales_completion_requires_four_sections_not_every_payment_method(self):
+        self.financials.set_daily_sales(
+            "2026-08-04",
+            lunch_sales=10000,
+            lunch_customers=5,
+            dinner_sales=20000,
+            dinner_customers=10,
+            cash_sales=30000,
+            tabelog_lunch_customers=0,
+            tabelog_dinner_customers=0,
+        )
+        self.assertEqual(
+            self.financials.sales_completion_status("2026-08-04"), "complete"
+        )
+
+    def test_sales_completion_marks_legacy_or_incomplete_record_partial(self):
+        self.financials.set_daily_sales(
+            "2026-08-04", lunch_sales=10000, dinner_sales=20000
+        )
+        self.assertEqual(
+            self.financials.sales_completion_status("2026-08-04"), "partial"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -106,16 +106,16 @@ def purchase_page():
                     {"excluded": "税抜の納品書", "included": "税込の納品書"},
                     value="excluded",
                 ).props("spread no-caps").classes("w-full")
-                amount_8 = ui.number("8％対象の小計", min=0, step=1, value=0).props(
+                amount_8 = ui.number("8％対象の小計", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full")
-                amount_10 = ui.number("10％対象の小計", min=0, step=1, value=0).props(
+                amount_10 = ui.number("10％対象の小計", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full")
                 amount_1 = ui.number(
-                    "1％対象の小計（制度開始後に使用）", min=0, step=1, value=0
+                    "1％対象の小計（制度開始後に使用）", min=0, step=1
                 ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
-                exempt = ui.number("非課税・対象外の小計", min=0, step=1, value=0).props(
+                exempt = ui.number("非課税・対象外の小計", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full")
                 rounding = ui.select(
@@ -217,7 +217,7 @@ def purchase_page():
                     ui.notify(f"保存できませんでした: {error}", type="negative")
                     return
                 amount.value = None
-                amount_1.value = amount_8.value = amount_10.value = exempt.value = 0
+                amount_1.value = amount_8.value = amount_10.value = exempt.value = None
                 stated_tax_1.value = stated_tax_8.value = stated_tax_10.value = None
                 supplier_shortcuts.refresh()
                 totals.refresh()

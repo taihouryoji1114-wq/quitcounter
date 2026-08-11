@@ -204,6 +204,28 @@ class FinancialManager:
         totals["total_fees"] = sum(fees.values())
         return totals
 
+    def sales_completion_status(self, record_date):
+        records = self.sales_records(record_date=record_date)
+        if not records:
+            return "missing"
+        record = records[0]
+        lunch_complete = all(
+            key in record for key in ("lunch_sales", "lunch_customers")
+        )
+        dinner_complete = all(
+            key in record for key in ("dinner_sales", "dinner_customers")
+        )
+        payment_complete = all(key in record for key in self.PAYMENT_FIELDS)
+        tabelog_complete = all(
+            key in record
+            for key in ("tabelog_lunch_customers", "tabelog_dinner_customers")
+        )
+        return (
+            "complete"
+            if all((lunch_complete, dinner_complete, payment_complete, tabelog_complete))
+            else "partial"
+        )
+
     def get_plan(self):
         plan = self._data_manager.data.get("business_plan", {})
         return dict(plan) if isinstance(plan, dict) else {}
