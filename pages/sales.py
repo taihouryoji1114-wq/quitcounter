@@ -143,56 +143,6 @@ def sales_page():
                 "w-full"
             )
 
-        with ui.expansion("月1回の広告費を入力", icon="campaign").classes(
-            "surface-card w-full q-mb-md"
-        ):
-            ui.label("請求書の税込合計を入力してください。").classes(
-                "text-xs text-grey-6 q-mb-sm"
-            )
-            advertising_month = ui.input(
-                "対象月", value=viewed_month[0]
-            ).props("type=month outlined").classes("w-full q-mb-sm")
-            initial_ads = financials.get_monthly_advertising(viewed_month[0])
-            tabelog_ad = ui.number(
-                "食べログの税込請求額", value=initial_ads["tabelog"] or None, min=0, step=1
-            ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
-            hotpepper_ad = ui.number(
-                "ホットペッパーの税込請求額", value=initial_ads["hotpepper"] or None, min=0, step=1
-            ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
-            other_ad = ui.number(
-                "その他の広告費", value=initial_ads["other"] or None, min=0, step=1
-            ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
-
-            def load_advertising_month(value):
-                if not value:
-                    return
-                values = financials.get_monthly_advertising(str(value))
-                tabelog_ad.value = values["tabelog"] or None
-                hotpepper_ad.value = values["hotpepper"] or None
-                other_ad.value = values["other"] or None
-
-            advertising_month.on_value_change(
-                lambda event: load_advertising_month(event.value)
-            )
-
-            def save_advertising():
-                try:
-                    financials.save_monthly_advertising(
-                        str(advertising_month.value),
-                        tabelog_ad.value,
-                        hotpepper_ad.value,
-                        other_ad.value,
-                    )
-                except ValueError as error:
-                    ui.notify(str(error), type="negative")
-                    return
-                summary.refresh()
-                ui.notify("広告費を保存しました", type="positive")
-
-            ui.button("この月の広告費を保存", icon="save", on_click=save_advertising).classes(
-                "w-full"
-            )
-
         @ui.refreshable
         def summary():
             month = selected_day[0][:7]

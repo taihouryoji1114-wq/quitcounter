@@ -53,6 +53,15 @@ def future_financials_home():
     )
     cost_rate = purchase_total / sales_total if sales_total else 0
     labor_rate = operations["personnel"] / gross_profit if gross_profit > 0 else None
+    monthly_entry_items = (
+        ("人件費", operations["personnel"]),
+        ("家賃", operations["rent"]),
+        ("水道光熱費", operations["utilities"]),
+        ("広告費", advertising_total),
+        ("その他管理費", operations["other_admin"]),
+    )
+    missing_monthly_items = [title for title, value in monthly_entry_items if not value]
+    completed_monthly_items = len(monthly_entry_items) - len(missing_monthly_items)
     month_label = current_month.replace("-", "年") + "月"
     with content:
         detail_visible = [False]
@@ -110,6 +119,20 @@ def future_financials_home():
                         "借入元金返済", value=operations["loan_payment"] or None, min=0, step=1
                     ).props("outlined prefix=¥ inputmode=numeric")
 
+                ui.label("広告費（請求書の税込合計）").classes(
+                    "text-sm font-bold q-mt-md q-mb-sm"
+                )
+                with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
+                    tabelog_ad_input = ui.number(
+                        "食べログ", value=advertising_summary["tabelog"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+                    hotpepper_ad_input = ui.number(
+                        "ホットペッパー", value=advertising_summary["hotpepper"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+                    other_ad_input = ui.number(
+                        "その他の広告費", value=advertising_summary["other"] or None, min=0, step=1
+                    ).props("outlined prefix=¥ inputmode=numeric")
+
                 def save_operations():
                     try:
                         financials.save_monthly_operations(
@@ -120,13 +143,19 @@ def future_financials_home():
                             other_admin_input.value,
                             loan_input.value,
                         )
+                        financials.save_monthly_advertising(
+                            current_month,
+                            tabelog_ad_input.value,
+                            hotpepper_ad_input.value,
+                            other_ad_input.value,
+                        )
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
                         return
-                    ui.notify("月次費用を保存しました", type="positive")
+                    ui.notify("月次費用・広告費を保存しました", type="positive")
                     ui.navigate.to("/mirai-kessan")
 
-                ui.button("月次費用を保存", icon="save", on_click=save_operations).classes(
+                ui.button("月次費用・広告費を保存", icon="save", on_click=save_operations).classes(
                     "w-full q-mt-md"
                 )
             with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mt-sm"):
@@ -145,6 +174,30 @@ def future_financials_home():
                     ):
                         ui.label(title).classes("text-[9px] text-grey-7")
                         ui.label(f"¥{value:,}").classes("text-sm font-bold")
+
+        with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
+            with ui.row().classes("w-full items-center justify-between no-wrap"):
+                with ui.column().classes("gap-0"):
+                    ui.label("月次入力の完成度").classes("text-sm font-bold")
+                    ui.label("暫定利益の信頼度を確認").classes("text-[9px] text-grey-6")
+                ui.label(f"{completed_monthly_items}/{len(monthly_entry_items)} 項目").classes(
+                    "text-lg font-black text-primary"
+                )
+            ui.linear_progress(
+                value=completed_monthly_items / len(monthly_entry_items),
+                color="positive" if not missing_monthly_items else "warning",
+            ).classes("q-mt-sm")
+            if missing_monthly_items:
+                ui.label("未入力：" + "・".join(missing_monthly_items)).classes(
+                    "text-[10px] q-mt-sm"
+                ).style("color:#A66A17")
+                ui.label("未入力項目は0円として暫定利益を計算しています").classes(
+                    "text-[9px] text-grey-6 q-mt-xs"
+                )
+            else:
+                ui.label("主要な月次費用はすべて入力済みです").classes(
+                    "text-[10px] text-positive q-mt-sm"
+                )
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
             ui.label("暫定実績の利益構造").classes("text-lg font-bold")
