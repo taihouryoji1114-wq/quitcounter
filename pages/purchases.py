@@ -31,7 +31,7 @@ def purchase_page():
 
             @ui.refreshable
             def supplier_shortcuts():
-                values = purchases.suppliers()[:6]
+                values = purchases.suppliers()
                 if not values:
                     return
                 with ui.dialog() as editor_dialog, ui.card().classes(
