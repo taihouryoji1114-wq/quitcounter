@@ -120,6 +120,17 @@ class PurchaseManager:
             "total": total,
         }
 
+    @staticmethod
+    def sum_amount_expression(value):
+        """Sum a simple plus-separated list such as ``1,200+350+980``."""
+        normalized = unicodedata.normalize("NFKC", str(value or "")).strip()
+        if not normalized:
+            return 0
+        parts = normalized.split("+")
+        if any(not part.replace(",", "").strip().isdigit() for part in parts):
+            raise ValueError("金額は『1200+350+980』のように入力してください。")
+        return sum(int(part.replace(",", "").strip()) for part in parts)
+
     def delete(self, record_id):
         records = self._data_manager.data.get("business_purchases", [])
         record = next((item for item in records if item.get("id") == record_id), None)

@@ -55,6 +55,14 @@ class PurchaseManagerTest(unittest.TestCase):
         self.assertEqual(record["total"], 27100)
         self.assertEqual(record["tax_breakdown"]["tax_8"], 1600)
 
+    def test_item_amounts_can_be_added_with_plus_expression(self):
+        self.assertEqual(
+            self.purchases.sum_amount_expression("1,200＋350+980"), 2530
+        )
+        self.assertEqual(self.purchases.sum_amount_expression(""), 0)
+        with self.assertRaisesRegex(ValueError, r"1200\+350"):
+            self.purchases.sum_amount_expression("1200-350")
+
     def test_tax_included_and_stated_tax_override(self):
         breakdown = self.purchases.calculate_tax_breakdown(
             amount_8=10800,

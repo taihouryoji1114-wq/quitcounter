@@ -118,6 +118,40 @@ def purchase_page():
                 exempt = ui.number("非課税・対象外の小計", min=0, step=1).props(
                     "outlined prefix=¥ inputmode=numeric"
                 ).classes("w-full")
+                with ui.expansion("商品ごとの金額を足し算する", icon="calculate").classes(
+                    "w-full"
+                ):
+                    ui.label(
+                        "小計が書かれていない時に、同じ税率の商品を＋でつないでください。"
+                    ).classes("text-xs text-grey-6 q-mb-sm")
+                    calc_8 = ui.input(
+                        "8％の商品", placeholder="例：1,200+350+980"
+                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    calc_10 = ui.input(
+                        "10％の商品", placeholder="例：500+300"
+                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    calc_1 = ui.input(
+                        "1％の商品（制度開始後）", placeholder="例：1000+500"
+                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    calc_exempt = ui.input(
+                        "非課税・対象外", placeholder="例：200+100"
+                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+
+                    def apply_item_sums():
+                        try:
+                            amount_8.value = purchases.sum_amount_expression(calc_8.value)
+                            amount_10.value = purchases.sum_amount_expression(calc_10.value)
+                            amount_1.value = purchases.sum_amount_expression(calc_1.value)
+                            exempt.value = purchases.sum_amount_expression(calc_exempt.value)
+                        except ValueError as error:
+                            ui.notify(str(error), type="negative")
+                            return
+                        calculate_breakdown()
+                        ui.notify("税率ごとの小計へ反映しました", type="positive")
+
+                    ui.button(
+                        "足し算して小計へ反映", icon="add", on_click=apply_item_sums
+                    ).classes("w-full")
                 rounding = ui.select(
                     {"floor": "切り捨て", "half_up": "四捨五入", "ceil": "切り上げ"},
                     value="floor",
@@ -218,6 +252,7 @@ def purchase_page():
                     return
                 amount.value = None
                 amount_1.value = amount_8.value = amount_10.value = exempt.value = None
+                calc_1.value = calc_8.value = calc_10.value = calc_exempt.value = ""
                 stated_tax_1.value = stated_tax_8.value = stated_tax_10.value = None
                 supplier_shortcuts.refresh()
                 totals.refresh()
