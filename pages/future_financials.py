@@ -392,6 +392,7 @@ def _render_future_financials_home(selected_month=None):
             "receipt_long", "#246BFD", "/mirai-kessan/shiire",
         )
         menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "account_tree", "#39745A", "/mirai-kessan/block-map")
+        menu_card("決算分析", "決算書を入力して会社の状態を診断", "monitoring", "#7B5D9B", "/mirai-kessan/financial-analysis")
 
 
 @ui.page("/mirai-kessan")
