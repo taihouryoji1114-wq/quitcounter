@@ -148,41 +148,86 @@ def future_financials_home():
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
             ui.label("暫定実績の利益構造").classes("text-lg font-bold")
-            ui.label("入力済みの実績だけで構成しています").classes(
+            ui.label("入力済みの実績を、シミュレーションと同じ利益ブロックで表示").classes(
                 "text-[10px] text-grey-6 q-mb-md"
             )
             if sales_total:
-                cost_components = (
-                    ("原価", purchase_total, "#C98A42"),
-                    ("人件費", operations["personnel"], "#4A9FD0"),
-                    ("その他費用", operating_costs - operations["personnel"], "#8B7DB8"),
+                gross_for_ratio = max(gross_profit, 1)
+                cost_share = max(purchase_total / sales_total, 0.015)
+                gross_share = max(gross_profit / sales_total, 0.015)
+                breakdown = (
+                    ("人件費", operations["personnel"], "#4A9FD0", operations["personnel"] / gross_for_ratio),
+                    ("家賃", operations["rent"], "#8172B5", operations["rent"] / gross_for_ratio),
+                    ("水道光熱費", operations["utilities"], "#4CB7B4", operations["utilities"] / gross_for_ratio),
+                    ("広告費", advertising_total, "#D8943C", advertising_total / gross_for_ratio),
+                    (
+                        "その他管理費",
+                        operations["other_admin"] + other_expense_total + payment_fees,
+                        "#99A29D",
+                        (operations["other_admin"] + other_expense_total + payment_fees) / gross_for_ratio,
+                    ),
+                    (
+                        "営業利益" if operating_profit >= 0 else "営業損失",
+                        abs(operating_profit),
+                        "#4B77B7" if operating_profit >= 0 else "#C85C57",
+                        abs(operating_profit) / gross_for_ratio,
+                    ),
                 )
-                chart_components = cost_components + (
-                    (("営業利益", operating_profit, "#39745A"),)
-                    if operating_profit >= 0 else ()
-                )
-                legend_components = chart_components + (
-                    (("営業損失", abs(operating_profit), "#C85C57"),)
-                    if operating_profit < 0 else ()
-                )
-                with ui.element("div").classes("w-full flex overflow-hidden q-mb-md").style(
-                    "height:34px;border-radius:12px;background:#EEF0EE"
+
+                def actual_block(title, value, color, flex, note=""):
+                    with ui.element("div").classes("actual-money-box").style(
+                        f"background:{color};flex:{max(flex, 0.015)}"
+                    ):
+                        ui.label(title).classes("actual-block-title")
+                        if flex >= 0.07:
+                            ui.label(f"¥{value:,}").classes("actual-block-value")
+                        if note and flex >= 0.11:
+                            ui.label(note).classes("actual-block-note")
+
+                with ui.element("div").classes("actual-box-map q-mb-md").style(
+                    f"grid-template-rows:{cost_share}fr {gross_share}fr"
                 ):
-                    denominator = max(sales_total, sum(value for _, value, _ in chart_components), 1)
-                    for _, value, color in chart_components:
-                        if value:
-                            ui.element("div").style(
-                                f"width:{value / denominator * 100:.3f}%;background:{color};height:100%"
-                            )
+                    actual_block("売上", sales_total, "#355F4C", 1, "100%")
+                    with ui.element("div").classes("actual-cost-block"):
+                        actual_block(
+                            "仕入れ・原価", purchase_total, "#82988D", 1,
+                            f"原価率 {cost_rate * 100:.1f}%",
+                        )
+                    with ui.element("div").classes("actual-gross-block"):
+                        actual_block(
+                            "粗利", gross_profit, "#4F8C70", 1,
+                            f"粗利率 {gross_profit / sales_total * 100:.1f}%",
+                        )
+                    with ui.element("div").classes("actual-breakdown"):
+                        for title, value, color, flex in breakdown:
+                            note = ""
+                            if title == "人件費" and labor_rate is not None:
+                                note = f"分配率 {labor_rate * 100:.1f}%"
+                            elif title in ("営業利益", "営業損失"):
+                                note = f"利益率 {operating_profit / sales_total * 100:.1f}%"
+                            actual_block(title, value, color, flex, note)
+
+                legend_components = (
+                    ("原価（売上比）", purchase_total, "#82988D", cost_rate),
+                    ("人件費（粗利比）", operations["personnel"], "#4A9FD0", labor_rate),
+                    ("家賃（売上比）", operations["rent"], "#8172B5", operations["rent"] / sales_total),
+                    ("水道光熱費（売上比）", operations["utilities"], "#4CB7B4", operations["utilities"] / sales_total),
+                    ("広告費（売上比）", advertising_total, "#D8943C", advertising_total / sales_total),
+                    ("その他管理費（売上比）", operations["other_admin"] + other_expense_total + payment_fees, "#99A29D", (operations["other_admin"] + other_expense_total + payment_fees) / sales_total),
+                    (("営業利益" if operating_profit >= 0 else "営業損失") + "（売上比）", operating_profit, "#4B77B7" if operating_profit >= 0 else "#C85C57", operating_profit / sales_total),
+                )
+                ui.label("現在の実際の比率").classes("text-[10px] text-primary font-bold q-mb-xs")
                 with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
-                    for title, value, color in legend_components:
+                    for title, value, color, ratio in legend_components:
                         with ui.row().classes("w-full items-center justify-between no-wrap"):
                             with ui.row().classes("items-center gap-1 no-wrap"):
                                 ui.element("div").style(
                                     f"width:9px;height:9px;border-radius:3px;background:{color}"
                                 )
-                                ui.label(title).classes("text-[10px] text-grey-7")
-                            ui.label(f"¥{value:,}").classes("text-[10px] font-bold")
+                                ui.label(f"{title} {ratio * 100:.1f}%" if ratio is not None else title).classes(
+                                    "text-[9px] text-grey-7"
+                                )
+                            ui.label(f"¥{value:,}").classes("text-[9px] font-bold")
                 ui.separator().classes("q-my-md")
                 with ui.row().classes("w-full items-center justify-between"):
                     ui.label("税金・借入返済後の資金増減目安").classes("text-xs text-grey-7")
@@ -194,6 +239,20 @@ def future_financials_home():
                 ui.label("売上を入力すると図が表示されます").classes(
                     "text-sm text-grey-6 q-pa-md text-center"
                 )
+
+        ui.add_css("""
+        .actual-box-map{height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}
+        .actual-money-box{min-height:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}
+        .actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}
+        .actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}
+        .actual-cost-block>.actual-money-box,.actual-gross-block>.actual-money-box{width:100%}
+        .actual-gross-block{grid-column:2;grid-row:2;min-height:0;display:flex}
+        .actual-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+        .actual-block-title{font-size:10px;font-weight:800;line-height:1.15}
+        .actual-block-value{font-size:12px;font-weight:800;line-height:1.2;margin-top:2px;white-space:nowrap}
+        .actual-block-note{font-size:8px;line-height:1.15;margin-top:2px;opacity:.9;white-space:nowrap}
+        @media(max-width:520px){.actual-box-map{height:300px}.actual-block-title{font-size:8px}.actual-block-value{font-size:9px}.actual-block-note{display:none}}
+        """)
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-lg"):
             ui.label("重要な経営指標").classes("text-lg font-bold q-mb-md")
