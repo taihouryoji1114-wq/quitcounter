@@ -8,19 +8,24 @@ from core.theme import Theme
 
 BS_SECTIONS = (
     ("流動資産", (
-        ("cash", "現金・預金"), ("receivables", "売掛金"),
-        ("inventory", "棚卸資産"), ("prepaid", "前払費用"),
+        ("cash_on_hand", "現金"), ("checking_deposit", "当座預金"),
+        ("ordinary_deposit", "普通預金"), ("receivables", "売掛金"),
+        ("merchandise", "商品・棚卸資産"), ("temporary_payment", "仮払金"),
+        ("prepaid", "前払費用"), ("substitute_payment", "立替金"),
         ("other_current_assets", "その他流動資産"),
     )),
     ("固定資産", (
-        ("buildings", "建物・附属設備"), ("vehicles", "車両運搬具"),
-        ("equipment", "什器備品"), ("intangible_assets", "無形固定資産"),
-        ("deposits", "保証金・敷金"), ("investments", "出資金・投資等"),
+        ("building_equipment", "建物附属設備"), ("vehicles", "車両運搬具"),
+        ("fixtures", "什器備品"), ("lump_sum_depreciable_assets", "一括償却資産"),
+        ("telephone_rights", "電話加入権"), ("investments", "出資金"),
+        ("security_deposit", "保証金"), ("lease_deposit", "敷金"),
+        ("membership_deposit", "加盟金"),
         ("other_fixed_assets", "その他固定資産"),
     )),
     ("流動負債", (
         ("payables", "買掛金"), ("short_term_loans", "短期借入金"),
-        ("accrued_expenses", "未払金・未払費用"), ("unpaid_taxes", "未払税金"),
+        ("unpaid_accounts", "未払金"), ("accrued_expenses", "未払費用"),
+        ("deposits_received", "預り金"), ("unpaid_consumption_tax", "未払消費税"),
         ("other_current_liabilities", "その他流動負債"),
     )),
     ("固定負債", (
@@ -28,8 +33,9 @@ BS_SECTIONS = (
         ("other_fixed_liabilities", "その他固定負債"),
     )),
     ("純資産", (
-        ("capital", "資本金"), ("capital_reserves", "資本・利益準備金"),
-        ("retained_earnings", "繰越利益剰余金"),
+        ("capital", "資本金"), ("profit_reserve", "利益準備金"),
+        ("special_reserve", "別途積立金"), ("retained_earnings", "繰越利益剰余金"),
+        ("other_equity", "その他純資産"),
     )),
 )
 
@@ -39,21 +45,30 @@ PL_SECTIONS = (
         ("purchases", "仕入高"), ("closing_inventory", "期末棚卸高"),
     )),
     ("人件費", (
-        ("executive_compensation", "役員報酬"), ("salaries", "給与・賞与"),
-        ("statutory_welfare", "法定福利費"), ("welfare", "福利厚生費"),
+        ("executive_compensation", "役員報酬"), ("salaries", "給料手当"),
+        ("retirement_allowance", "退職金"), ("statutory_welfare", "法定福利費"),
+        ("welfare", "福利厚生費"), ("temporary_wages", "雑給"),
+        ("recruitment_fees", "人材採用費"),
     )),
     ("販売費・一般管理費", (
-        ("rent", "家賃"), ("utilities", "水道光熱費"),
-        ("depreciation", "減価償却費"), ("advertising", "広告宣伝費"),
-        ("travel", "旅費交通費"), ("communication", "通信費"),
-        ("fees", "支払手数料"), ("supplies", "消耗品費"),
-        ("taxes_and_dues", "租税公課"), ("insurance", "保険料"),
-        ("repairs", "修繕費"), ("other_sga", "その他販売管理費"),
+        ("advertising", "広告宣伝費"), ("freight", "運賃"),
+        ("utilities", "水道光熱費"), ("fuel", "燃料費"),
+        ("office_supplies", "事務用消耗品費"), ("consumables", "消耗品費"),
+        ("rent", "家賃"), ("insurance", "支払保険料"),
+        ("repairs", "修繕費"), ("taxes_and_dues", "租税公課"),
+        ("entertainment", "接待交際費"), ("travel", "旅費交通費"),
+        ("communication", "通信費"), ("fees", "支払手数料"),
+        ("membership_fees", "諸会費"), ("card_fees", "カード手数料"),
+        ("lease", "リース料"), ("depreciation", "減価償却費"),
+        ("miscellaneous_expenses", "雑費"), ("other_sga", "その他販売管理費"),
     )),
     ("営業外・税金", (
-        ("non_operating_income", "営業外収益"),
-        ("non_operating_expense", "営業外費用・支払利息"),
-        ("extraordinary_income", "特別利益"), ("extraordinary_loss", "特別損失"),
+        ("interest_income", "受取利息"), ("dividend_income", "受取配当金"),
+        ("miscellaneous_income", "雑収入"), ("interest_expense", "支払利息・割引料"),
+        ("guarantee_amortization", "保証料償却"), ("miscellaneous_loss", "雑損失"),
+        ("extraordinary_income", "特別利益"),
+        ("fixed_asset_disposal_loss", "固定資産除却損"),
+        ("extraordinary_loss", "その他特別損失"),
         ("corporate_taxes", "法人税等"),
     )),
 )
@@ -217,7 +232,7 @@ def _render_analysis(period=None):
                     ("売上高", report["current"]["sales"], report["previous"]["sales"]),
                     ("営業利益", current_result["operating_profit"], previous_result["operating_profit"]),
                     ("当期純利益", current_result["net_income"], previous_result["net_income"]),
-                    ("現金・預金", report["current"]["cash"], report["previous"]["cash"]),
+                    ("現金・預金", report["current"]["cash_on_hand"] + report["current"]["checking_deposit"] + report["current"]["ordinary_deposit"], report["previous"]["cash_on_hand"] + report["previous"]["checking_deposit"] + report["previous"]["ordinary_deposit"]),
                     ("純資産", current_result["equity"], previous_result["equity"]),
                 )
                 for title, current, previous in comparisons:
@@ -345,7 +360,7 @@ def financial_analysis_report_page(period: str):
             for title, now, before in (
                 ("売上高", report["current"]["sales"], report["previous"]["sales"]),
                 ("営業利益", current["operating_profit"], previous["operating_profit"]),
-                ("現金・預金", report["current"]["cash"], report["previous"]["cash"]),
+                ("現金・預金", report["current"]["cash_on_hand"] + report["current"]["checking_deposit"] + report["current"]["ordinary_deposit"], report["previous"]["cash_on_hand"] + report["previous"]["checking_deposit"] + report["previous"]["ordinary_deposit"]),
                 ("純資産", current["equity"], previous["equity"]),
             ):
                 difference = now - before
