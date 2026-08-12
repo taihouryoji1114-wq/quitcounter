@@ -186,5 +186,123 @@ class AnnualReportManager:
             "cash_months": (values["cash_on_hand"] + values["checking_deposit"] + values["ordinary_deposit"]) / (values["sales"] / 12) if values["sales"] else None,
         }
 
+    @staticmethod
+    def management_decision(current_values, previous_values=None):
+        current = AnnualReportManager.calculate(current_values)
+        previous = AnnualReportManager.calculate(previous_values or {})
+        sales = int(current_values.get("sales", 0) or 0)
+        previous_sales = int((previous_values or {}).get("sales", 0) or 0)
+        debt = int(current_values.get("short_term_loans", 0) or 0) + int(
+            current_values.get("long_term_loans", 0) or 0
+        )
+        personnel = sum(int(current_values.get(key, 0) or 0) for key in (
+            "executive_compensation", "salaries", "retirement_allowance",
+            "statutory_welfare", "welfare", "temporary_wages", "recruitment_fees",
+        ))
+        working_capital = current["current_assets"] - current["current_liabilities"]
+        cogs_rate = current["cogs"] / sales if sales else None
+        labor_rate = personnel / current["gross_profit"] if current["gross_profit"] > 0 else None
+        sales_growth = sales / previous_sales - 1 if previous_sales else None
+        debt_payback_years = debt / current["ordinary_profit"] if current["ordinary_profit"] > 0 else None
+
+        facts = {
+            "working_capital": working_capital,
+            "cogs_rate": cogs_rate,
+            "labor_rate": labor_rate,
+            "sales_growth": sales_growth,
+            "debt": debt,
+            "debt_payback_years": debt_payback_years,
+        }
+        if current["balance_gap"]:
+            return {
+                "mode": "verify", "label": "判断前に入力確認", "score": 0,
+                "summary": "貸借が一致していないため、経営判断を確定できません。",
+                "reasons": [f"貸借差額が {abs(current['balance_gap']):,}円あります。"],
+                "actions": ["資産合計と負債・純資産合計を決算書と照合する"],
+                "attack_conditions": ["貸借を一致させて診断を確定する"],
+                "facts": facts,
+            }
+
+        defense = 0
+        reasons = []
+        actions = []
+        if current["equity"] < 0:
+            defense += 3
+            reasons.append("債務超過で、損失への耐久力が低い")
+            actions.append("債務超過を何年で解消するか利益計画を作る")
+        if working_capital < 0:
+            defense += 2
+            reasons.append("流動負債が流動資産を上回っている")
+            actions.append("税金・買掛金・借入返済を含む12か月資金繰り表を作る")
+        if current["cash_months"] is not None and current["cash_months"] < 1:
+            defense += 2
+            reasons.append("現預金が月商1か月分未満")
+            actions.append("最低現預金ラインを決め、下回る投資を止める")
+        if debt_payback_years is None or debt_payback_years > 10:
+            defense += 1
+            reasons.append("現在の利益では借入返済が長期化する")
+            actions.append("借入返済額と本業の利益目標を分けて管理する")
+
+        improvement = 0
+        if current["operating_profit"] <= 0:
+            improvement += 3
+            reasons.append("本業の営業利益が赤字")
+            actions.append("原価・人件費・固定費を分けて黒字化余地を試算する")
+        if previous_sales and sales_growth is not None and sales_growth > 0 and current["operating_profit"] < previous["operating_profit"]:
+            improvement += 2
+            reasons.append("増収なのに営業利益が減っている")
+            actions.append("売上拡大より先に、増えた費用の科目を特定する")
+        if cogs_rate is not None and cogs_rate >= 0.35:
+            improvement += 1
+            reasons.append(f"原価率が {cogs_rate * 100:.1f}%")
+            actions.append("仕入価格・廃棄・メニュー構成別に原価改善額を決める")
+        if labor_rate is not None and labor_rate >= 0.45:
+            improvement += 1
+            reasons.append(f"労働分配率が {labor_rate * 100:.1f}%")
+            actions.append("時間帯別売上と人員配置を照合する")
+
+        attack = 0
+        attack_conditions = []
+        if current["operating_profit"] > 0 and (current["operating_margin"] or 0) >= 0.05:
+            attack += 1
+        else:
+            attack_conditions.append("営業利益率5%以上を安定させる")
+        if working_capital > 0 and (current["cash_months"] or 0) >= 2:
+            attack += 1
+        else:
+            attack_conditions.append("運転資金をプラスにし、現預金2か月分を確保する")
+        if current["equity"] > 0 and (debt_payback_years is None or debt_payback_years <= 10):
+            attack += 1
+        else:
+            attack_conditions.append("純資産をプラスにし、返済力を改善する")
+        if sales_growth is not None and sales_growth > 0 and current["operating_profit"] >= previous["operating_profit"]:
+            attack += 1
+        elif previous_sales:
+            attack_conditions.append("売上と営業利益がともに前年を上回る状態を作る")
+
+        if defense >= 3:
+            mode, label = "defense", "守りを優先"
+            summary = "投資拡大より、資金確保と財務改善を先に進める局面です。"
+        elif improvement >= 2:
+            mode, label = "improve", "利益改善を優先"
+            summary = "売上拡大だけでなく、利益構造の改善を優先する局面です。"
+        elif attack >= 3:
+            mode, label = "attack", "条件付きで攻める"
+            summary = "財務余力を守りながら、効果を測れる投資を検討できる局面です。"
+            reasons.append("収益・資金・返済力の複数条件を満たしている")
+            actions.append("投資上限と回収期限を決め、採用・広告・設備投資を比較する")
+        else:
+            mode, label = "balance", "守りながら改善"
+            summary = "大きな投資は抑え、利益と現預金を積み上げる局面です。"
+            actions.append("四半期ごとに利益・現預金・借入残高を確認する")
+
+        return {
+            "mode": mode, "label": label, "score": max(defense, improvement, attack),
+            "summary": summary, "reasons": list(dict.fromkeys(reasons))[:3],
+            "actions": list(dict.fromkeys(actions))[:3],
+            "attack_conditions": list(dict.fromkeys(attack_conditions))[:3],
+            "facts": facts,
+        }
+
 
 annual_reports = AnnualReportManager()

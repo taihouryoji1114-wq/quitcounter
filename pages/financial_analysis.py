@@ -406,6 +406,7 @@ def financial_analysis_report_page(period: str):
     report = annual_reports.get_report(period)
     current = annual_reports.calculate(report["current"])
     previous = annual_reports.calculate(report["previous"])
+    decision = annual_reports.management_decision(report["current"], report["previous"])
     content = Theme.shell(
         "決算報告",
         period.replace("-", "年") + "月期｜会社の現在地と次の一手",
@@ -415,7 +416,6 @@ def financial_analysis_report_page(period: str):
     equity_negative = current["equity"] < 0
     liquidity_low = current["current_ratio"] is not None and current["current_ratio"] < 1
     operating_negative = current["operating_profit"] < 0
-    urgent_count = sum((equity_negative, liquidity_low, operating_negative))
     sales = report["current"]["sales"]
     previous_sales = report["previous"]["sales"]
     personnel = sum(report["current"][key] for key in (
@@ -429,16 +429,25 @@ def financial_analysis_report_page(period: str):
     sales_change = (sales / previous_sales - 1) if previous_sales else None
     debt_payback_years = total_debt / current["ordinary_profit"] if current["ordinary_profit"] > 0 else None
     with content:
-        with ui.card().classes("report-hero w-full q-pa-lg q-mb-md text-white"):
-            ui.label("総合診断").classes("text-xs opacity-70")
-            ui.label(
-                "財務改善を最優先" if urgent_count >= 2 else
-                "注意項目を確認" if urgent_count else "大きな緊急警告なし"
-            ).classes("text-3xl font-black q-mt-xs")
-            ui.label(
-                f"重要な確認項目が {urgent_count} 件あります" if urgent_count
-                else "主要指標は安定しています。成長と利益改善を確認しましょう。"
-            ).classes("text-sm opacity-80 q-mt-sm")
+        with ui.card().classes(f"report-hero {decision['mode']} w-full q-pa-lg q-mb-md text-white"):
+            ui.label("今の経営方針").classes("text-xs opacity-70")
+            ui.label(decision["label"]).classes("text-3xl font-black q-mt-xs")
+            ui.label(decision["summary"]).classes("text-sm opacity-85 q-mt-sm leading-relaxed")
+
+        if decision["mode"] == "verify":
+            with ui.card().classes("decision-verification w-full q-pa-lg q-mb-md"):
+                ui.label("この分析はまだ確定していません").classes("text-lg font-black")
+                ui.label(decision["reasons"][0]).classes("text-sm q-mt-sm")
+                ui.label("先に貸借を一致させると、守り・改善・攻めを判定できます。").classes(
+                    "text-[10px] q-mt-sm opacity-70"
+                )
+        else:
+            with ui.card().classes("decision-card w-full q-pa-lg q-mb-md"):
+                ui.label("この方針になった理由").classes("text-base font-black q-mb-sm")
+                for reason in decision["reasons"]:
+                    with ui.row().classes("items-start no-wrap q-mb-sm"):
+                        ui.icon("check_circle").classes("text-primary text-lg")
+                        ui.label(reason).classes("text-xs leading-relaxed")
 
         ui.label("経営サマリー").classes("report-section-title")
         with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-md"):
@@ -481,24 +490,20 @@ def financial_analysis_report_page(period: str):
                     ui.label(value).classes("text-base font-black")
 
         ui.label("来期に優先する行動").classes("report-section-title")
-        priorities = []
-        if equity_negative:
-            priorities.append(("債務超過の解消計画", f"純資産は {_money(current['equity'])}。来期の黒字目標と借入返済を分け、何年でプラスへ戻すか計画します。"))
-        if liquidity_low:
-            priorities.append(("12か月資金繰り表を作る", f"流動比率 {_ratio(current['current_ratio'])}、運転資金 {_money(working_capital)}。税金・買掛金・借入返済の支払月を先に並べます。"))
-        if current["cash_months"] is not None and current["cash_months"] < 1:
-            priorities.append(("現預金の最低ラインを決める", f"現預金は月商の約 {current['cash_months']:.1f}か月分。最低確保額を決め、それを下回る投資・返済を抑えます。"))
-        if operating_negative:
-            priorities.append(("本業を黒字化する", f"営業損失 {_money(abs(current['operating_profit']))}。まず原価率 {_ratio(cogs_rate)} と労働分配率 {_ratio(personnel_rate)} のどちらを優先するか決めます。"))
-        if not priorities:
-            priorities.append(("成長と利益改善", "重大警告はありません。前年差と来期計画から次の成長投資を判断できます。"))
-        for index, (title, message) in enumerate(priorities, 1):
-            with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
+        for index, action in enumerate(decision["actions"], 1):
+            with ui.card().classes("action-card w-full q-pa-md q-mb-sm"):
                 with ui.row().classes("items-start no-wrap"):
                     ui.label(str(index)).classes("priority-number")
-                    with ui.column().classes("gap-0"):
-                        ui.label(title).classes("text-sm font-black")
-                        ui.label(message).classes("text-[10px] text-grey-7 leading-relaxed q-mt-xs")
+                    ui.label(action).classes("text-xs font-bold leading-relaxed q-pt-xs")
+
+        if decision["mode"] != "attack" and decision["attack_conditions"]:
+            with ui.expansion("攻めに転じる条件", icon="rocket_launch", value=False).classes(
+                "attack-conditions w-full q-mb-md"
+            ):
+                for condition in decision["attack_conditions"]:
+                    with ui.row().classes("items-start no-wrap q-mb-sm"):
+                        ui.icon("radio_button_unchecked").classes("text-amber-8 text-sm")
+                        ui.label(condition).classes("text-[10px] leading-relaxed")
 
         ui.label("前期から何が変わったか").classes("report-section-title")
         with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
@@ -521,8 +526,8 @@ def financial_analysis_report_page(period: str):
             "text-[9px] text-grey-6 q-mt-lg"
         )
         ui.add_css("""
-        .report-hero{border-radius:28px;border:0;background:radial-gradient(circle at 90% 10%,rgba(214,170,92,.38),transparent 34%),linear-gradient(145deg,#102F27,#1D5945 70%,#76532E);box-shadow:0 20px 44px rgba(17,55,42,.25)}
+        .report-hero{border-radius:28px;border:0;background:radial-gradient(circle at 90% 10%,rgba(214,170,92,.38),transparent 34%),linear-gradient(145deg,#102F27,#1D5945 70%,#76532E);box-shadow:0 20px 44px rgba(17,55,42,.25)}.report-hero.defense{background:radial-gradient(circle at 88% 8%,rgba(238,150,109,.35),transparent 35%),linear-gradient(145deg,#3B2020,#8B3832)}.report-hero.improve{background:radial-gradient(circle at 88% 8%,rgba(255,213,127,.35),transparent 35%),linear-gradient(145deg,#493411,#A06C22)}.report-hero.attack{background:radial-gradient(circle at 88% 8%,rgba(145,222,181,.32),transparent 35%),linear-gradient(145deg,#0E3A2B,#287C58)}.report-hero.verify{background:linear-gradient(145deg,#4A4F4C,#777F7A)}
         .report-section-title{font-size:19px;font-weight:900;margin:16px 0 9px}.report-kpi{border-radius:18px;padding:16px;background:linear-gradient(145deg,#F1F7F3,#E8F1EC);min-width:0;color:#1B382C;border:1px solid #E0EAE4}.report-kpi.danger{background:linear-gradient(145deg,#FFF2EF,#FBE4E1);color:#873934;border-color:#F2D1CD}
         .insight-card{border-radius:22px!important;background:#fff!important;border:1px solid #E5EAE7!important;box-shadow:0 9px 25px rgba(35,57,45,.06)!important}.driver-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 12px;margin-bottom:7px;border-radius:13px}.driver-row.amber{background:#FFF5E5;color:#805317}.driver-row.blue{background:#EAF3FF;color:#285786}.driver-row.green{background:#EAF5EE;color:#286447}.driver-row.red{background:#FDECEA;color:#943D38}
-        .priority-number{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#FFF0E4;color:#9A5C24;font-weight:900;flex:none}
+        .decision-card{border-radius:22px!important;background:#F3F8F5!important;border:1px solid #DDEAE2!important;box-shadow:none!important}.decision-verification{border-radius:22px!important;background:#FFF3DF!important;color:#83581B!important;border:1px solid #F0D8AC!important;box-shadow:none!important}.action-card{border-radius:18px!important;background:#fff!important;border:1px solid #E4E9E6!important;box-shadow:0 7px 20px rgba(35,57,45,.05)!important}.attack-conditions{border-radius:18px!important;background:#FFF8EA!important;border:1px solid #F1E0BA!important}.priority-number{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#FFF0E4;color:#9A5C24;font-weight:900;flex:none}
         """)

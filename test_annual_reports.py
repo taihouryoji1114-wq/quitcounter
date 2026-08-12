@@ -76,6 +76,36 @@ class AnnualReportManagerTest(unittest.TestCase):
         self.assertEqual(result["equity"], 1000)
         self.assertEqual(result["balance_gap"], 0)
 
+    def test_decision_requires_balanced_statement(self):
+        decision = self.reports.management_decision(
+            {"cash_on_hand": 1000, "capital": 500}, {}
+        )
+        self.assertEqual(decision["mode"], "verify")
+
+    def test_decision_prioritizes_defense_for_negative_equity_and_cash(self):
+        values = {
+            "cash_on_hand": 100, "building_equipment": 900,
+            "payables": 500, "long_term_loans": 1500,
+            "capital": 1000, "retained_earnings": -2000,
+            "sales": 12000, "purchases": 4000, "salaries": 6000,
+            "rent": 1500, "interest_expense": 500,
+        }
+        decision = self.reports.management_decision(values, {})
+        self.assertEqual(decision["mode"], "defense")
+        self.assertIn("守り", decision["label"])
+
+    def test_decision_allows_attack_only_when_multiple_conditions_are_met(self):
+        previous = {
+            "cash_on_hand": 1800, "receivables": 200, "capital": 2000,
+            "sales": 10000, "purchases": 3000, "salaries": 3000, "rent": 1000,
+        }
+        current = {
+            "cash_on_hand": 3000, "receivables": 1000, "capital": 4000,
+            "sales": 12000, "purchases": 3000, "salaries": 3000, "rent": 1000,
+        }
+        decision = self.reports.management_decision(current, previous)
+        self.assertEqual(decision["mode"], "attack")
+
 
 if __name__ == "__main__":
     unittest.main()
