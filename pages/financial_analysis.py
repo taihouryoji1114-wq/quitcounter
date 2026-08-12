@@ -93,7 +93,8 @@ def _render_analysis(period=None):
         brand="未来決算",
     )
     periods = annual_reports.list_periods()
-    selected_period = period if period in periods else (periods[0] if periods else today_jst().strftime("%Y-%m"))
+    default_year = today_jst().year if today_jst().month >= 9 else today_jst().year - 1
+    selected_period = period if period in periods else (periods[0] if periods else f"{default_year:04d}-09")
     report = annual_reports.get_report(selected_period)
     current_result = annual_reports.calculate(report["current"])
     previous_result = annual_reports.calculate(report["previous"])
@@ -102,8 +103,13 @@ def _render_analysis(period=None):
 
     with content:
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
-            ui.label("決算期").classes("text-xs font-bold")
-            period_input = ui.input(value=selected_period).props("type=month outlined").classes("w-full q-mt-xs")
+            ui.label("決算期（9月末締め）").classes("text-xs font-bold")
+            period_year = ui.number(
+                "決算年", value=int(selected_period[:4]), min=1900, max=2200, step=1
+            ).props("outlined suffix=年 inputmode=numeric").classes("w-full q-mt-xs")
+            ui.label(f"{int(selected_period[:4])}年9月期として保存します").classes(
+                "text-[10px] text-grey-6 q-mt-xs"
+            )
             if periods:
                 ui.label("保存済みの決算期").classes("text-[10px] text-grey-6 q-mt-md")
                 with ui.row().classes("w-full gap-1 q-mt-xs"):
@@ -142,7 +148,6 @@ def _render_analysis(period=None):
                             ui.label(label).classes("text-[10px] text-grey-8")
                             inputs[key] = ui.input(
                                 value=str(report["current"][key]) if report["current"][key] else None,
-                                placeholder="0 または △59,960",
                             ).props("outlined dense prefix=¥ inputmode=decimal")
 
         statement_section("貸借対照表", BS_SECTIONS)
@@ -150,11 +155,12 @@ def _render_analysis(period=None):
 
         def save_report():
             try:
+                year = int(period_year.value)
                 saved = annual_reports.save_report(
-                    str(period_input.value),
+                    f"{year:04d}-09",
                     {key: field.value for key, field in inputs.items()},
                 )
-            except ValueError as error:
+            except (TypeError, ValueError) as error:
                 ui.notify(str(error), type="negative")
                 return
             ui.notify("決算書を保存して分析しました", type="positive")
