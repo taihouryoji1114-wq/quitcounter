@@ -64,9 +64,12 @@ class AnnualReportManager:
     @staticmethod
     def _amount(value):
         try:
-            amount = int(float(str(value or 0).replace(",", "")))
+            normalized = str(value or 0).strip().replace(",", "")
+            if normalized.startswith("△"):
+                normalized = "-" + normalized[1:]
+            amount = int(float(normalized))
         except (TypeError, ValueError) as error:
-            raise ValueError("金額は数字で入力してください。") from error
+            raise ValueError("金額は数字で入力してください。マイナスは - または △ を付けます。") from error
         return amount
 
     def list_periods(self):

@@ -140,9 +140,10 @@ def _render_analysis(period=None):
                     for key, label in fields:
                         with ui.element("div").classes("statement-grid items-center"):
                             ui.label(label).classes("text-[10px] text-grey-8")
-                            inputs[key] = ui.number(
-                                value=report["current"][key] or None, step=1
-                            ).props("outlined dense prefix=¥ inputmode=numeric")
+                            inputs[key] = ui.input(
+                                value=str(report["current"][key]) if report["current"][key] else None,
+                                placeholder="0 または △59,960",
+                            ).props("outlined dense prefix=¥ inputmode=decimal")
 
         statement_section("貸借対照表", BS_SECTIONS)
         statement_section("損益計算書", PL_SECTIONS)

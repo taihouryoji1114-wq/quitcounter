@@ -62,6 +62,10 @@ class AnnualReportManagerTest(unittest.TestCase):
         self.assertEqual(report["current"]["merchandise"], 500)
         self.assertEqual(report["current"]["building_equipment"], 900)
 
+    def test_triangle_amount_is_saved_as_negative(self):
+        saved = self.reports.save_report("2026-09", {"temporary_payment": "△59,960"})
+        self.assertEqual(saved["current"]["temporary_payment"], -59960)
+
 
 if __name__ == "__main__":
     unittest.main()
