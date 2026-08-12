@@ -8,23 +8,21 @@ from core.data import data
 CURRENT_ASSET_FIELDS = (
     "cash_on_hand", "checking_deposit", "ordinary_deposit", "receivables",
     "merchandise", "temporary_payment", "prepaid", "substitute_payment",
-    "other_current_assets",
 )
 FIXED_ASSET_FIELDS = (
     "building_equipment", "vehicles", "fixtures", "lump_sum_depreciable_assets",
     "telephone_rights", "investments", "security_deposit", "lease_deposit",
-    "membership_deposit", "other_fixed_assets",
+    "membership_deposit",
 )
 ASSET_FIELDS = (*CURRENT_ASSET_FIELDS, *FIXED_ASSET_FIELDS)
 CURRENT_LIABILITY_FIELDS = (
     "payables", "short_term_loans", "unpaid_accounts", "accrued_expenses",
-    "deposits_received", "unpaid_consumption_tax", "other_current_liabilities",
+    "deposits_received", "unpaid_consumption_tax",
 )
 FIXED_LIABILITY_FIELDS = ("long_term_loans", "other_fixed_liabilities")
 LIABILITY_FIELDS = (*CURRENT_LIABILITY_FIELDS, *FIXED_LIABILITY_FIELDS)
 EQUITY_FIELDS = (
     "capital", "profit_reserve", "special_reserve", "retained_earnings",
-    "other_equity",
 )
 SGA_FIELDS = (
     "executive_compensation", "salaries", "retirement_allowance",
@@ -41,7 +39,16 @@ PL_INPUT_FIELDS = (
     "extraordinary_income", "fixed_asset_disposal_loss", "extraordinary_loss",
     "corporate_taxes",
 )
-ALL_FIELDS = (*ASSET_FIELDS, *LIABILITY_FIELDS, *EQUITY_FIELDS, *PL_INPUT_FIELDS)
+# Values entered in the early summarized screen remain stored for recovery, but
+# are intentionally excluded from totals because they are not on the statement.
+HIDDEN_LEGACY_FIELDS = (
+    "other_current_assets", "other_fixed_assets",
+    "other_current_liabilities", "other_equity",
+)
+ALL_FIELDS = (
+    *ASSET_FIELDS, *LIABILITY_FIELDS, *EQUITY_FIELDS, *PL_INPUT_FIELDS,
+    *HIDDEN_LEGACY_FIELDS,
+)
 
 
 class AnnualReportManager:

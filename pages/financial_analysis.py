@@ -19,7 +19,6 @@ BS_SECTIONS = (
         ("telephone_rights", "電話加入権"), ("investments", "出資金"),
         ("security_deposit", "保証金"), ("lease_deposit", "敷金"),
         ("membership_deposit", "加盟金"),
-        ("other_fixed_assets", "その他固定資産"),
     )),
     ("流動負債", (
         ("payables", "買掛金"), ("short_term_loans", "短期借入金"),
@@ -97,6 +96,16 @@ def _render_analysis(period=None):
     previous_result = annual_reports.calculate(report["previous"])
     has_values = any(report["current"].values())
     inputs = {}
+    subtotal_labels = {}
+
+    def input_number(value):
+        try:
+            normalized = str(value or 0).strip().replace(",", "")
+            if normalized.startswith("△"):
+                normalized = "-" + normalized[1:]
+            return int(float(normalized))
+        except (TypeError, ValueError):
+            return 0
 
     def amount_input(value):
         with ui.element("div").classes("amount-entry"):
@@ -164,9 +173,29 @@ def _render_analysis(period=None):
                         with ui.element("div").classes("statement-grid items-center"):
                             ui.label(label).classes("text-[10px] text-grey-8")
                             inputs[key] = amount_input(report["current"][key])
+                    with ui.element("div").classes("statement-grid subtotal-row items-center"):
+                        ui.label(section_title + " 小計").classes("text-[10px] font-black")
+                        subtotal_labels[section_title] = ui.label("¥0").classes(
+                            "text-sm font-black text-primary text-right"
+                        )
 
         statement_section("貸借対照表", BS_SECTIONS)
         statement_section("損益計算書", PL_SECTIONS)
+
+        section_fields = {
+            title: tuple(key for key, _ in fields)
+            for title, fields in (*BS_SECTIONS, *PL_SECTIONS)
+        }
+
+        def refresh_subtotals():
+            for title, keys in section_fields.items():
+                subtotal_labels[title].text = _money(
+                    sum(input_number(inputs[key].value) for key in keys)
+                )
+
+        for field in inputs.values():
+            field.on_value_change(lambda _: refresh_subtotals())
+        refresh_subtotals()
 
         def save_report():
             try:
@@ -186,6 +215,47 @@ def _render_analysis(period=None):
         )
 
         if has_values:
+            with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
+                ui.label("バランスシート").classes("text-xl font-black")
+                ui.label("左の資産と、右の負債・純資産が同額なら入力完了です").classes(
+                    "text-[9px] text-grey-6 q-mb-md"
+                )
+                with ui.element("div").classes("balance-sheet"):
+                    with ui.element("div").classes("balance-side asset-side"):
+                        ui.label("資産").classes("balance-heading")
+                        for label, value in (
+                            ("流動資産", current_result["current_assets"]),
+                            ("固定資産", current_result["fixed_assets"]),
+                        ):
+                            with ui.row().classes("w-full justify-between no-wrap"):
+                                ui.label(label)
+                                ui.label(_money(value)).classes("font-bold")
+                        ui.separator().classes("q-my-sm")
+                        with ui.row().classes("w-full justify-between no-wrap"):
+                            ui.label("資産合計").classes("font-black")
+                            ui.label(_money(current_result["assets"])).classes("font-black")
+                    with ui.element("div").classes("balance-side funding-side"):
+                        ui.label("負債・純資産").classes("balance-heading")
+                        for label, value in (
+                            ("流動負債", current_result["current_liabilities"]),
+                            ("固定負債", current_result["fixed_liabilities"]),
+                            ("純資産", current_result["equity"]),
+                        ):
+                            with ui.row().classes("w-full justify-between no-wrap"):
+                                ui.label(label)
+                                ui.label(_money(value)).classes("font-bold")
+                        ui.separator().classes("q-my-sm")
+                        with ui.row().classes("w-full justify-between no-wrap"):
+                            ui.label("合計").classes("font-black")
+                            ui.label(_money(current_result["liabilities"] + current_result["equity"])).classes("font-black")
+                if current_result["balance_gap"]:
+                    larger = "資産側" if current_result["balance_gap"] > 0 else "負債・純資産側"
+                    ui.label(
+                        f"{larger}が {_money(abs(current_result['balance_gap']))} 多い状態です"
+                    ).classes("balance-warning")
+                else:
+                    ui.label("左右が一致しています").classes("balance-ok")
+
             with ui.row().classes("w-full items-center justify-between q-mb-sm"):
                 ui.label("会社の健康診断").classes("text-xl font-black")
                 ui.button(
@@ -300,6 +370,7 @@ def _render_analysis(period=None):
         .statement-head{color:#6D7972;font-size:9px;font-weight:800;margin-bottom:5px}
         .statement-grid .q-field__control{min-height:38px;height:38px}.statement-grid .q-field__native{font-size:11px;padding:0}
         .amount-entry{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:3px;align-items:center;min-width:0}.amount-field{min-width:0;width:100%}.negative-toggle{min-width:34px!important;width:34px;height:38px;min-height:38px!important;padding:0!important;border-radius:9px!important;background:#FFF0EE!important;color:#B54E48!important;font-size:15px;font-weight:900}
+        .subtotal-row{margin:6px 0 12px;padding:9px 10px;border-radius:10px;background:#EDF5F0;border:1px solid #DCE9E1}.balance-sheet{display:grid;grid-template-columns:1fr 1fr;border:2px solid #DDE4DF;border-radius:14px;overflow:hidden}.balance-side{padding:14px;font-size:10px;min-width:0}.balance-side+ .balance-side{border-left:2px solid #DDE4DF}.asset-side{background:#EFF7F2}.funding-side{background:#FFF7EA}.balance-heading{font-size:13px;font-weight:900;margin-bottom:12px}.balance-warning{margin-top:10px;padding:10px;border-radius:10px;background:#FDECEA;color:#A13C36;font-size:11px;font-weight:900;text-align:center}.balance-ok{margin-top:10px;padding:10px;border-radius:10px;background:#EAF5EE;color:#286647;font-size:11px;font-weight:900;text-align:center}
         .diagnostic-metric{border-radius:16px;padding:14px;background:#F4F7F5;min-width:0}
         @media(max-width:520px){.statement-grid{grid-template-columns:minmax(105px,1fr) minmax(120px,1.15fr);gap:6px}}
         """)

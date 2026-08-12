@@ -66,6 +66,16 @@ class AnnualReportManagerTest(unittest.TestCase):
         saved = self.reports.save_report("2026-09", {"temporary_payment": "△59,960"})
         self.assertEqual(saved["current"]["temporary_payment"], -59960)
 
+    def test_hidden_legacy_summary_amounts_do_not_duplicate_totals(self):
+        result = self.reports.calculate({
+            "cash_on_hand": 1000,
+            "other_current_assets": 11500000,
+            "capital": 1000,
+        })
+        self.assertEqual(result["assets"], 1000)
+        self.assertEqual(result["equity"], 1000)
+        self.assertEqual(result["balance_gap"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
