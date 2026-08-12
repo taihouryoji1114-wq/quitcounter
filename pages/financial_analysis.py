@@ -12,7 +12,6 @@ BS_SECTIONS = (
         ("ordinary_deposit", "普通預金"), ("receivables", "売掛金"),
         ("merchandise", "商品・棚卸資産"), ("temporary_payment", "仮払金"),
         ("prepaid", "前払費用"), ("substitute_payment", "立替金"),
-        ("other_current_assets", "その他流動資産"),
     )),
     ("固定資産", (
         ("building_equipment", "建物附属設備"), ("vehicles", "車両運搬具"),
@@ -26,7 +25,6 @@ BS_SECTIONS = (
         ("payables", "買掛金"), ("short_term_loans", "短期借入金"),
         ("unpaid_accounts", "未払金"), ("accrued_expenses", "未払費用"),
         ("deposits_received", "預り金"), ("unpaid_consumption_tax", "未払消費税"),
-        ("other_current_liabilities", "その他流動負債"),
     )),
     ("固定負債", (
         ("long_term_loans", "長期借入金"),
@@ -35,7 +33,6 @@ BS_SECTIONS = (
     ("純資産", (
         ("capital", "資本金"), ("profit_reserve", "利益準備金"),
         ("special_reserve", "別途積立金"), ("retained_earnings", "繰越利益剰余金"),
-        ("other_equity", "その他純資産"),
     )),
 )
 
@@ -229,7 +226,28 @@ def _render_analysis(period=None):
 
             alerts = []
             if current_result["balance_gap"]:
-                alerts.append(("入力確認", f"資産と負債・純資産に {_money(abs(current_result['balance_gap']))} の差があります。決算書の入力漏れを確認してください。", "warning"))
+                larger = "資産側が多い" if current_result["balance_gap"] > 0 else "負債・純資産側が多い"
+                alerts.append((
+                    "入力確認：貸借が一致していません",
+                    f"資産 {_money(current_result['assets'])} に対し、負債＋純資産は {_money(current_result['liabilities'] + current_result['equity'])}。差額 {_money(abs(current_result['balance_gap']))}（{larger}）です。下の内訳と決算書の各合計を照合してください。",
+                    "warning",
+                ))
+                with ui.card().classes("w-full q-pa-md q-mb-sm").style(
+                    "border-radius:18px;background:#FFF9EB;box-shadow:none"
+                ):
+                    ui.label("貸借チェックの内訳").classes("text-sm font-black").style("color:#805817")
+                    for label, value in (
+                        ("流動資産", current_result["current_assets"]),
+                        ("固定資産", current_result["fixed_assets"]),
+                        ("資産合計", current_result["assets"]),
+                        ("流動負債", current_result["current_liabilities"]),
+                        ("固定負債", current_result["fixed_liabilities"]),
+                        ("純資産", current_result["equity"]),
+                        ("負債・純資産合計", current_result["liabilities"] + current_result["equity"]),
+                    ):
+                        with ui.row().classes("w-full items-center justify-between q-py-xs"):
+                            ui.label(label).classes("text-[10px] text-grey-7")
+                            ui.label(_money(value)).classes("text-xs font-bold")
             if current_result["equity"] < 0:
                 alerts.append(("最優先：債務超過", f"純資産が {_money(current_result['equity'])} です。利益改善と返済計画を合わせた解消計画が必要です。", "negative"))
             if current_result["current_ratio"] is not None and current_result["current_ratio"] < 1:

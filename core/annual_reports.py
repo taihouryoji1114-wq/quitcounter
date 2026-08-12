@@ -121,10 +121,13 @@ class AnnualReportManager:
     def save_report(self, period, current, previous=None):
         period = self._period(period)
         reports = self._data_manager.data.setdefault("business_annual_reports", {})
+        existing_current = reports.get(period, {}).get("current", {})
+        merged_current = dict(existing_current) if isinstance(existing_current, dict) else {}
+        merged_current.update(current or {})
         if previous is None:
             previous = reports.get(period, {}).get("previous", {})
         cleaned = {
-            "current": {key: self._amount((current or {}).get(key, 0)) for key in ALL_FIELDS},
+            "current": {key: self._amount(merged_current.get(key, 0)) for key in ALL_FIELDS},
             "previous": {key: self._amount((previous or {}).get(key, 0)) for key in ALL_FIELDS},
         }
         reports[period] = cleaned
