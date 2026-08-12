@@ -110,7 +110,7 @@ def _render_analysis(period=None):
     def amount_input(value):
         with ui.element("div").classes("amount-entry"):
             field = ui.input(
-                value=str(value) if value else None,
+                value=f"{value:,}" if value else None,
             ).props("outlined dense prefix=¥ inputmode=decimal").classes("amount-field")
 
             def toggle_negative():
@@ -125,6 +125,18 @@ def _render_analysis(period=None):
             ui.button("△", on_click=toggle_negative).props(
                 "flat dense aria-label='プラス・マイナスを切り替え'"
             ).classes("negative-toggle").tooltip("プラス・マイナスを切り替え")
+            field.on("focus", js_handler="""(event) => {
+                event.target.value = event.target.value.replace(/,/g, '');
+            }""")
+            field.on("blur", js_handler="""(event) => {
+                const raw = event.target.value.trim();
+                if (!raw || raw === '△' || raw === '-') return;
+                const negative = raw.startsWith('△') || raw.startsWith('-');
+                const number = Number(raw.replace(/[△,\-]/g, ''));
+                if (!Number.isFinite(number)) return;
+                event.target.value = (negative ? '△' : '') + Math.round(number).toLocaleString('ja-JP');
+                event.target.dispatchEvent(new Event('input', {bubbles: true}));
+            }""")
         return field
 
     with content:
@@ -161,7 +173,7 @@ def _render_analysis(period=None):
             ).style("color:#A66A17")
 
         def statement_section(statement_title, sections):
-            with ui.expansion(statement_title, icon="description", value=True).classes(
+            with ui.expansion(statement_title, icon="description", value=False).classes(
                 "surface-card w-full q-mb-md"
             ):
                 with ui.element("div").classes("statement-grid statement-head"):
@@ -404,6 +416,18 @@ def financial_analysis_report_page(period: str):
     liquidity_low = current["current_ratio"] is not None and current["current_ratio"] < 1
     operating_negative = current["operating_profit"] < 0
     urgent_count = sum((equity_negative, liquidity_low, operating_negative))
+    sales = report["current"]["sales"]
+    previous_sales = report["previous"]["sales"]
+    personnel = sum(report["current"][key] for key in (
+        "executive_compensation", "salaries", "retirement_allowance",
+        "statutory_welfare", "welfare", "temporary_wages", "recruitment_fees",
+    ))
+    total_debt = report["current"]["short_term_loans"] + report["current"]["long_term_loans"]
+    working_capital = current["current_assets"] - current["current_liabilities"]
+    cogs_rate = current["cogs"] / sales if sales else None
+    personnel_rate = personnel / current["gross_profit"] if current["gross_profit"] else None
+    sales_change = (sales / previous_sales - 1) if previous_sales else None
+    debt_payback_years = total_debt / current["ordinary_profit"] if current["ordinary_profit"] > 0 else None
     with content:
         with ui.card().classes("report-hero w-full q-pa-lg q-mb-md text-white"):
             ui.label("総合診断").classes("text-xs opacity-70")
@@ -416,50 +440,56 @@ def financial_analysis_report_page(period: str):
                 else "主要指標は安定しています。成長と利益改善を確認しましょう。"
             ).classes("text-sm opacity-80 q-mt-sm")
 
+        ui.label("経営サマリー").classes("report-section-title")
         with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mb-md"):
             for title, value, note, danger in (
-                ("売上高", report["current"]["sales"], "前期比 " + (_ratio(report["current"]["sales"] / report["previous"]["sales"]) if report["previous"]["sales"] else "—"), False),
-                ("営業利益", current["operating_profit"], "営業利益率 " + _ratio(current["operating_margin"]), operating_negative),
-                ("当期純利益", current["net_income"], "前期 " + _money(previous["net_income"]), current["net_income"] < 0),
-                ("純資産", current["equity"], "自己資本比率 " + _ratio(current["equity_ratio"]), equity_negative),
+                ("売上高", _money(sales), "前年差 " + (("+" if sales - previous_sales > 0 else "") + _money(sales - previous_sales)) if previous_sales else "前期データなし", False),
+                ("営業利益", _money(current["operating_profit"]), "利益率 " + _ratio(current["operating_margin"]), operating_negative),
+                ("運転資金", _money(working_capital), "流動資産 − 流動負債", working_capital < 0),
+                ("純資産", _money(current["equity"]), "自己資本比率 " + _ratio(current["equity_ratio"]), equity_negative),
             ):
-                with ui.element("div").classes("report-kpi").style(
-                    "background:#FDECEA" if danger else "background:#F3F7F4"
-                ):
-                    ui.label(title).classes("text-[10px] text-grey-7")
-                    ui.label(_money(value)).classes(
-                        "text-xl font-black text-negative" if danger else "text-xl font-black"
-                    )
-                    ui.label(note).classes("text-[8px] text-grey-6")
+                with ui.element("div").classes("report-kpi danger" if danger else "report-kpi"):
+                    ui.label(title).classes("text-[10px] opacity-70")
+                    ui.label(value).classes("text-xl font-black q-mt-xs")
+                    ui.label(note).classes("text-[8px] opacity-70 q-mt-xs")
 
-        with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
-            ui.label("財務の全体像").classes("text-lg font-black")
-            scale = max(current["assets"], current["liabilities"], abs(current["equity"]), 1)
-            for title, value, color in (
-                ("資産", current["assets"], "#3F7C62"),
-                ("負債", current["liabilities"], "#D18A3B"),
-                ("純資産", current["equity"], "#C85450" if equity_negative else "#557CC0"),
+        ui.label("利益を動かした要因").classes("report-section-title")
+        with ui.card().classes("insight-card w-full q-pa-lg q-mb-md"):
+            for title, value, explanation, tone in (
+                ("原価率", _ratio(cogs_rate), f"売上 {_money(sales)} に対して売上原価 {_money(current['cogs'])}", "amber"),
+                ("労働分配率", _ratio(personnel_rate), f"粗利 {_money(current['gross_profit'])} に対して人件費 {_money(personnel)}", "blue"),
+                ("営業利益率", _ratio(current["operating_margin"]), f"本業で残った利益 {_money(current['operating_profit'])}", "green" if not operating_negative else "red"),
             ):
-                ui.label(f"{title}　{_money(value)}").classes("text-xs font-bold q-mt-md")
-                with ui.element("div").classes("report-bar-track"):
-                    ui.element("div").classes("report-bar").style(
-                        f"width:{max(abs(value) / scale * 100, 1):.2f}%;background:{color}"
-                    )
-            if current["balance_gap"]:
-                ui.label(
-                    f"貸借に {_money(abs(current['balance_gap']))} の差があります。入力内容を確認してください。"
-                ).classes("text-xs text-negative font-bold q-mt-md")
+                with ui.element("div").classes(f"driver-row {tone}"):
+                    with ui.column().classes("gap-0"):
+                        ui.label(title).classes("text-xs font-black")
+                        ui.label(explanation).classes("text-[8px] opacity-70")
+                    ui.label(value).classes("text-xl font-black")
 
-        ui.label("最優先で確認").classes("text-xl font-black q-mb-sm")
+        ui.label("財務の安全性").classes("report-section-title")
+        with ui.card().classes("insight-card w-full q-pa-lg q-mb-md"):
+            for title, value, meaning in (
+                ("短期支払余力", _ratio(current["current_ratio"]), f"運転資金 {_money(working_capital)}"),
+                ("手元資金", f"{current['cash_months']:.1f}か月" if current["cash_months"] is not None else "—", "現預金が月商の何か月分あるか"),
+                ("借入負担", f"{current['debt_to_sales'] * 12:.1f}か月" if current["debt_to_sales"] is not None else "—", f"借入残高 {_money(total_debt)}"),
+                ("債務償還年数", f"{debt_payback_years:.1f}年" if debt_payback_years is not None else "算定不可", "現在の経常利益で借入を返す目安"),
+            ):
+                with ui.row().classes("w-full items-center justify-between q-py-sm no-wrap").style("border-bottom:1px solid #E8ECE9"):
+                    with ui.column().classes("gap-0"):
+                        ui.label(title).classes("text-xs font-bold")
+                        ui.label(meaning).classes("text-[8px] text-grey-6")
+                    ui.label(value).classes("text-base font-black")
+
+        ui.label("来期に優先する行動").classes("report-section-title")
         priorities = []
         if equity_negative:
-            priorities.append(("債務超過", f"純資産 {_money(current['equity'])}。利益を積み上げる中期解消計画が必要です。"))
+            priorities.append(("債務超過の解消計画", f"純資産は {_money(current['equity'])}。来期の黒字目標と借入返済を分け、何年でプラスへ戻すか計画します。"))
         if liquidity_low:
-            priorities.append(("短期の支払余力", f"流動比率 {_ratio(current['current_ratio'])}。支払時期と現預金予定を月別に確認してください。"))
+            priorities.append(("12か月資金繰り表を作る", f"流動比率 {_ratio(current['current_ratio'])}、運転資金 {_money(working_capital)}。税金・買掛金・借入返済の支払月を先に並べます。"))
         if current["cash_months"] is not None and current["cash_months"] < 1:
-            priorities.append(("手元資金", f"現預金は月商の約 {current['cash_months']:.1f}か月分です。資金繰り管理を優先してください。"))
+            priorities.append(("現預金の最低ラインを決める", f"現預金は月商の約 {current['cash_months']:.1f}か月分。最低確保額を決め、それを下回る投資・返済を抑えます。"))
         if operating_negative:
-            priorities.append(("本業の収益", f"営業損失 {_money(abs(current['operating_profit']))}。原価・人件費・固定費を分けて改善します。"))
+            priorities.append(("本業を黒字化する", f"営業損失 {_money(abs(current['operating_profit']))}。まず原価率 {_ratio(cogs_rate)} と労働分配率 {_ratio(personnel_rate)} のどちらを優先するか決めます。"))
         if not priorities:
             priorities.append(("成長と利益改善", "重大警告はありません。前年差と来期計画から次の成長投資を判断できます。"))
         for index, (title, message) in enumerate(priorities, 1):
@@ -470,11 +500,12 @@ def financial_analysis_report_page(period: str):
                         ui.label(title).classes("text-sm font-black")
                         ui.label(message).classes("text-[10px] text-grey-7 leading-relaxed q-mt-xs")
 
-        ui.label("前期との比較").classes("text-xl font-black q-mt-md q-mb-sm")
+        ui.label("前期から何が変わったか").classes("report-section-title")
         with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
             for title, now, before in (
                 ("売上高", report["current"]["sales"], report["previous"]["sales"]),
                 ("営業利益", current["operating_profit"], previous["operating_profit"]),
+                ("当期純利益", current["net_income"], previous["net_income"]),
                 ("現金・預金", report["current"]["cash_on_hand"] + report["current"]["checking_deposit"] + report["current"]["ordinary_deposit"], report["previous"]["cash_on_hand"] + report["previous"]["checking_deposit"] + report["previous"]["ordinary_deposit"]),
                 ("純資産", current["equity"], previous["equity"]),
             ):
@@ -490,8 +521,8 @@ def financial_analysis_report_page(period: str):
             "text-[9px] text-grey-6 q-mt-lg"
         )
         ui.add_css("""
-        .report-hero{border-radius:26px;border:0;background:linear-gradient(145deg,#173F32,#315F4C 65%,#9B7040);box-shadow:0 18px 38px rgba(24,62,49,.2)}
-        .report-kpi{border-radius:17px;padding:15px;background:#F3F7F4;min-width:0}
-        .report-bar-track{width:100%;height:22px;border-radius:7px;background:#EDF0EE;overflow:hidden;margin-top:5px}.report-bar{height:100%;border-radius:7px}
+        .report-hero{border-radius:28px;border:0;background:radial-gradient(circle at 90% 10%,rgba(214,170,92,.38),transparent 34%),linear-gradient(145deg,#102F27,#1D5945 70%,#76532E);box-shadow:0 20px 44px rgba(17,55,42,.25)}
+        .report-section-title{font-size:19px;font-weight:900;margin:16px 0 9px}.report-kpi{border-radius:18px;padding:16px;background:linear-gradient(145deg,#F1F7F3,#E8F1EC);min-width:0;color:#1B382C;border:1px solid #E0EAE4}.report-kpi.danger{background:linear-gradient(145deg,#FFF2EF,#FBE4E1);color:#873934;border-color:#F2D1CD}
+        .insight-card{border-radius:22px!important;background:#fff!important;border:1px solid #E5EAE7!important;box-shadow:0 9px 25px rgba(35,57,45,.06)!important}.driver-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 12px;margin-bottom:7px;border-radius:13px}.driver-row.amber{background:#FFF5E5;color:#805317}.driver-row.blue{background:#EAF3FF;color:#285786}.driver-row.green{background:#EAF5EE;color:#286447}.driver-row.red{background:#FDECEA;color:#943D38}
         .priority-number{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#FFF0E4;color:#9A5C24;font-weight:900;flex:none}
         """)
