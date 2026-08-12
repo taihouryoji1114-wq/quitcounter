@@ -39,7 +39,7 @@ class PurchaseManager:
         if not supplier:
             raise ValueError("仕入れ先を入力してください。")
         total = self._validate_total(total)
-        if kind not in {"cost", "expense"}:
+        if kind not in {"cost", "operating_supply", "expense"}:
             raise ValueError("支出の区分を選択してください。")
         if invoice_status not in {"registered", "unregistered", "unknown"}:
             raise ValueError("インボイスの区分を選択してください。")
@@ -159,7 +159,7 @@ class PurchaseManager:
         if not supplier:
             raise ValueError("仕入れ先を入力してください。")
         total = self._validate_total(total)
-        if kind not in {"cost", "expense"}:
+        if kind not in {"cost", "operating_supply", "expense"}:
             raise ValueError("支出の区分を選択してください。")
         if invoice_status not in {"registered", "unregistered", "unknown"}:
             raise ValueError("インボイスの区分を選択してください。")

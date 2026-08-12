@@ -218,10 +218,15 @@ def purchase_page():
                 label="インボイス",
             ).props("outlined").classes("w-full q-mb-sm")
             purchase_kind = ui.toggle(
-                {"cost": "原価", "expense": "その他経費"}, value="cost"
+                {
+                    "cost": "原価（食材）",
+                    "operating_supply": "営業用消耗品",
+                    "expense": "一般経費",
+                },
+                value="cost",
             ).props("spread no-caps").classes("w-full q-mb-xs")
             ui.label(
-                "商品・材料は原価、飲み会代などはその他経費"
+                "ガスボンベ・袋・容器などは営業用消耗品、接待交際費・会議費・交通費などは一般経費"
             ).classes("text-[10px] text-grey-6 q-mb-sm")
 
             def save_purchase():
@@ -275,7 +280,7 @@ def purchase_page():
                 ui.label(f"¥{purchases.daily_total(day):,}").classes(
                     "text-2xl font-bold metric-value q-mt-xs"
                 )
-            with ui.element("div").classes("grid grid-cols-2 gap-3 w-full q-mb-md"):
+            with ui.element("div").classes("grid grid-cols-3 gap-2 w-full q-mb-md"):
                 with ui.card().classes("surface-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・原価").classes(
                         "text-xs text-grey-6"
@@ -286,14 +291,21 @@ def purchase_page():
                         "text-xl font-bold metric-value q-mt-xs"
                     )
                 with ui.card().classes("surface-card q-pa-md"):
-                    ui.label(f"{month.replace('-', '年')}月累計・その他経費").classes(
+                    ui.label(f"{month.replace('-', '年')}月累計・営業用消耗品").classes(
+                        "text-xs text-grey-6"
+                    )
+                    ui.label(
+                        f"¥{purchases.monthly_total(month, kind='operating_supply'):,}"
+                    ).classes(
+                        "text-xl font-bold metric-value q-mt-xs"
+                    )
+                with ui.card().classes("surface-card q-pa-md"):
+                    ui.label(f"{month.replace('-', '年')}月累計・一般経費").classes(
                         "text-xs text-grey-6"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='expense'):,}"
-                    ).classes(
-                        "text-xl font-bold metric-value q-mt-xs"
-                    )
+                    ).classes("text-xl font-bold metric-value q-mt-xs")
 
         totals()
         def refresh_selected_day(value=None):
@@ -317,15 +329,18 @@ def purchase_page():
                     with ui.row().classes("w-full items-center no-wrap"):
                         with ui.column().classes("gap-0"):
                             ui.label(record["supplier"]).classes("font-bold")
-                            ui.badge(
-                                "原価"
-                                if record.get("kind", "cost") == "cost"
-                                else "その他経費"
-                            ).props(
-                                "color=primary"
-                                if record.get("kind", "cost") == "cost"
-                                else "color=orange"
-                            )
+                            kind = record.get("kind", "cost")
+                            kind_label = {
+                                "cost": "原価（食材）",
+                                "operating_supply": "営業用消耗品",
+                                "expense": "一般経費",
+                            }.get(kind, "一般経費")
+                            kind_color = {
+                                "cost": "primary",
+                                "operating_supply": "blue",
+                                "expense": "orange",
+                            }.get(kind, "orange")
+                            ui.badge(kind_label).props(f"color={kind_color}")
                             breakdown = record.get("tax_breakdown")
                             if breakdown:
                                 mode = "税込" if breakdown["price_mode"] == "included" else "税抜"
@@ -453,7 +468,11 @@ def purchase_page():
                                     label="インボイス",
                                 ).props("outlined").classes("w-full")
                                 edit_kind = ui.toggle(
-                                    {"cost": "原価", "expense": "その他経費"},
+                                    {
+                                        "cost": "原価（食材）",
+                                        "operating_supply": "営業用消耗品",
+                                        "expense": "一般経費",
+                                    },
                                     value=selected.get("kind", "cost"),
                                 ).props("spread no-caps").classes("w-full")
 

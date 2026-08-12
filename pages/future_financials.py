@@ -48,6 +48,7 @@ def _render_future_financials_home(selected_month=None):
         else f"/mirai-kessan/month/{current_month}"
     )
     purchase_total = purchases.monthly_total(current_month, kind="cost")
+    operating_supply_total = purchases.monthly_total(current_month, kind="operating_supply")
     other_expense_total = purchases.monthly_total(current_month, kind="expense")
     sales_total = financials.monthly_sales_total(current_month)
     payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
@@ -63,7 +64,7 @@ def _render_future_financials_home(selected_month=None):
     gross_profit = sales_total - purchase_total
     operating_costs = (
         operations["personnel"] + operations["rent"] + operations["utilities"]
-        + operations["other_admin"] + other_expense_total + payment_fees
+        + operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees
         + advertising_total
     )
     operating_profit = gross_profit - operating_costs
@@ -210,7 +211,8 @@ def _render_future_financials_home(selected_month=None):
                     ("家賃", operations["rent"], "#F1EDFF"),
                     ("水道光熱費", operations["utilities"], "#E9F8F5"),
                     ("広告費", advertising_total, "#FFF0F2"),
-                    ("その他経費・管理費", other_expense_total + operations["other_admin"], "#F4F4F2"),
+                    ("営業用消耗品", operating_supply_total, "#EAF5FF"),
+                    ("一般経費・管理費", other_expense_total + operations["other_admin"], "#F4F4F2"),
                     ("決済手数料", payment_fees, "#EDF5FF"),
                     ("消費税納付見込", consumption_tax_estimate, "#FFF4E5"),
                     ("借入元金返済", operations["loan_payment"], "#FCEEEE"),
@@ -257,9 +259,9 @@ def _render_future_financials_home(selected_month=None):
                     ("広告費", advertising_total, "#D8943C", advertising_total / gross_for_ratio),
                     (
                         "その他管理費",
-                        operations["other_admin"] + other_expense_total + payment_fees,
+                        operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees,
                         "#99A29D",
-                        (operations["other_admin"] + other_expense_total + payment_fees) / gross_for_ratio,
+                        (operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees) / gross_for_ratio,
                     ),
                     (
                         "営業利益" if operating_profit >= 0 else "営業損失",
@@ -308,7 +310,7 @@ def _render_future_financials_home(selected_month=None):
                     ("家賃（売上比）", operations["rent"], "#8172B5", operations["rent"] / sales_total),
                     ("水道光熱費（売上比）", operations["utilities"], "#4CB7B4", operations["utilities"] / sales_total),
                     ("広告費（売上比）", advertising_total, "#D8943C", advertising_total / sales_total),
-                    ("その他管理費（売上比）", operations["other_admin"] + other_expense_total + payment_fees, "#99A29D", (operations["other_admin"] + other_expense_total + payment_fees) / sales_total),
+                    ("その他費用（売上比）", operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees, "#99A29D", (operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees) / sales_total),
                     (("営業利益" if operating_profit >= 0 else "営業損失") + "（売上比）", operating_profit, "#4B77B7" if operating_profit >= 0 else "#C85C57", operating_profit / sales_total),
                 )
                 ui.label("現在の実際の比率").classes("text-[10px] text-primary font-bold q-mb-xs")
@@ -430,7 +432,7 @@ def future_financials():
     actuals = {
         "sales": financials.monthly_sales_total(current_month),
         "cogs": purchases.monthly_total(current_month, kind="cost"),
-        "other": purchases.monthly_total(current_month, kind="expense"),
+        "other": purchases.monthly_total(current_month, kind="expense") + purchases.monthly_total(current_month, kind="operating_supply"),
         "payment_fees": payment_summary["total_fees"],
         "advertising": advertising_summary["total"],
         "input_tax": purchase_tax["input_tax"] + advertising_summary["input_tax"],
@@ -595,7 +597,7 @@ def future_financials():
         root.dataset.view='provisional';
         simulationData={};[...ids,...modes].forEach(id=>simulationData[id]=$(id).value);
         const actual=window.miraiActuals||{};$('sales').value=actual.sales||0;$('cogs').value=actual.cogs||0;$('cogs-mode').value='amount';$('personnel').value=0;$('personnel-mode').value='amount';$('rent').value=0;$('utilities').value=0;$('advertising').value=actual.advertising||0;$('other-expenses').value=(actual.other||0)+(actual.payment_fees||0);$('non-op-income').value=0;$('non-op-expense').value=0;
-        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent=`暫定実績：売上・仕入れ・広告費・その他経費・決済手数料見込（${yen(actual.payment_fees||0)}）を反映しています。人件費など未入力の項目は0円のため、確定利益ではありません。`;$('legend-title').textContent='現在の実際の比率（入力済み実績から自動計算）';
+        fields.forEach(field=>field.disabled=true);$('save-plan').disabled=true;$('view-note').className='view-note provisional';$('view-note').textContent=`暫定実績：売上・仕入れ・営業用消耗品・一般経費・広告費・決済手数料見込（${yen(actual.payment_fees||0)}）を反映しています。人件費など未入力の項目は0円のため、確定利益ではありません。`;$('legend-title').textContent='現在の実際の比率（入力済み実績から自動計算）';
       }else{
         root.dataset.view='simulation';
         if(simulationData){[...ids,...modes].forEach(id=>{if(simulationData[id]!==undefined)$(id).value=simulationData[id]})}

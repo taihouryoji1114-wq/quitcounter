@@ -24,6 +24,7 @@ class PurchaseManagerTest(unittest.TestCase):
 
     def test_cost_and_other_expenses_are_separated(self):
         self.purchases.add("2026-08-10", "市場A", 12000, "cost")
+        self.purchases.add("2026-08-10", "資材店", 3000, "operating_supply")
         self.purchases.add("2026-08-10", "飲食店", 8000, "expense")
         self.assertEqual(
             self.purchases.monthly_total("2026-08", kind="cost"), 12000
@@ -31,7 +32,10 @@ class PurchaseManagerTest(unittest.TestCase):
         self.assertEqual(
             self.purchases.monthly_total("2026-08", kind="expense"), 8000
         )
-        self.assertEqual(len(self.purchases.records(record_date="2026-08-10")), 2)
+        self.assertEqual(
+            self.purchases.monthly_total("2026-08", kind="operating_supply"), 3000
+        )
+        self.assertEqual(len(self.purchases.records(record_date="2026-08-10")), 3)
 
     def test_tax_excluded_mixed_rates_are_calculated_per_rate(self):
         breakdown = self.purchases.calculate_tax_breakdown(
