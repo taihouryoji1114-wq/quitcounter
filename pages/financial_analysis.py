@@ -101,6 +101,26 @@ def _render_analysis(period=None):
     has_values = any(report["current"].values())
     inputs = {}
 
+    def amount_input(value):
+        with ui.element("div").classes("amount-entry"):
+            field = ui.input(
+                value=str(value) if value else None,
+            ).props("outlined dense prefix=¥ inputmode=decimal").classes("amount-field")
+
+            def toggle_negative():
+                text = str(field.value or "").strip()
+                if not text:
+                    field.value = "△"
+                elif text.startswith(("-", "△")):
+                    field.value = text[1:]
+                else:
+                    field.value = "△" + text
+
+            ui.button("△", on_click=toggle_negative).props(
+                "flat dense aria-label='プラス・マイナスを切り替え'"
+            ).classes("negative-toggle").tooltip("プラス・マイナスを切り替え")
+        return field
+
     with content:
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
             ui.label("決算期（9月末締め）").classes("text-xs font-bold")
@@ -146,9 +166,7 @@ def _render_analysis(period=None):
                     for key, label in fields:
                         with ui.element("div").classes("statement-grid items-center"):
                             ui.label(label).classes("text-[10px] text-grey-8")
-                            inputs[key] = ui.input(
-                                value=str(report["current"][key]) if report["current"][key] else None,
-                            ).props("outlined dense prefix=¥ inputmode=decimal")
+                            inputs[key] = amount_input(report["current"][key])
 
         statement_section("貸借対照表", BS_SECTIONS)
         statement_section("損益計算書", PL_SECTIONS)
@@ -263,6 +281,7 @@ def _render_analysis(period=None):
         .statement-grid{width:100%;display:grid;grid-template-columns:minmax(120px,1.15fr) minmax(120px,1fr);gap:8px}
         .statement-head{color:#6D7972;font-size:9px;font-weight:800;margin-bottom:5px}
         .statement-grid .q-field__control{min-height:38px;height:38px}.statement-grid .q-field__native{font-size:11px;padding:0}
+        .amount-entry{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:3px;align-items:center;min-width:0}.amount-field{min-width:0;width:100%}.negative-toggle{min-width:34px!important;width:34px;height:38px;min-height:38px!important;padding:0!important;border-radius:9px!important;background:#FFF0EE!important;color:#B54E48!important;font-size:15px;font-weight:900}
         .diagnostic-metric{border-radius:16px;padding:14px;background:#F4F7F5;min-width:0}
         @media(max-width:520px){.statement-grid{grid-template-columns:minmax(105px,1fr) minmax(120px,1.15fr);gap:6px}}
         """)
