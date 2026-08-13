@@ -17,7 +17,7 @@ def staffing_page():
         wages = staffing.wages()
         salaries = staffing.monthly_salaries()
         current_month = today_jst().strftime("%Y-%m")
-        current_summary = staffing.month_cost_summary(current_month)
+        current_summary = staffing.month_cost_summary(current_month, today_jst())
         with ui.card().classes("staff-total-card w-full q-pa-lg q-mb-sm text-white"):
             ui.label("現時点の会社総負担").classes("text-[10px] opacity-70")
             ui.label(f"¥{current_summary['company_cost']:,}").classes(
@@ -31,7 +31,7 @@ def staffing_page():
                     "text-base font-black")
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
-            ui.label("月10日休み・1出勤10時間を基準に、出勤日数で現時点額を配分します").classes(
+            ui.label("副社長は暦日按分、店長・社員は月10日休み・1出勤10時間を基準に配分します").classes(
                 "text-[9px] text-grey-6 q-mb-xs")
             salary_inputs = {
                 name: ui.number(f"{name}の額面給与", value=salaries[name] or None,
@@ -181,11 +181,11 @@ def staffing_page():
                         render_day(record_date)
                     ui.button("勤務時間を保存", icon="save", on_click=save_day).classes("w-full q-mt-md")
                     ui.label(f"この日の賃金・交通費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
-                    summary = staffing.month_cost_summary(record_date[:7])
+                    summary = staffing.month_cost_summary(record_date[:7], today_jst())
                     ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-[10px] text-grey-7 q-mt-xs")
                     ui.label(f"現時点の会社総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
                     ui.label(
-                        f"副社長 {summary['attendance']['副社長']}/{summary['planned_days']}日・店長 {summary['attendance']['店長']}/{summary['planned_days']}日・社員A {summary['attendance']['社員A']}/{summary['planned_days']}日（1日10時間基準）"
+                        f"副社長 暦日{summary['elapsed_days']}/{summary['days_in_month']}日・店長 {summary['attendance']['店長']}/{summary['planned_days']}日・社員A {summary['attendance']['社員A']}/{summary['planned_days']}日（1日10時間基準）"
                     ).classes("text-[9px] text-grey-6 q-mt-xs")
                     ui.label(f"月末着地予測　¥{summary['forecast_company_cost']:,}").classes(
                         "text-sm font-black q-mt-xs")

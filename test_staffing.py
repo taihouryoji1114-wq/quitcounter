@@ -82,7 +82,7 @@ class StaffingManagerTest(unittest.TestCase):
             "social": True, "standard_monthly": 100_000,
             "care": False, "employment": True,
         }})
-        summary = self.staffing.month_cost_summary("2026-08")
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 1))
         self.assertEqual(summary["gross_wages"], 6000)
         self.assertEqual(summary["transportation"], 500)
         self.assertGreater(summary["employer_insurance"], 14_000)
@@ -95,7 +95,7 @@ class StaffingManagerTest(unittest.TestCase):
         self.staffing.save_day("2026-08-01", {"店長": {
             "attended": True,
         }})
-        summary = self.staffing.month_cost_summary("2026-08")
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 31))
         self.assertEqual(summary["planned_days"], 21)
         self.assertEqual(summary["attendance"]["店長"], 1)
         self.assertEqual(summary["gross_wages"], round(350_000 / 21))
@@ -106,16 +106,23 @@ class StaffingManagerTest(unittest.TestCase):
         self.staffing.save_monthly_salaries({"店長": 310_000})
         for day in range(1, 23):
             self.staffing.save_day(f"2026-08-{day:02d}", {"店長": {"attended": True}})
-        summary = self.staffing.month_cost_summary("2026-08")
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 1))
         self.assertEqual(summary["gross_wages"], 310_000)
 
     def test_vice_president_is_regular_salaried_staff(self):
         self.staffing.save_monthly_salaries({"副社長": 420_000})
         self.staffing.save_day("2026-08-01", {"副社長": {"attended": True}})
-        summary = self.staffing.month_cost_summary("2026-08")
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 1))
         self.assertEqual(summary["attendance"]["副社長"], 1)
-        self.assertEqual(summary["gross_wages"], 20_000)
+        self.assertEqual(summary["gross_wages"], round(420_000 / 31))
         self.assertEqual(summary["forecast_gross_wages"], 420_000)
+
+    def test_vice_president_uses_calendar_day_progress_without_attendance(self):
+        self.staffing.save_monthly_salaries({"副社長": 310_000})
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 10))
+        self.assertEqual(summary["gross_wages"], 100_000)
+        self.assertEqual(summary["attendance"]["副社長"], 0)
+        self.assertEqual(summary["forecast_gross_wages"], 310_000)
 
 
 if __name__ == "__main__":
