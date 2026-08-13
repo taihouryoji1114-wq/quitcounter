@@ -151,10 +151,16 @@ class ConsultingManager:
             answer["actions"] = ["12か月の入金・仕入支払・税金・返済を月別に入力", "最初に現金が不足する月を確認", "不足予測の3か月前を金融機関への相談期限にする"]
         elif question == "loss":
             gap = max(0, -profit)
-            answer.update(conclusion=(f"まず年間 ¥{gap:,} の改善が必要です。" if gap else "最新決算では営業黒字です。"),
+            if gap:
+                target = f"まず損益分岐点（営業利益0円）まで年間 ¥{gap:,} 改善する"
+                actions = ["原価1%・人件費1%・客単価100円の効果を比較", "赤字額を埋める組み合わせを決める", "月次実績で改善ペースを確認"]
+            else:
+                margin = profit / sales if sales else 0
+                target = f"現在の年間営業利益 ¥{profit:,}（利益率 {margin*100:.1f}%）以上を維持する"
+                actions = ["現在の黒字を生んでいる売上と費用構造を確認", "原価・人件費・客単価の変化による利益減少を監視", "投資する場合も現在利益を下回らない条件を決める"]
+            answer.update(conclusion=(f"まず年間 ¥{gap:,} の改善が必要です。" if gap else f"赤字解消は不要です。年間営業利益は ¥{profit:,} です。"),
                           reason=f"決算書の年間売上 ¥{sales:,}、粗利 ¥{gross:,}、営業利益 ¥{profit:,}です。",
-                          target=f"年間営業利益を最低 ¥{max(1, round(sales*.03)):,} にする",
-                          actions=["原価1%・人件費1%・客単価100円の効果を比較", "金額効果が大きく実行しやすい施策を1つ選ぶ", "翌月に実績との差を確認"])
+                          target=target, actions=actions)
         elif question == "debt":
             ordinary = result["ordinary_profit"] if result else 0
             years = debt / ordinary if debt and ordinary > 0 else None

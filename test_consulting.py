@@ -57,6 +57,18 @@ class ConsultingManagerTest(unittest.TestCase):
         self.assertEqual(result["spend_effect"], 2_000_000)
         self.assertEqual(result["new_profit"], 1_800_000)
 
+    def test_profitable_company_keeps_current_profit_as_target(self):
+        snapshot = {
+            "sales": 150_790_767, "cost": 50_000_000, "gross": 100_790_767,
+            "personnel": 40_000_000, "profit": 7_683_578, "cash": 1,
+            "debt": 0, "result": {}, "values": {}, "period": "2026-09",
+        }
+        with patch.object(self.manager, "annual_snapshot", return_value=snapshot):
+            answer = self.manager.answer("2026-08", "loss")
+        self.assertIn("赤字解消は不要", answer["conclusion"])
+        self.assertIn("7,683,578", answer["target"])
+        self.assertNotIn("4,523,723", answer["target"])
+
 
 if __name__ == "__main__":
     unittest.main()
