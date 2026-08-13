@@ -82,6 +82,17 @@ class StaffingManager:
         self._data_manager.save()
         return cleaned
 
+    def commute_rates(self):
+        stored = self._data_manager.data.get("business_staff_commute_rates", {})
+        return {name: int(stored.get(name, 0) or 0) for name in self.STAFF}
+
+    def save_commute_rates(self, values):
+        cleaned = {name: self._amount(values.get(name, 0), "1出勤あたり交通費")
+                   for name in self.STAFF}
+        self._data_manager.data["business_staff_commute_rates"] = cleaned
+        self._data_manager.save()
+        return cleaned
+
     def dependent_settings(self):
         stored = self._data_manager.data.get("business_staff_dependent_settings", {})
         result = {}
@@ -123,8 +134,9 @@ class StaffingManager:
                 result[name] = {key: str(value.get(key, "") or "") for key in
                                 ("lunch_start", "lunch_end", "dinner_start", "dinner_end")}
                 result[name]["transportation"] = int(value.get("transportation", 0) or 0)
+                result[name]["attended"] = bool(value.get("attended", False))
             else:  # Preserve older duration-only entries.
-                result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0}
+                result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0, "attended": False}
         return result
 
     def save_day(self, record_date, values):
@@ -135,6 +147,7 @@ class StaffingManager:
             cleaned[name] = {key: self._time(value.get(key, "")) for key in
                              ("lunch_start", "lunch_end", "dinner_start", "dinner_end")}
             cleaned[name]["transportation"] = self._amount(value.get("transportation", 0), "交通費")
+            cleaned[name]["attended"] = bool(value.get("attended", False))
             for prefix in ("lunch", "dinner"):
                 start, end = cleaned[name][f"{prefix}_start"], cleaned[name][f"{prefix}_end"]
                 if bool(start) != bool(end):
@@ -146,19 +159,18 @@ class StaffingManager:
     def day_total(self, record_date):
         wages, shifts = self.wages(), self.day(record_date)
         return round(sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
-                     + sum(shifts[name]["transportation"] for name in self.STAFF))
+                     + self._day_transport(shifts))
 
     def month_total(self, month):
         datetime.strptime(month, "%Y-%m")
         wages = self.wages()
         records = self._data_manager.data.get("business_staff_hours", {})
-        return round(sum(self._shift_pay(wages[name], self.day(record_date)[name]) + self.day(record_date)[name]["transportation"]
+        return round(sum(self._shift_pay(wages[name], self.day(record_date)[name])
                          for record_date in records if record_date.startswith(month)
                          for name in self.HOURLY_STAFF)
                      + sum(self.monthly_salaries().values())
-                     + round(sum(self.day(record_date)[name]["transportation"]
-                                 for record_date in records if record_date.startswith(month)
-                                 for name in self.SALARIED_STAFF)))
+                     + sum(self._day_transport(self.day(record_date))
+                           for record_date in records if record_date.startswith(month)))
 
     def month_cost_summary(self, month):
         records = self._data_manager.data.get("business_staff_hours", {})
@@ -170,7 +182,7 @@ class StaffingManager:
                 continue
             shifts = self.day(record_date)
             gross += sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
-            transportation += sum(shifts[name]["transportation"] for name in self.STAFF)
+            transportation += self._day_transport(shifts)
         social = labor = 0
         for name in self.STAFF:
             setting = settings[name]
@@ -182,9 +194,12 @@ class StaffingManager:
             if setting["employment"]:
                 if name in self.SALARIED_STAFF:
                     staff_gross = self.monthly_salaries()[name] + sum(
-                        self.day(day)[name]["transportation"] for day in records if day.startswith(month))
+                        self.commute_rates()[name] for day in records if day.startswith(month)
+                        and self.day(day)[name]["attended"])
                 else:
-                    staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name]) + self.day(day)[name]["transportation"] for day in records if day.startswith(month))
+                    staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name])
+                                      + (self.commute_rates()[name] if self._worked(self.day(day)[name]) else 0)
+                                      for day in records if day.startswith(month))
                 labor += staff_gross * rates["employment"] / 100
         labor += (gross + transportation) * rates["workers_comp"] / 100
         employer_insurance = round(social + labor)
@@ -219,6 +234,17 @@ class StaffingManager:
         return {"normal_minutes": normal, "night_minutes": night,
                 "total_minutes": normal + night,
                 "pay": round(self._shift_pay(self.wages()[name], shift))}
+
+    def _day_transport(self, shifts):
+        rates = self.commute_rates()
+        return sum(rates[name] for name in self.STAFF
+                   if (shifts[name]["attended"] if name in self.SALARIED_STAFF
+                       else self._worked(shifts[name])))
+
+    @staticmethod
+    def _worked(shift):
+        return any(shift.get(key) for key in
+                   ("lunch_start", "lunch_end", "dinner_start", "dinner_end"))
 
     @classmethod
     def _shift_pay(cls, wage, shift):

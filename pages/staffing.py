@@ -40,6 +40,20 @@ def staffing_page():
                 ui.notify("時給設定を保存しました", type="positive")
             ui.button("時給を保存", icon="save", on_click=save_wages).classes("w-full q-mt-md")
 
+        commute_rates = staffing.commute_rates()
+        with ui.expansion("1出勤あたりの交通費", icon="directions_train", value=False).classes(
+            "staff-panel w-full q-mt-sm"):
+            commute_inputs = {}
+            with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
+                for name in staffing.STAFF:
+                    commute_inputs[name] = ui.number(
+                        name, value=commute_rates[name] or None, min=0, step=1
+                    ).props("outlined dense prefix=¥ inputmode=numeric")
+            def save_commute():
+                staffing.save_commute_rates({name: field.value for name, field in commute_inputs.items()})
+                ui.notify("交通費設定を保存しました", type="positive")
+            ui.button("交通費を保存", icon="save", on_click=save_commute).classes("w-full q-mt-md")
+
         settings = staffing.dependent_settings()
         with ui.expansion("扶養アラート設定", icon="notifications_active", value=False).classes(
             "staff-panel w-full q-mt-sm"):
@@ -100,9 +114,10 @@ def staffing_page():
             ui.button("保険設定を保存", on_click=save_insurance).classes("w-full q-mt-sm")
 
         selected = today_jst().isoformat()
-        ui.label("勤務時間を入力").classes("text-lg font-black q-mt-md")
-        date_input = ui.input("日付", value=selected).props("outlined dense type=date").classes("w-full")
-        hours_area = ui.column().classes("w-full gap-0")
+        with ui.expansion("勤務・出勤を入力", icon="schedule", value=False).classes(
+            "staff-panel w-full q-mt-sm"):
+            date_input = ui.input("日付", value=selected).props("outlined dense type=date").classes("w-full")
+            hours_area = ui.column().classes("w-full gap-0")
 
         def render_day(record_date):
             hours_area.clear()
@@ -126,9 +141,11 @@ def staffing_page():
                             else:
                                 for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"):
                                     shift_inputs[name][key] = ui.input(value="").props("type=hidden").classes("hidden")
-                            shift_inputs[name]["transportation"] = ui.number(
-                                "この日の交通費", value=values[name]["transportation"] or None,
-                                min=0, step=1).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
+                                shift_inputs[name]["attended"] = ui.checkbox(
+                                    "この日は出勤", value=values[name]["attended"]
+                                ).classes("q-mt-xs")
+                            if name in staffing.HOURLY_STAFF:
+                                shift_inputs[name]["attended"] = ui.checkbox(value=False).props("disable").classes("hidden")
                             detail = staffing.day_detail(record_date, name)
                             if detail["total_minutes"]:
                                 ui.label(
@@ -148,11 +165,10 @@ def staffing_page():
                         ui.notify(f"保存しました：¥{staffing.day_total(record_date):,}", type="positive")
                         render_day(record_date)
                     ui.button("勤務時間を保存", icon="save", on_click=save_day).classes("w-full q-mt-md")
-                    ui.label(f"この日の人件費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
-                    ui.label(f"今月の人件費　¥{staffing.month_total(record_date[:7]):,}").classes("text-xl font-black q-mt-xs")
+                    ui.label(f"この日の賃金・交通費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
                     summary = staffing.month_cost_summary(record_date[:7])
                     ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-[10px] text-grey-7 q-mt-xs")
                     ui.label(f"会社の総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
-        date_input.on("change", lambda: render_day(date_input.value))
-        render_day(selected)
+            date_input.on("change", lambda: render_day(date_input.value))
+            render_day(selected)
         ui.add_css(".staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
