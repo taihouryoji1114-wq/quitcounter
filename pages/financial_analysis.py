@@ -136,24 +136,25 @@ def _render_analysis(period=None):
         return field
 
     with content:
-        with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
-            ui.label("決算期（9月末締め）").classes("text-xs font-bold")
-            period_year = ui.number(
-                "決算年", value=int(selected_period[:4]), min=1900, max=2200, step=1
-            ).props("outlined suffix=年 inputmode=numeric").classes("w-full q-mt-xs")
-            ui.label(f"{int(selected_period[:4])}年9月期として保存します").classes(
-                "text-[10px] text-grey-6 q-mt-xs"
-            )
+        with ui.card().classes("period-card surface-card w-full q-pa-sm q-mb-md"):
+            with ui.row().classes("w-full items-center no-wrap gap-2"):
+                ui.label("決算期").classes("text-xs font-bold q-pl-sm")
+                period_year = ui.number(
+                    value=int(selected_period[:4]), min=1900, max=2200, step=1
+                ).props("outlined dense suffix=年 inputmode=numeric aria-label='決算年'").classes(
+                    "period-year"
+                )
+                ui.label("9月末締め").classes("text-[9px] text-grey-6")
             if periods:
-                ui.label("保存済みの決算期").classes("text-[10px] text-grey-6 q-mt-md")
-                with ui.row().classes("w-full gap-1 q-mt-xs"):
-                    for saved_period in periods:
-                        ui.button(
-                            saved_period.replace("-", "年") + "月",
-                            on_click=lambda _, value=saved_period: ui.navigate.to(
-                                f"/mirai-kessan/financial-analysis/{value}"
-                            ),
-                        ).props("outline dense no-caps")
+                with ui.expansion("保存済みの決算期", value=False).classes("saved-periods w-full"):
+                    with ui.row().classes("w-full gap-1"):
+                        for saved_period in periods:
+                            ui.button(
+                                saved_period.replace("-", "年") + "月",
+                                on_click=lambda _, value=saved_period: ui.navigate.to(
+                                    f"/mirai-kessan/financial-analysis/{value}"
+                                ),
+                            ).props("outline dense no-caps")
 
         ui.label("決算書入力").classes("text-xl font-black q-mb-xs")
         ui.label("日々の入力とは連動しません。この決算期の数字だけ入力してください。").classes(
@@ -323,7 +324,7 @@ def _render_analysis(period=None):
                         with ui.element("div").classes("rounded-xl q-pa-md").style(f"background:{color}"):
                             ui.label(title).classes("text-[9px] text-grey-7")
                             ui.label(_money(value)).classes(
-                                "text-lg font-black text-negative" if value < 0 else "text-lg font-black"
+                                "overview-number text-negative" if value < 0 else "overview-number"
                             )
 
             alerts = []
@@ -398,12 +399,12 @@ def _render_analysis(period=None):
                 )
 
         ui.add_css("""
-        .statement-grid{width:100%;display:grid;grid-template-columns:minmax(120px,1.15fr) minmax(120px,1fr);gap:8px}
+        .period-card{border-radius:18px!important}.period-year{width:120px;max-width:42%}.saved-periods .q-item{min-height:34px!important;padding:4px 8px!important;font-size:10px}.statement-grid{width:100%;display:grid;grid-template-columns:minmax(120px,1.15fr) minmax(120px,1fr);gap:8px}
         .statement-head{color:#6D7972;font-size:9px;font-weight:800;margin-bottom:5px}
         .statement-grid .q-field__control{min-height:38px;height:38px}.statement-grid .q-field__native{font-size:11px;padding:0}
         .amount-entry{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:3px;align-items:center;min-width:0}.amount-field{min-width:0;width:100%}.negative-toggle{min-width:34px!important;width:34px;height:38px;min-height:38px!important;padding:0!important;border-radius:9px!important;background:#FFF0EE!important;color:#B54E48!important;font-size:15px;font-weight:900}
-        .subtotal-row{margin:6px 0 12px;padding:9px 10px;border-radius:10px;background:#EDF5F0;border:1px solid #DCE9E1}.balance-sheet{display:grid;grid-template-columns:1fr 1fr;border:2px solid #DDE4DF;border-radius:14px;overflow:hidden}.balance-side{padding:14px;font-size:10px;min-width:0}.balance-side+ .balance-side{border-left:2px solid #DDE4DF}.asset-side{background:#EFF7F2}.funding-side{background:#FFF7EA}.balance-heading{font-size:13px;font-weight:900;margin-bottom:12px}.balance-warning{margin-top:10px;padding:10px;border-radius:10px;background:#FDECEA;color:#A13C36;font-size:11px;font-weight:900;text-align:center}.balance-ok{margin-top:10px;padding:10px;border-radius:10px;background:#EAF5EE;color:#286647;font-size:11px;font-weight:900;text-align:center}
-        .diagnostic-metric{border-radius:16px;padding:14px;background:#F4F7F5;min-width:0}
+        .subtotal-row{margin:6px 0 12px;padding:9px 10px;border-radius:10px;background:#EDF5F0;border:1px solid #DCE9E1}.balance-sheet{display:grid;grid-template-columns:1fr 1fr;border:2px solid #DDE4DF;border-radius:14px;overflow:hidden}.balance-side{padding:14px;font-size:10px;min-width:0;overflow:hidden}.balance-side .q-row>div,.balance-side .font-bold,.balance-side .font-black{min-width:0;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.balance-side+ .balance-side{border-left:2px solid #DDE4DF}.asset-side{background:#EFF7F2}.funding-side{background:#FFF7EA}.balance-heading{font-size:13px;font-weight:900;margin-bottom:12px}.balance-warning{margin-top:10px;padding:10px;border-radius:10px;background:#FDECEA;color:#A13C36;font-size:11px;font-weight:900;text-align:center}.balance-ok{margin-top:10px;padding:10px;border-radius:10px;background:#EAF5EE;color:#286647;font-size:11px;font-weight:900;text-align:center}
+        .diagnostic-metric{border-radius:16px;padding:12px;background:#F4F7F5;min-width:0;overflow:hidden}.diagnostic-metric .text-xl{font-size:clamp(15px,5vw,20px)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.overview-number{font-size:clamp(12px,4vw,18px);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
         @media(max-width:520px){.statement-grid{grid-template-columns:minmax(105px,1fr) minmax(120px,1.15fr);gap:6px}}
         """)
 

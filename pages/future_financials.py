@@ -3,7 +3,7 @@ from datetime import datetime
 
 from nicegui import ui
 
-from core.auth import log_out, require_login
+from core.auth import require_login
 from core.clock import today_jst
 from core.financials import financials
 from core.purchases import purchases
@@ -34,7 +34,6 @@ def _render_future_financials_home(selected_month=None):
                 ui.label("未来決算メニュー").classes("text-xl font-black")
                 ui.button(icon="close", on_click=menu_dialog.close).props("flat round")
             for title, icon, path in (
-                ("経営ダッシュボード", "dashboard", "/mirai-kessan/dashboard"),
                 ("売上入力", "point_of_sale", "/mirai-kessan/sales"),
                 ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
                 ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),
@@ -43,10 +42,6 @@ def _render_future_financials_home(selected_month=None):
                 ui.button(
                     title, icon=icon, on_click=lambda _, target=path: ui.navigate.to(target)
                 ).props("flat no-caps align=left").classes("future-menu-item w-full")
-            ui.separator().classes("q-my-sm")
-            ui.button("R-BASEへ戻る", icon="logout", on_click=log_out).props(
-                "flat no-caps align=left"
-            ).classes("future-menu-item w-full text-grey-7")
         with ui.row().classes("gap-0"):
             ui.button(icon="menu", on_click=menu_dialog.open).props(
                 "flat round aria-label='メニューを開く'"
@@ -241,10 +236,46 @@ def _render_future_financials_home(selected_month=None):
                         ui.label(f"¥{value:,}").classes("text-sm font-bold")
 
         # The dashboard intentionally stops at the monthly snapshot. Detailed
-        # tools live in the menu so the first screen stays decision-focused.
+        # tools live in the menu; the only second element is the current block.
+        with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
+            with ui.row().classes("w-full items-center justify-between no-wrap q-mb-sm"):
+                with ui.column().classes("gap-0 min-w-0"):
+                    ui.label("今月の暫定利益ブロック").classes("text-base font-black")
+                    ui.label("入力済みの数字だけで表示").classes("text-[9px] text-grey-6")
+                ui.button(
+                    icon="open_in_new", on_click=lambda: ui.navigate.to("/mirai-kessan/block-map")
+                ).props("flat round aria-label='利益シミュレーションを開く'")
+            if sales_total:
+                compact_gross = max(gross_profit, 1)
+                components = (
+                    ("原価", purchase_total, "#82988D"),
+                    ("人件費", operations["personnel"], "#4A9FD0"),
+                    ("固定費等", operating_costs - operations["personnel"], "#99A29D"),
+                    ("営業利益" if operating_profit >= 0 else "営業損失", abs(operating_profit), "#4B77B7" if operating_profit >= 0 else "#C85C57"),
+                )
+                with ui.element("div").classes("dashboard-profit-block"):
+                    for title, value, color in components:
+                        share = max(abs(value) / max(sales_total, compact_gross), .04)
+                        with ui.element("div").classes("dashboard-profit-part").style(
+                            f"background:{color};flex:{share}"
+                        ):
+                            ui.label(title).classes("text-[9px] font-bold")
+                            if share >= .12:
+                                ui.label(f"¥{value:,}").classes("dashboard-block-value")
+                with ui.row().classes("w-full justify-between items-center q-mt-sm no-wrap"):
+                    ui.label("暫定営業利益").classes("text-[10px] text-grey-7")
+                    ui.label(f"¥{operating_profit:,}").classes(
+                        "dashboard-profit-total text-negative" if operating_profit < 0
+                        else "dashboard-profit-total text-primary"
+                    )
+            else:
+                ui.label("売上を入力すると表示されます").classes(
+                    "text-xs text-grey-6 text-center q-pa-md"
+                )
         ui.add_css("""
         .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
         .metric-value,.rounded-xl .font-bold{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .dashboard-profit-block{height:180px;display:flex;flex-direction:column;overflow:hidden;border-radius:16px;background:#EEF1EF}.dashboard-profit-part{min-height:18px;display:flex;align-items:center;justify-content:space-between;color:#fff;padding:4px 10px;overflow:hidden}.dashboard-block-value{font-size:11px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dashboard-profit-total{font-size:clamp(15px,5vw,21px);font-weight:900;max-width:58%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         """)
         return
 
@@ -448,11 +479,9 @@ def future_financials_opening():
             ui.icon("insights").classes("text-5xl")
         ui.label("未来決算").classes("text-4xl font-black q-mt-lg")
         ui.label("数字から、次の一手を決める").classes("text-sm opacity-70 q-mt-xs")
-        ui.label("タップして開く").classes("opening-tap q-mt-xl")
     ui.add_css("""
-    .future-opening{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;cursor:pointer;background:radial-gradient(circle at 70% 25%,rgba(210,162,91,.38),transparent 30%),linear-gradient(145deg,#0C2D23,#1D5B44 67%,#866133)}
-    .future-opening-mark{width:104px;height:104px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25);box-shadow:0 24px 60px rgba(0,0,0,.2)}
-    .opening-tap{padding:11px 22px;border-radius:999px;background:rgba(255,255,255,.14);font-size:11px;letter-spacing:.08em;animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.55}}
+    .future-opening{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;cursor:pointer;overflow:hidden;background:radial-gradient(circle at 70% 25%,rgba(210,162,91,.38),transparent 30%),linear-gradient(145deg,#0C2D23,#1D5B44 67%,#866133)}.future-opening:before,.future-opening:after{content:"";position:absolute;width:300px;height:300px;border-radius:50%;border:1px solid rgba(255,255,255,.1);animation:orbit 8s linear infinite}.future-opening:after{width:470px;height:470px;animation-duration:13s;animation-direction:reverse}
+    .future-opening-mark{z-index:1;width:104px;height:104px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25);box-shadow:0 24px 60px rgba(0,0,0,.2);animation:float 2.8s ease-in-out infinite}.future-opening .text-4xl,.future-opening .text-sm{z-index:1}@keyframes float{50%{transform:translateY(-9px) scale(1.03);box-shadow:0 32px 72px rgba(0,0,0,.28)}}@keyframes orbit{to{transform:rotate(360deg)}}
     """)
 
 
@@ -515,7 +544,8 @@ def future_financials():
         ui.html(
             r'''
 <div id="mirai-app">
-  <section class="mk-card input-card">
+  <details class="mk-card compact-section input-card">
+    <summary class="compact-summary">月間計画を入力・編集</summary>
     <div class="mk-head"><div><small>SIMULATION</small><h2>月間の利益を試算</h2></div><button id="save-plan">計画を保存</button></div>
     <div class="view-switch"><button id="view-simulation" class="active">計画シミュレーション</button></div>
     <div id="view-note" class="view-note simulation">入力した計画値で「こうなったら利益はいくら残るか」を試算しています。</div>
@@ -537,7 +567,7 @@ def future_financials():
       <label>営業外費用・支払利息<input id="non-op-expense" inputmode="numeric" value="50000"></label>
       <label>目標経常利益<input id="target-profit" inputmode="numeric" value="700000"></label>
     </div>
-  </section>
+  </details>
 
   <section class="mk-card result-card">
     <div class="mk-head"><div><small>PROFIT STRUCTURE</small><h2>利益ブロック図</h2></div><span>月間</span></div>
@@ -549,7 +579,8 @@ def future_financials():
     <div id="sales-answer" class="answer"></div>
   </section>
 
-  <section class="mk-card cash-card">
+  <details class="mk-card compact-section cash-card">
+    <summary class="compact-summary">税金・資金繰りの詳細</summary>
     <div class="mk-head"><div><small>TAX & CASH</small><h2>税金・資金繰り</h2></div><span>自動概算</span></div>
     <div class="tax-settings">
       <label>消費税の計算方式<select id="tax-method"><option value="general">一般課税</option><option value="simplified">簡易課税（飲食店・みなし仕入率60%）</option></select></label>
@@ -567,10 +598,11 @@ def future_financials():
       <label>設備投資・その他<input id="investment" inputmode="numeric" value="0"></label>
     </div>
     <div id="cash-flow" class="cash-flow"></div>
-  </section>
+  </details>
 </div>
 <style>
 #mirai-app{width:100%;display:grid;gap:16px}.mk-card{background:#fff;border:1px solid #E5E9E6;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(39,55,45,.055)}.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.mk-head small{color:#4F7C68;font-weight:800;letter-spacing:.14em}.mk-head h2{font-size:19px;margin:3px 0 0}.mk-head span{color:#7A867F;font-size:11px}.mk-head button{border:0;border-radius:10px;background:#EDF5F0;color:#39745A;padding:9px 14px;font-weight:700}.block-guide{margin:-8px 0 14px;color:#748078;font-size:11px;line-height:1.6}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.input-grid label{color:#68746D;font-size:10px;font-weight:700}.input-grid input{width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #DDE3DF;border-radius:10px;padding:10px;font-size:14px;outline:none}.input-grid input:focus{border-color:#4F7C68;box-shadow:0 0 0 3px rgba(79,124,104,.1)}.dual-plan-field{border:1px solid #DDE3DF;border-radius:13px;padding:10px;background:#FAFBFA}.dual-plan-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#68746D;font-size:11px;font-weight:800}.dual-plan-head select{border:1px solid #DDE3DF;border-radius:8px;background:#fff;padding:6px;color:#39745A;font-size:10px;font-weight:700}.dual-plan-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.dual-plan-inputs input:disabled{background:#EFF2F0;color:#68746D}.target-settings{grid-column:1/-1;border:1px solid #DDE3DF;border-radius:13px;padding:10px;background:#FAFBFA}.target-settings summary{cursor:pointer;color:#39745A;font-size:11px;font-weight:800}.target-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}.summary{background:#F5F8F6;border-radius:12px;padding:12px}.summary small{display:block;color:#748078;font-size:9px}.summary b{display:block;margin-top:3px;font-size:15px}.summary.negative b{color:#C84B45}.answer{margin-top:18px;border-radius:15px;background:#EAF1FF;padding:16px;color:#244F89}.answer small{display:block;font-size:10px}.answer b{display:block;font-size:22px;margin-top:3px}.answer span{font-size:11px}.compact{margin-bottom:18px}.cash-flow{display:grid;gap:7px}.cash-line{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #EEF0EE;font-size:12px}.cash-line strong{font-size:14px}.cash-line.final{border:0;border-radius:12px;background:#F3F6F4;padding:14px}.cash-line.final strong.negative{color:#C84B45}@media(max-width:520px){.mk-card{padding:18px 15px}.input-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.target-grid{grid-template-columns:1fr 1fr}}
+.compact-section{padding:0!important}.compact-summary{cursor:pointer;list-style:none;padding:18px 20px;font-size:14px;font-weight:900;color:#315A45}.compact-summary::-webkit-details-marker{display:none}.compact-summary:after{content:'＋';float:right}.compact-section[open]>.compact-summary:after{content:'−'}.compact-section[open]>.mk-head,.compact-section[open]>.view-switch,.compact-section[open]>.view-note,.compact-section[open]>.input-grid,.compact-section[open]>.tax-settings,.compact-section[open]>.tax-note,.compact-section[open]>.compact,.compact-section[open]>.cash-flow{margin-left:18px;margin-right:18px}.compact-section[open]>.cash-flow,.compact-section[open]>.input-grid{margin-bottom:20px}
 .view-switch{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#EEF2EF;padding:5px;border-radius:13px;margin-bottom:10px}.view-switch button{border:0;border-radius:9px;background:transparent;padding:9px 5px;color:#718078;font-size:10px;font-weight:800}.view-switch button.active{background:#fff;color:#39745A;box-shadow:0 2px 8px rgba(39,55,45,.08)}.view-note{border-radius:11px;padding:10px 12px;margin-bottom:14px;font-size:10px;line-height:1.55}.view-note.simulation{background:#EAF1FF;color:#315A91}.view-note.provisional{background:#FFF2DB;color:#855D20}.diagnosis{margin-bottom:12px}.diagnosis-main{border-radius:14px;padding:12px;background:#FFF0ED;color:#8E3F38;font-size:11px;font-weight:800}.diagnosis-main.good{background:#EAF5EE;color:#39745A}.house-map{background:#F3F6F4;border-radius:18px;padding:12px}.house-map svg{display:block;width:100%;height:auto;overflow:visible}.house-part{transition:all .3s ease}.house-legend{display:grid;gap:7px;margin-top:12px}.legend-row{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center;border-bottom:1px solid #EEF0EE;padding:7px 2px;font-size:10px}.legend-color{width:12px;height:12px;border-radius:3px}.legend-row span{color:#66736C}.legend-row strong{text-align:right}.legend-row small{display:block;color:#89938E}.legend-row.warning strong,.legend-row.warning small{color:#C84B45}.legend-row.warning{background:#FFF7F5;border-radius:8px;padding:7px}.house-caption{text-align:center;color:#748078;font-size:9px;margin-top:6px}
 .target-settings{display:none}.house-status{text-align:center;margin-top:7px;font-size:11px;font-weight:900}.house-status.strong{color:#39745A}.house-status.caution{color:#B77822}.house-status.danger{color:#C84B45}
 .box-map{height:380px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;background:#E8ECE9;padding:5px;border-radius:16px;overflow:hidden}.box-column{min-width:0;height:100%;display:flex;flex-direction:column;gap:5px}.box-spacer{min-height:0}.money-box{min-height:18px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-radius:9px;padding:4px;box-sizing:border-box;overflow:hidden;color:#fff}.money-box span{font-size:10px;font-weight:800;line-height:1.2}.money-box b{font-size:12px;margin-top:2px;white-space:nowrap}.money-box em{font-size:8px;font-style:normal;margin-top:2px;opacity:.9;white-space:nowrap}.box-sales{height:100%;background:#355F4C}.box-cost{background:#82988D}.box-gross{background:#4F8C70}.box-personnel{background:#4A9FD0}.box-rent{background:#8172B5}.box-utilities{background:#4CB7B4}.box-advertising{background:#D8943C}.box-other{background:#99A29D}.box-profit{background:#4B77B7}.box-loss{background:#C85C57}.block-legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}.block-legend div{display:flex;justify-content:space-between;gap:6px;padding:7px 9px;background:#F6F8F6;border-radius:8px;font-size:9px}.block-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}.block-legend strong{white-space:nowrap}@media(max-width:520px){.box-map{height:330px;gap:3px;padding:3px}.box-column{gap:3px}.money-box{padding:2px}.money-box span{font-size:8px}.money-box b{font-size:9px}.money-box em{display:none}}

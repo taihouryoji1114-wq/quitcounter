@@ -144,6 +144,18 @@ class AnnualReportManagerTest(unittest.TestCase):
         self.assertIn("400円が改善検討額", actions)
         self.assertIn("700円が改善検討額", actions)
 
+    def test_decision_explains_negative_working_capital_and_debt(self):
+        values = {
+            "cash_on_hand": 100, "building_equipment": 1900,
+            "payables": 1000, "short_term_loans": 1000,
+            "sales": 10000, "purchases": 3000,
+            "salaries": 5000, "rent": 2500,
+        }
+        decision = self.reports.management_decision(values, {})
+        actions = " ".join(decision["actions"])
+        self.assertIn("短期資金が 1,900円不足", actions)
+        self.assertIn("借入残高は 1,000円", actions)
+
 
 if __name__ == "__main__":
     unittest.main()

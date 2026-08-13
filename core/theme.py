@@ -45,7 +45,9 @@ class Theme:
         with ui.column().classes("app-shell gap-0"):
             with ui.row().classes("w-full items-center justify-between no-wrap q-mb-lg"):
                 if back_to:
-                    ui.button("ホーム", icon="arrow_back", on_click=lambda: ui.navigate.to(back_to)).props("flat").classes("text-grey-8")
+                    ui.button(icon="arrow_back", on_click=ui.navigate.back).props(
+                        "flat round aria-label='1つ前へ戻る'"
+                    ).classes("text-grey-8").tooltip("1つ前へ戻る")
                 else:
                     ui.label(brand).classes("text-xl font-bold")
                 if action:

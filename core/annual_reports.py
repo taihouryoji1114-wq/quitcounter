@@ -286,6 +286,24 @@ class AnnualReportManager:
                 "時間帯別売上とシフトを照合する"
             )
         actions = concrete_actions + actions
+        if working_capital < 0:
+            current_ratio = current["current_ratio"] or 0
+            actions.insert(0,
+                f"短期資金が {abs(working_capital):,}円不足し、流動比率は"
+                f"{current_ratio * 100:.1f}%。まず12か月の入出金予定を並べ、"
+                "支払延期・借換え・返済条件の相談が必要な月を特定する"
+            )
+        if debt:
+            if debt_payback_years is None:
+                actions.insert(1,
+                    f"借入残高は {debt:,}円。経常利益がプラスでないため返済年数を算定できない。"
+                    "追加借入より先に、本業黒字化と年間元金返済額を確認する"
+                )
+            elif debt_payback_years > 10:
+                actions.insert(1,
+                    f"借入残高 {debt:,}円は現在の経常利益で約{debt_payback_years:.1f}年分。"
+                    "10年以内を一つの確認線として、利益改善・借換え・返済条件を比較する"
+                )
 
         attack = 0
         attack_conditions = []
