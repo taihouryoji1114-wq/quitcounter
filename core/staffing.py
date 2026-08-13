@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import datetime
 
 from core.data import data
@@ -11,6 +12,8 @@ class StaffingManager:
     STAFF = ("店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(15)))
     SALARIED_STAFF = ("店長", "社員A")
     HOURLY_STAFF = STAFF[2:]
+    MONTHLY_REST_DAYS = 10
+    SALARIED_DAILY_HOURS = 10
     DEPENDENT_LIMITS = {
         "general": ("一般の税扶養", 1_230_000),
         "young": ("19〜22歳（控除維持）", 1_500_000),
@@ -175,7 +178,16 @@ class StaffingManager:
     def month_cost_summary(self, month):
         records = self._data_manager.data.get("business_staff_hours", {})
         wages, settings, rates = self.wages(), self.insurance_settings(), self.insurance_rates()
-        gross = sum(self.monthly_salaries().values())
+        planned_days = max(1, monthrange(int(month[:4]), int(month[5:7]))[1] - self.MONTHLY_REST_DAYS)
+        attendance = {name: sum(
+            1 for day in records if day.startswith(month) and self.day(day)[name]["attended"]
+        ) for name in self.SALARIED_STAFF}
+        salaries = self.monthly_salaries()
+        salaried_actual = sum(
+            min(salaries[name], round(salaries[name] / planned_days * attendance[name]))
+            for name in self.SALARIED_STAFF
+        )
+        gross = salaried_actual
         transportation = 0
         for record_date in records:
             if not record_date.startswith(month):
@@ -190,10 +202,13 @@ class StaffingManager:
                 rate = rates["health"] + rates["pension"] + rates["other"]
                 if setting["care"]:
                     rate += rates["care"]
-                social += setting["standard_monthly"] * rate / 100
+                factor = (min(1, attendance[name] / planned_days)
+                          if name in self.SALARIED_STAFF else 1)
+                social += setting["standard_monthly"] * rate / 100 * factor
             if setting["employment"]:
                 if name in self.SALARIED_STAFF:
-                    staff_gross = self.monthly_salaries()[name] + sum(
+                    staff_gross = min(salaries[name], round(
+                        salaries[name] / planned_days * attendance[name])) + sum(
                         self.commute_rates()[name] for day in records if day.startswith(month)
                         and self.day(day)[name]["attended"])
                 else:
@@ -203,9 +218,25 @@ class StaffingManager:
                 labor += staff_gross * rates["employment"] / 100
         labor += (gross + transportation) * rates["workers_comp"] / 100
         employer_insurance = round(social + labor)
+        forecast_social = 0
+        for name in self.STAFF:
+            setting = settings[name]
+            if setting["social"]:
+                rate = rates["health"] + rates["pension"] + rates["other"]
+                if setting["care"]:
+                    rate += rates["care"]
+                forecast_social += setting["standard_monthly"] * rate / 100
+        hourly_gross = gross - salaried_actual
+        forecast_gross = sum(salaries.values()) + hourly_gross
+        forecast_insurance = round(forecast_social + labor)
         return {"gross_wages": round(gross), "transportation": round(transportation),
                 "employer_insurance": employer_insurance,
-                "company_cost": round(gross + transportation + employer_insurance)}
+                "company_cost": round(gross + transportation + employer_insurance),
+                "planned_days": planned_days, "attendance": attendance,
+                "daily_hours": self.SALARIED_DAILY_HOURS,
+                "forecast_gross_wages": round(forecast_gross),
+                "forecast_employer_insurance": forecast_insurance,
+                "forecast_company_cost": round(forecast_gross + transportation + forecast_insurance)}
 
     def year_staff_total(self, year, name):
         records = self._data_manager.data.get("business_staff_hours", {})

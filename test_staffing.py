@@ -96,8 +96,18 @@ class StaffingManagerTest(unittest.TestCase):
             "attended": True,
         }})
         summary = self.staffing.month_cost_summary("2026-08")
-        self.assertEqual(summary["gross_wages"], 630_000)
+        self.assertEqual(summary["planned_days"], 21)
+        self.assertEqual(summary["attendance"]["店長"], 1)
+        self.assertEqual(summary["gross_wages"], round(350_000 / 21))
         self.assertEqual(summary["transportation"], 500)
+        self.assertEqual(summary["forecast_gross_wages"], 630_000)
+
+    def test_salaried_actual_is_capped_at_monthly_salary(self):
+        self.staffing.save_monthly_salaries({"店長": 310_000})
+        for day in range(1, 23):
+            self.staffing.save_day(f"2026-08-{day:02d}", {"店長": {"attended": True}})
+        summary = self.staffing.month_cost_summary("2026-08")
+        self.assertEqual(summary["gross_wages"], 310_000)
 
 
 if __name__ == "__main__":
