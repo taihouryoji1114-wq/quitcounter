@@ -46,6 +46,17 @@ class ConsultingManagerTest(unittest.TestCase):
             result = self.manager.diagnose("2026-08")
         self.assertEqual(result["primary"]["key"], "cash_defense")
 
+    def test_simulation_uses_annual_statement_and_explicit_customer_count(self):
+        snapshot = {
+            "sales": 10_000_000, "profit": -500_000,
+        }
+        with patch.object(self.manager, "annual_snapshot", return_value=snapshot):
+            result = self.manager.simulate("2026-08", 1, 2, 100, 20_000)
+        self.assertEqual(result["cost_effect"], 100_000)
+        self.assertEqual(result["personnel_effect"], 200_000)
+        self.assertEqual(result["spend_effect"], 2_000_000)
+        self.assertEqual(result["new_profit"], 1_800_000)
+
 
 if __name__ == "__main__":
     unittest.main()

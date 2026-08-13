@@ -13,6 +13,7 @@ def consulting_page():
     Theme.page("経営コンサル｜未来決算", app_name="mirai-kessan")
     month = today_jst().strftime("%Y-%m")
     diagnosis = consulting.diagnose(month)
+    snapshot = consulting.annual_snapshot(month)
     content = Theme.shell(
         "経営コンサル", "数字を、今月の具体的な行動へ変える",
         back_to="/mirai-kessan/dashboard", brand="未来決算",
@@ -21,8 +22,11 @@ def consulting_page():
         "not_started": "未着手", "in_progress": "実行中", "completed": "完了",
     }
     with content:
+        with ui.row().classes("w-full items-center justify-between q-mb-md no-wrap"):
+            ui.label("最新の決算書を基準に診断").classes("text-xs font-bold text-primary")
+            ui.label(snapshot["period"] if snapshot else "決算書未入力").classes("period-chip")
         ui.label("今、一番知りたいことは？").classes("text-xl font-black q-mb-xs")
-        ui.label("質問を選ぶと、今の数字から次の行動を出します").classes("text-[10px] text-grey-6 q-mb-sm")
+        ui.label("決算書の年間数字から、結論と次の行動を出します").classes("text-[10px] text-grey-6 q-mb-sm")
         answer_area = ui.column().classes("w-full gap-0")
 
         def show_answer(key):
@@ -47,6 +51,48 @@ def consulting_page():
                 ui.button(label, on_click=lambda _, selected=key: show_answer(selected)).props(
                     "flat no-caps"
                 ).classes("consult-question")
+
+        with ui.expansion("改善シミュレーション", icon="tune", value=False).classes(
+            "consult-info w-full q-mt-md"
+        ):
+            ui.label("数字を変えた場合の年間営業利益を試算").classes("text-xs font-bold q-mb-sm")
+            cost_change = ui.number("原価率を何%下げる？", min=0, max=20, step=.1).props(
+                "outlined dense suffix=% inputmode=decimal").classes("w-full")
+            personnel_change = ui.number("人件費率を何%下げる？", min=0, max=20, step=.1).props(
+                "outlined dense suffix=% inputmode=decimal").classes("w-full q-mt-xs")
+            spend_change = ui.number("客単価を何円上げる？", min=0, step=10).props(
+                "outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
+            annual_customers = ui.number("年間客数（分かる場合だけ）", min=0, step=1).props(
+                "outlined dense suffix=人 inputmode=numeric").classes("w-full q-mt-xs")
+            ui.label("数日分の客数から年間推計はしません").classes("text-[9px] text-grey-6 q-mt-xs")
+            simulation_area = ui.column().classes("w-full gap-0")
+
+            def run_simulation():
+                result = consulting.simulate(month, cost_change.value or 0,
+                                             personnel_change.value or 0,
+                                             spend_change.value or 0,
+                                             annual_customers.value or 0)
+                simulation_area.clear()
+                with simulation_area:
+                    if not result:
+                        ui.label("先に決算書を入力してください").classes("text-negative q-mt-sm")
+                        return
+                    with ui.element("div").classes("simulation-result q-mt-md"):
+                        for label, value in (
+                            ("原価改善", result["cost_effect"]),
+                            ("人件費改善", result["personnel_effect"]),
+                            ("客単価改善", result["spend_effect"]),
+                        ):
+                            with ui.row().classes("w-full justify-between no-wrap"):
+                                ui.label(label).classes("text-[10px] text-grey-7")
+                                ui.label(f"年間 +¥{value:,}").classes("text-xs font-bold")
+                        ui.separator().classes("q-my-sm")
+                        ui.label("改善後の年間営業利益").classes("text-[9px] text-grey-6")
+                        ui.label(f"¥{result['new_profit']:,}").classes(
+                            "text-2xl font-black text-positive" if result["new_profit"] >= 0
+                            else "text-2xl font-black text-negative")
+            ui.button("この条件で試算", icon="calculate", on_click=run_simulation).classes(
+                "w-full q-mt-sm")
 
         with ui.expansion("自動診断と行動管理", icon="assignment", value=False).classes(
             "consult-info w-full q-mt-md"
@@ -73,9 +119,10 @@ def consulting_page():
             "consult-info w-full q-mt-sm"
         ):
             ui.label(
-                "決算書の財務安全性を優先し、次に今月の営業利益・原価率・人件費率を確認しています。"
+                "最新の決算書を基準に、財務安全性・年間営業利益・原価率・人件費率を確認しています。"
+                "客単価の試算は、年間客数を入力した場合だけ計算します。"
                 "参考値は絶対的な合否ではなく、行動の優先順位を決める目安です。"
             ).classes("text-[10px] leading-relaxed")
         ui.add_css("""
-        .consult-question-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.consult-question{min-height:58px!important;border-radius:17px!important;background:#fff!important;border:1px solid #DDE7E1!important;color:#20382D!important;font-size:12px!important;font-weight:800!important;line-height:1.25!important;padding:8px!important}.consult-answer{border-radius:25px!important;border:1px solid #DCE8E1!important;background:linear-gradient(155deg,#fff,#F4F8F5)!important;box-shadow:0 16px 38px rgba(32,61,46,.1)!important}.answer-kicker{font-size:9px;font-weight:900;letter-spacing:.12em;color:#56806B}.answer-target{padding:10px 12px;border-radius:13px;background:#E4F2E9;color:#285941;font-size:12px;font-weight:900}.mini-number{width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex:none;border-radius:50%;background:#315F49;color:#fff;font-size:9px;font-weight:900}.consult-hero{border-radius:22px!important;border:0!important;background:linear-gradient(145deg,#173D30,#765225)!important}.consult-action{border-radius:18px!important;border:1px solid #E2E9E5!important;box-shadow:none!important}.consult-info{border-radius:18px!important;background:#fff!important;border:1px solid #E4E9E6!important}
+        .period-chip{padding:5px 9px;border-radius:999px;background:#E8F1EC;color:#315F49;font-size:9px;font-weight:900}.consult-question-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.consult-question{min-height:58px!important;border-radius:17px!important;background:#fff!important;border:1px solid #DDE7E1!important;color:#20382D!important;font-size:12px!important;font-weight:800!important;line-height:1.25!important;padding:8px!important}.consult-answer{border-radius:25px!important;border:1px solid #DCE8E1!important;background:linear-gradient(155deg,#fff,#F4F8F5)!important;box-shadow:0 16px 38px rgba(32,61,46,.1)!important}.answer-kicker{font-size:9px;font-weight:900;letter-spacing:.12em;color:#56806B}.answer-target{padding:10px 12px;border-radius:13px;background:#E4F2E9;color:#285941;font-size:12px;font-weight:900}.mini-number{width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex:none;border-radius:50%;background:#315F49;color:#fff;font-size:9px;font-weight:900}.simulation-result{padding:14px;border-radius:16px;background:#F3F7F4}.consult-hero{border-radius:22px!important;border:0!important;background:linear-gradient(145deg,#173D30,#765225)!important}.consult-action{border-radius:18px!important;border:1px solid #E2E9E5!important;box-shadow:none!important}.consult-info{border-radius:18px!important;background:#fff!important;border:1px solid #E4E9E6!important}
         """)
