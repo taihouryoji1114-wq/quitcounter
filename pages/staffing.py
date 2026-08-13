@@ -153,19 +153,25 @@ def staffing_page():
                                             shift_inputs[name][key] = ui.input(
                                                 title, value=values[name][key]
                                             ).props("outlined dense type=time step=60").classes("grow")
+                                shift_inputs[name]["break_minutes"] = ui.number(
+                                    "休憩時間（賄いを含む）", value=values[name]["break_minutes"] or None,
+                                    min=0, max=1440, step=1
+                                ).props("outlined dense suffix=分 inputmode=numeric").classes("w-full q-mt-xs")
                             else:
                                 for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"):
                                     shift_inputs[name][key] = ui.input(value="").props("type=hidden").classes("hidden")
                                 shift_inputs[name]["attended"] = ui.checkbox(
                                     "この日は出勤", value=values[name]["attended"]
                                 ).classes("q-mt-xs")
+                                shift_inputs[name]["break_minutes"] = ui.number(value=0).props(
+                                    "disable").classes("hidden")
                             if name in staffing.HOURLY_STAFF:
                                 shift_inputs[name]["attended"] = ui.checkbox(value=False).props("disable").classes("hidden")
                             detail = staffing.day_detail(record_date, name)
                             if detail["total_minutes"]:
                                 ui.label(
                                     f"{detail['total_minutes']//60}時間{detail['total_minutes']%60}分"
-                                    f"（深夜 {detail['night_minutes']}分）　¥{detail['pay']:,}"
+                                    f"（休憩 {detail['break_minutes']}分・支払対象 {detail['paid_minutes']//60}時間{detail['paid_minutes']%60}分・深夜 {detail['night_minutes']}分）　¥{detail['pay']:,}"
                                 ).classes("text-[10px] font-bold text-primary q-mt-sm")
 
                     def save_day():

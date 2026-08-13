@@ -50,6 +50,22 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(detail["night_minutes"], 180)
         self.assertEqual(detail["pay"], 5700)
 
+    def test_break_time_is_subtracted_from_hourly_pay(self):
+        self.staffing.save_wages({"スタッフA": 1200})
+        self.staffing.save_day("2026-08-01", {"スタッフA": {
+            "lunch_start": "10:00", "lunch_end": "15:00", "break_minutes": 30,
+        }})
+        detail = self.staffing.day_detail("2026-08-01", "スタッフA")
+        self.assertEqual(detail["total_minutes"], 300)
+        self.assertEqual(detail["paid_minutes"], 270)
+        self.assertEqual(detail["pay"], 5400)
+
+    def test_break_cannot_exceed_work_time(self):
+        with self.assertRaises(ValueError):
+            self.staffing.save_day("2026-08-01", {"スタッフA": {
+                "lunch_start": "10:00", "lunch_end": "11:00", "break_minutes": 61,
+            }})
+
     def test_dependent_alert_uses_prior_income_and_projection(self):
         self.staffing.save_wages({"スタッフA": 1200})
         self.staffing.save_dependent_settings({

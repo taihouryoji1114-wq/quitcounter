@@ -138,8 +138,9 @@ class StaffingManager:
                                 ("lunch_start", "lunch_end", "dinner_start", "dinner_end")}
                 result[name]["transportation"] = int(value.get("transportation", 0) or 0)
                 result[name]["attended"] = bool(value.get("attended", False))
+                result[name]["break_minutes"] = int(value.get("break_minutes", 0) or 0)
             else:  # Preserve older duration-only entries.
-                result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0, "attended": False}
+                result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0, "attended": False, "break_minutes": 0}
         return result
 
     def save_day(self, record_date, values):
@@ -151,10 +152,14 @@ class StaffingManager:
                              ("lunch_start", "lunch_end", "dinner_start", "dinner_end")}
             cleaned[name]["transportation"] = self._amount(value.get("transportation", 0), "交通費")
             cleaned[name]["attended"] = bool(value.get("attended", False))
+            cleaned[name]["break_minutes"] = self._amount(value.get("break_minutes", 0), "休憩時間")
             for prefix in ("lunch", "dinner"):
                 start, end = cleaned[name][f"{prefix}_start"], cleaned[name][f"{prefix}_end"]
                 if bool(start) != bool(end):
                     raise ValueError(f"{name}の{prefix}開始・終了を両方入力してください。")
+            worked_minutes = sum(self._minutes(cleaned[name]))
+            if cleaned[name]["break_minutes"] > worked_minutes:
+                raise ValueError(f"{name}の休憩時間が勤務時間を超えています。")
         self._data_manager.data.setdefault("business_staff_hours", {})[record_date] = cleaned
         self._data_manager.save()
         return cleaned
@@ -278,7 +283,12 @@ class StaffingManager:
     def day_detail(self, record_date, name):
         shift = self.day(record_date)[name]
         normal, night = self._minutes(shift)
+        break_minutes = shift.get("break_minutes", 0)
+        normal_after_break = max(0, normal - break_minutes)
+        night_after_break = max(0, night - max(0, break_minutes - normal))
         return {"normal_minutes": normal, "night_minutes": night,
+                "break_minutes": break_minutes,
+                "paid_minutes": normal_after_break + night_after_break,
                 "total_minutes": normal + night,
                 "pay": round(self._shift_pay(self.wages()[name], shift))}
 
@@ -296,6 +306,9 @@ class StaffingManager:
     @classmethod
     def _shift_pay(cls, wage, shift):
         normal, night = cls._minutes(shift)
+        break_minutes = int(shift.get("break_minutes", 0) or 0)
+        normal = max(0, normal - break_minutes)
+        night = max(0, night - max(0, break_minutes - cls._minutes(shift)[0]))
         return wage * normal / 60 + wage * 1.25 * night / 60
 
     @classmethod
