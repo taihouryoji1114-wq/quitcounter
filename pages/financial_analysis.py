@@ -36,7 +36,7 @@ BS_SECTIONS = (
 )
 
 PL_SECTIONS = (
-    ("売上・原価", (
+    ("売上・売上原価", (
         ("sales", "売上高"), ("opening_inventory", "期首棚卸高"),
         ("purchases", "仕入高"), ("closing_inventory", "期末棚卸高"),
     )),
@@ -44,7 +44,6 @@ PL_SECTIONS = (
         ("executive_compensation", "役員報酬"), ("salaries", "給料手当"),
         ("retirement_allowance", "退職金"), ("statutory_welfare", "法定福利費"),
         ("welfare", "福利厚生費"), ("temporary_wages", "雑給"),
-        ("recruitment_fees", "人材採用費"),
     )),
     ("販売費・一般管理費", (
         ("advertising", "広告宣伝費"), ("freight", "運賃"),
@@ -55,17 +54,14 @@ PL_SECTIONS = (
         ("entertainment", "接待交際費"), ("travel", "旅費交通費"),
         ("communication", "通信費"), ("fees", "支払手数料"),
         ("membership_fees", "諸会費"), ("card_fees", "カード手数料"),
-        ("lease", "リース料"), ("depreciation", "減価償却費"),
-        ("miscellaneous_expenses", "雑費"), ("other_sga", "その他販売管理費"),
+        ("lease", "リース料"), ("miscellaneous_expenses", "雑費"),
     )),
-    ("営業外・税金", (
+    ("営業外・特別損益", (
         ("interest_income", "受取利息"), ("dividend_income", "受取配当金"),
         ("miscellaneous_income", "雑収入"), ("interest_expense", "支払利息・割引料"),
         ("guarantee_amortization", "保証料償却"), ("miscellaneous_loss", "雑損失"),
         ("extraordinary_income", "特別利益"),
         ("fixed_asset_disposal_loss", "固定資産除却損"),
-        ("extraordinary_loss", "その他特別損失"),
-        ("corporate_taxes", "法人税等"),
     )),
 )
 
@@ -186,7 +182,12 @@ def _render_analysis(period=None):
                             ui.label(label).classes("text-[10px] text-grey-8")
                             inputs[key] = amount_input(report["current"][key])
                     with ui.element("div").classes("statement-grid subtotal-row items-center"):
-                        ui.label(section_title + " 小計").classes("text-[10px] font-black")
+                        subtotal_title = (
+                            "売上総利益（自動計算）"
+                            if section_title == "売上・売上原価"
+                            else section_title + " 小計"
+                        )
+                        ui.label(subtotal_title).classes("text-[10px] font-black")
                         subtotal_labels[section_title] = ui.label("¥0").classes(
                             "text-sm font-black text-primary text-right"
                         )
@@ -201,9 +202,28 @@ def _render_analysis(period=None):
 
         def refresh_subtotals():
             for title, keys in section_fields.items():
-                subtotal_labels[title].text = _money(
-                    sum(input_number(inputs[key].value) for key in keys)
-                )
+                if title == "売上・売上原価":
+                    sales = input_number(inputs["sales"].value)
+                    cost = (
+                        input_number(inputs["opening_inventory"].value)
+                        + input_number(inputs["purchases"].value)
+                        - input_number(inputs["closing_inventory"].value)
+                    )
+                    subtotal = sales - cost
+                elif title == "営業外・特別損益":
+                    subtotal = (
+                        input_number(inputs["interest_income"].value)
+                        + input_number(inputs["dividend_income"].value)
+                        + input_number(inputs["miscellaneous_income"].value)
+                        + input_number(inputs["extraordinary_income"].value)
+                        - input_number(inputs["interest_expense"].value)
+                        - input_number(inputs["guarantee_amortization"].value)
+                        - input_number(inputs["miscellaneous_loss"].value)
+                        - input_number(inputs["fixed_asset_disposal_loss"].value)
+                    )
+                else:
+                    subtotal = sum(input_number(inputs[key].value) for key in keys)
+                subtotal_labels[title].text = _money(subtotal)
 
         for field in inputs.values():
             field.on_value_change(lambda _: refresh_subtotals())
@@ -420,7 +440,7 @@ def financial_analysis_report_page(period: str):
     previous_sales = report["previous"]["sales"]
     personnel = sum(report["current"][key] for key in (
         "executive_compensation", "salaries", "retirement_allowance",
-        "statutory_welfare", "welfare", "temporary_wages", "recruitment_fees",
+        "statutory_welfare", "welfare", "temporary_wages",
     ))
     total_debt = report["current"]["short_term_loans"] + report["current"]["long_term_loans"]
     working_capital = current["current_assets"] - current["current_liabilities"]

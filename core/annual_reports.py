@@ -26,24 +26,25 @@ EQUITY_FIELDS = (
 )
 SGA_FIELDS = (
     "executive_compensation", "salaries", "retirement_allowance",
-    "statutory_welfare", "welfare", "temporary_wages", "recruitment_fees",
+    "statutory_welfare", "welfare", "temporary_wages",
     "advertising", "freight", "utilities", "fuel", "office_supplies",
     "consumables", "rent", "insurance", "repairs", "taxes_and_dues",
     "entertainment", "travel", "communication", "fees", "membership_fees",
-    "card_fees", "lease", "depreciation", "miscellaneous_expenses", "other_sga",
+    "card_fees", "lease", "miscellaneous_expenses",
 )
 PL_INPUT_FIELDS = (
     "sales", "opening_inventory", "purchases", "closing_inventory",
     *SGA_FIELDS, "interest_income", "dividend_income", "miscellaneous_income",
     "interest_expense", "guarantee_amortization", "miscellaneous_loss",
-    "extraordinary_income", "fixed_asset_disposal_loss", "extraordinary_loss",
-    "corporate_taxes",
+    "extraordinary_income", "fixed_asset_disposal_loss",
 )
 # Values entered in the early summarized screen remain stored for recovery, but
 # are intentionally excluded from totals because they are not on the statement.
 HIDDEN_LEGACY_FIELDS = (
     "other_current_assets", "other_fixed_assets",
     "other_current_liabilities", "other_equity",
+    "recruitment_fees", "depreciation", "other_sga",
+    "extraordinary_loss", "corporate_taxes",
 )
 ALL_FIELDS = (
     *ASSET_FIELDS, *LIABILITY_FIELDS, *EQUITY_FIELDS, *PL_INPUT_FIELDS,
@@ -156,9 +157,11 @@ class AnnualReportManager:
         non_operating_income = values["interest_income"] + values["dividend_income"] + values["miscellaneous_income"]
         non_operating_expense = values["interest_expense"] + values["guarantee_amortization"] + values["miscellaneous_loss"]
         ordinary_profit = operating_profit + non_operating_income - non_operating_expense
-        extraordinary_loss = values["fixed_asset_disposal_loss"] + values["extraordinary_loss"]
+        # The supplied statement shows 固定資産除却損 as the input account and
+        # 特別損失 as its subtotal, so they must not be added together.
+        extraordinary_loss = values["fixed_asset_disposal_loss"]
         pretax_profit = ordinary_profit + values["extraordinary_income"] - extraordinary_loss
-        net_income = pretax_profit - values["corporate_taxes"]
+        net_income = pretax_profit
         assets = current_assets + fixed_assets
         liabilities = current_liabilities + fixed_liabilities
         return {
@@ -197,7 +200,7 @@ class AnnualReportManager:
         )
         personnel = sum(int(current_values.get(key, 0) or 0) for key in (
             "executive_compensation", "salaries", "retirement_allowance",
-            "statutory_welfare", "welfare", "temporary_wages", "recruitment_fees",
+            "statutory_welfare", "welfare", "temporary_wages",
         ))
         working_capital = current["current_assets"] - current["current_liabilities"]
         cogs_rate = current["cogs"] / sales if sales else None

@@ -29,14 +29,14 @@ class AnnualReportManagerTest(unittest.TestCase):
             "cash_on_hand": 300, "receivables": 200, "merchandise": 100,
             "building_equipment": 400, "payables": 200, "long_term_loans": 300,
             "capital": 500, "sales": 2000, "purchases": 600,
-            "salaries": 500, "rent": 200, "corporate_taxes": 50,
+            "salaries": 500, "rent": 200,
         })
         self.assertEqual(result["assets"], 1000)
         self.assertEqual(result["liabilities"], 500)
         self.assertEqual(result["equity"], 500)
         self.assertEqual(result["gross_profit"], 1400)
         self.assertEqual(result["operating_profit"], 700)
-        self.assertEqual(result["net_income"], 650)
+        self.assertEqual(result["net_income"], 700)
         self.assertEqual(result["current_ratio"], 3)
 
     def test_negative_retained_earnings_is_preserved(self):
@@ -105,6 +105,25 @@ class AnnualReportManagerTest(unittest.TestCase):
         }
         decision = self.reports.management_decision(current, previous)
         self.assertEqual(decision["mode"], "attack")
+
+    def test_legacy_extraordinary_subtotal_is_not_counted_twice(self):
+        result = self.reports.calculate({
+            "sales": 1000,
+            "fixed_asset_disposal_loss": 100,
+            "extraordinary_loss": 100,
+        })
+        self.assertEqual(result["pretax_profit"], 900)
+
+    def test_accounts_not_on_supplied_statement_do_not_affect_profit(self):
+        result = self.reports.calculate({
+            "sales": 1000,
+            "recruitment_fees": 100,
+            "depreciation": 100,
+            "other_sga": 100,
+            "corporate_taxes": 100,
+        })
+        self.assertEqual(result["operating_profit"], 1000)
+        self.assertEqual(result["net_income"], 1000)
 
 
 if __name__ == "__main__":
