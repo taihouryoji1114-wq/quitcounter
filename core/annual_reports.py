@@ -264,6 +264,29 @@ class AnnualReportManager:
             reasons.append(f"労働分配率が {labor_rate * 100:.1f}%")
             actions.append("時間帯別売上と人員配置を照合する")
 
+        # Turn ratios into an actionable annual yen target. The restaurant
+        # references are starting points for diagnosis, not mandatory budgets.
+        personnel_sales_rate = personnel / sales if sales else None
+        concrete_actions = []
+        if current["operating_profit"] < 0:
+            concrete_actions.append(
+                f"最初の目標は営業赤字 {abs(current['operating_profit']):,}円を埋めること。"
+                "原価・人件費・固定費に改善額を割り振る"
+            )
+        if cogs_rate is not None and cogs_rate > .36:
+            excess = max(0, current["cogs"] - round(sales * .36))
+            concrete_actions.append(
+                f"原価率36%を参考にすると、年間 {excess:,}円が改善検討額。"
+                "仕入価格、廃棄、値上げの順に確認する"
+            )
+        if personnel_sales_rate is not None and personnel_sales_rate > .33:
+            excess = max(0, personnel - round(sales * .33))
+            concrete_actions.append(
+                f"人件費率33%を参考にすると、年間 {excess:,}円が改善検討額。"
+                "時間帯別売上とシフトを照合する"
+            )
+        actions = concrete_actions + actions
+
         attack = 0
         attack_conditions = []
         if current["operating_profit"] > 0 and (current["operating_margin"] or 0) >= 0.05:
@@ -306,6 +329,86 @@ class AnnualReportManager:
             "attack_conditions": list(dict.fromkeys(attack_conditions))[:3],
             "facts": facts,
         }
+
+    @staticmethod
+    def restaurant_health(current_values):
+        """Return compact restaurant-oriented diagnostics.
+
+        Restaurant benchmarks are reference points, not pass/fail accounting
+        standards. Cost and personnel ratios use the Japanese restaurant
+        averages published in JFC's restaurant startup guide; operating margin
+        uses the official food-service industry reference.
+        """
+        result = AnnualReportManager.calculate(current_values)
+        sales = int(current_values.get("sales", 0) or 0)
+        personnel = sum(int(current_values.get(key, 0) or 0) for key in (
+            "executive_compensation", "salaries", "retirement_allowance",
+            "statutory_welfare", "welfare", "temporary_wages",
+        ))
+        cost_rate = result["cogs"] / sales if sales else None
+        personnel_sales_rate = personnel / sales if sales else None
+        labor_distribution = personnel / result["gross_profit"] if result["gross_profit"] > 0 else None
+
+        def high_status(value, guide, warning):
+            if value is None:
+                return "unknown"
+            return "danger" if value >= warning else "caution" if value > guide else "good"
+
+        def low_status(value, guide, danger):
+            if value is None:
+                return "unknown"
+            return "danger" if value < danger else "caution" if value < guide else "good"
+
+        return (
+            {
+                "key": "cost", "title": "原価率", "value": cost_rate,
+                "display": f"{cost_rate * 100:.1f}%" if cost_rate is not None else "—",
+                "guide": "日本料理店の参考 36%",
+                "status": high_status(cost_rate, .36, .40),
+                "meaning": "売上のうち、食材など売上原価に使った割合です。",
+                "action": "高い場合は、値上げ・仕入価格・廃棄・メニュー構成の順で確認します。",
+            },
+            {
+                "key": "personnel", "title": "人件費率", "value": personnel_sales_rate,
+                "display": f"{personnel_sales_rate * 100:.1f}%" if personnel_sales_rate is not None else "—",
+                "guide": "日本料理店の参考 33%",
+                "status": high_status(personnel_sales_rate, .33, .38),
+                "meaning": "売上のうち、人件費に使った割合です。",
+                "action": "高い場合は、時間帯別売上とシフトを照合し、暇な時間の配置から直します。",
+            },
+            {
+                "key": "labor", "title": "労働分配率", "value": labor_distribution,
+                "display": f"{labor_distribution * 100:.1f}%" if labor_distribution is not None else "—",
+                "guide": "粗利に対する人件費",
+                "status": high_status(labor_distribution, .50, .60),
+                "meaning": "稼いだ粗利のうち、どれだけを人件費へ配分したかを見る指標です。",
+                "action": "高い場合は、人を減らす前に原価改善と客単価・回転数の改善余地も比較します。",
+            },
+            {
+                "key": "operating", "title": "営業利益率", "value": result["operating_margin"],
+                "display": f"{result['operating_margin'] * 100:.1f}%" if result["operating_margin"] is not None else "—",
+                "guide": "飲食サービス業の参考 3.9%",
+                "status": low_status(result["operating_margin"], .039, 0),
+                "meaning": "本業の売上から、原価と営業経費を引いて残った割合です。",
+                "action": "赤字なら、原価・人件費・固定費の改善額を別々に試算して黒字化します。",
+            },
+            {
+                "key": "equity", "title": "自己資本比率", "value": result["equity_ratio"],
+                "display": f"{result['equity_ratio'] * 100:.1f}%" if result["equity_ratio"] is not None else "—",
+                "guide": "プラス化が最初の目標",
+                "status": "danger" if result["equity"] < 0 else low_status(result["equity_ratio"], .20, .10),
+                "meaning": "会社の資産を、返済不要の自分のお金でどれだけ支えているかを示します。",
+                "action": "債務超過なら、投資拡大より先に毎期の黒字額と解消年数を決めます。",
+            },
+            {
+                "key": "cash", "title": "現預金月商倍率", "value": result["cash_months"],
+                "display": f"{result['cash_months']:.1f}か月" if result["cash_months"] is not None else "—",
+                "guide": "まず2か月分を目安",
+                "status": low_status(result["cash_months"], 2, 1),
+                "meaning": "今の現預金で、月商何か月分を持っているかを見る資金余力です。",
+                "action": "1か月未満なら、12か月資金繰り表と最低現預金ラインを先に作ります。",
+            },
+        )
 
 
 annual_reports = AnnualReportManager()

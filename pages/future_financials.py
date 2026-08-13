@@ -28,23 +28,40 @@ def _render_future_financials_home(selected_month=None):
     if not require_login():
         return
     Theme.page("未来決算", app_name="mirai-kessan")
-    def exit_action():
-        ui.button(icon="logout", on_click=log_out).props(
-            "flat round aria-label='R-BASEへ戻る'"
-        ).classes(
-            "text-grey-8"
-        ).tooltip("R-BASEへ戻る")
+    def header_actions():
+        with ui.dialog() as menu_dialog, ui.card().classes("future-menu q-pa-lg"):
+            with ui.row().classes("w-full items-center justify-between q-mb-md"):
+                ui.label("未来決算メニュー").classes("text-xl font-black")
+                ui.button(icon="close", on_click=menu_dialog.close).props("flat round")
+            for title, icon, path in (
+                ("経営ダッシュボード", "dashboard", "/mirai-kessan/dashboard"),
+                ("売上入力", "point_of_sale", "/mirai-kessan/sales"),
+                ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
+                ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),
+                ("決算分析", "assessment", "/mirai-kessan/financial-analysis"),
+            ):
+                ui.button(
+                    title, icon=icon, on_click=lambda _, target=path: ui.navigate.to(target)
+                ).props("flat no-caps align=left").classes("future-menu-item w-full")
+            ui.separator().classes("q-my-sm")
+            ui.button("R-BASEへ戻る", icon="logout", on_click=log_out).props(
+                "flat no-caps align=left"
+            ).classes("future-menu-item w-full text-grey-7")
+        with ui.row().classes("gap-0"):
+            ui.button(icon="menu", on_click=menu_dialog.open).props(
+                "flat round aria-label='メニューを開く'"
+            ).classes("text-grey-8")
 
     content = Theme.shell(
         "経営ダッシュボード",
         "毎日の入力から、今月の経営状況を見える化",
-        action=exit_action,
+        action=header_actions,
         brand="未来決算",
     )
     actual_current_month = today_jst().strftime("%Y-%m")
     current_month = _valid_month(selected_month) or actual_current_month
     dashboard_path = (
-        "/mirai-kessan" if current_month == actual_current_month
+        "/mirai-kessan/dashboard" if current_month == actual_current_month
         else f"/mirai-kessan/month/{current_month}"
     )
     purchase_total = purchases.monthly_total(current_month, kind="cost")
@@ -97,7 +114,7 @@ def _render_future_financials_home(selected_month=None):
                     ui.label(month_label).classes("text-base font-black")
                     if current_month != actual_current_month:
                         ui.button(
-                            "今月へ戻る", on_click=lambda: ui.navigate.to("/mirai-kessan")
+                            "今月へ戻る", on_click=lambda: ui.navigate.to("/mirai-kessan/dashboard")
                         ).props("flat dense no-caps").classes("text-[10px]")
                 ui.button(
                     icon="chevron_right",
@@ -223,6 +240,14 @@ def _render_future_financials_home(selected_month=None):
                         ui.label(title).classes("text-[9px] text-grey-7")
                         ui.label(f"¥{value:,}").classes("text-sm font-bold")
 
+        # The dashboard intentionally stops at the monthly snapshot. Detailed
+        # tools live in the menu so the first screen stays decision-focused.
+        ui.add_css("""
+        .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
+        .metric-value,.rounded-xl .font-bold{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        """)
+        return
+
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
             with ui.row().classes("w-full items-center justify-between no-wrap"):
                 with ui.column().classes("gap-0"):
@@ -338,6 +363,7 @@ def _render_future_financials_home(selected_month=None):
                 )
 
         ui.add_css("""
+        .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
         .actual-box-map{width:100%!important;align-self:stretch;height:420px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}
         .actual-money-box{min-height:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}
         .actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}
@@ -405,9 +431,29 @@ def _render_future_financials_home(selected_month=None):
         """)
 
 
-@ui.page("/mirai-kessan")
+@ui.page("/mirai-kessan/dashboard")
 def future_financials_home():
     _render_future_financials_home()
+
+
+@ui.page("/mirai-kessan")
+def future_financials_opening():
+    if not require_login():
+        return
+    Theme.page("未来決算", app_name="mirai-kessan")
+    with ui.element("div").classes("future-opening").on(
+        "click", lambda: ui.navigate.to("/mirai-kessan/dashboard")
+    ):
+        with ui.element("div").classes("future-opening-mark"):
+            ui.icon("insights").classes("text-5xl")
+        ui.label("未来決算").classes("text-4xl font-black q-mt-lg")
+        ui.label("数字から、次の一手を決める").classes("text-sm opacity-70 q-mt-xs")
+        ui.label("タップして開く").classes("opening-tap q-mt-xl")
+    ui.add_css("""
+    .future-opening{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;cursor:pointer;background:radial-gradient(circle at 70% 25%,rgba(210,162,91,.38),transparent 30%),linear-gradient(145deg,#0C2D23,#1D5B44 67%,#866133)}
+    .future-opening-mark{width:104px;height:104px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25);box-shadow:0 24px 60px rgba(0,0,0,.2)}
+    .opening-tap{padding:11px 22px;border-radius:999px;background:rgba(255,255,255,.14);font-size:11px;letter-spacing:.08em;animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.55}}
+    """)
 
 
 @ui.page("/mirai-kessan/month/{selected_month}")
@@ -423,7 +469,7 @@ def future_financials():
     content = Theme.shell(
         "利益シミュレーション",
         "計画と暫定実績を切り替えて、お金の残り方を確認",
-        back_to="/mirai-kessan",
+        back_to="/mirai-kessan/dashboard",
     )
     current_month = today_jst().strftime("%Y-%m")
     purchase_tax = purchases.monthly_tax_summary(current_month)

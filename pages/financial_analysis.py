@@ -81,7 +81,7 @@ def _render_analysis(period=None):
     content = Theme.shell(
         "決算分析",
         "決算書の最新数字を入力して、会社の状態と改善点を診断",
-        back_to="/mirai-kessan",
+        back_to="/mirai-kessan/dashboard",
         brand="未来決算",
     )
     periods = annual_reports.list_periods()
@@ -427,6 +427,7 @@ def financial_analysis_report_page(period: str):
     current = annual_reports.calculate(report["current"])
     previous = annual_reports.calculate(report["previous"])
     decision = annual_reports.management_decision(report["current"], report["previous"])
+    health = annual_reports.restaurant_health(report["current"])
     content = Theme.shell(
         "決算報告",
         period.replace("-", "年") + "月期｜会社の現在地と次の一手",
@@ -482,39 +483,45 @@ def financial_analysis_report_page(period: str):
                     ui.label(value).classes("text-xl font-black q-mt-xs")
                     ui.label(note).classes("text-[8px] opacity-70 q-mt-xs")
 
-        ui.label("利益を動かした要因").classes("report-section-title")
-        with ui.card().classes("insight-card w-full q-pa-lg q-mb-md"):
-            for title, value, explanation, tone in (
-                ("原価率", _ratio(cogs_rate), f"売上 {_money(sales)} に対して売上原価 {_money(current['cogs'])}", "amber"),
-                ("労働分配率", _ratio(personnel_rate), f"粗利 {_money(current['gross_profit'])} に対して人件費 {_money(personnel)}", "blue"),
-                ("営業利益率", _ratio(current["operating_margin"]), f"本業で残った利益 {_money(current['operating_profit'])}", "green" if not operating_negative else "red"),
-            ):
-                with ui.element("div").classes(f"driver-row {tone}"):
-                    with ui.column().classes("gap-0"):
-                        ui.label(title).classes("text-xs font-black")
-                        ui.label(explanation).classes("text-[8px] opacity-70")
-                    ui.label(value).classes("text-xl font-black")
-
-        ui.label("財務の安全性").classes("report-section-title")
-        with ui.card().classes("insight-card w-full q-pa-lg q-mb-md"):
-            for title, value, meaning in (
-                ("短期支払余力", _ratio(current["current_ratio"]), f"運転資金 {_money(working_capital)}"),
-                ("手元資金", f"{current['cash_months']:.1f}か月" if current["cash_months"] is not None else "—", "現預金が月商の何か月分あるか"),
-                ("借入負担", f"{current['debt_to_sales'] * 12:.1f}か月" if current["debt_to_sales"] is not None else "—", f"借入残高 {_money(total_debt)}"),
-                ("債務償還年数", f"{debt_payback_years:.1f}年" if debt_payback_years is not None else "算定不可", "現在の経常利益で借入を返す目安"),
-            ):
-                with ui.row().classes("w-full items-center justify-between q-py-sm no-wrap").style("border-bottom:1px solid #E8ECE9"):
-                    with ui.column().classes("gap-0"):
-                        ui.label(title).classes("text-xs font-bold")
-                        ui.label(meaning).classes("text-[8px] text-grey-6")
-                    ui.label(value).classes("text-base font-black")
-
-        ui.label("来期に優先する行動").classes("report-section-title")
+        ui.label("次に打つ手").classes("report-section-title")
         for index, action in enumerate(decision["actions"], 1):
             with ui.card().classes("action-card w-full q-pa-md q-mb-sm"):
                 with ui.row().classes("items-start no-wrap"):
                     ui.label(str(index)).classes("priority-number")
                     ui.label(action).classes("text-xs font-bold leading-relaxed q-pt-xs")
+
+        ui.label("飲食店の健康診断").classes("report-section-title")
+        ui.label("飲食店の参考値と比較。色は合否ではなく、確認の優先度です。").classes(
+            "text-[9px] text-grey-6 q-mb-sm"
+        )
+        with ui.element("div").classes("health-grid w-full q-mb-md"):
+            for item in health:
+                with ui.element("div").classes(f"health-card {item['status']}"):
+                    with ui.row().classes("w-full items-center justify-between no-wrap"):
+                        ui.label(item["title"]).classes("health-title")
+                        ui.element("span").classes("health-dot")
+                    ui.label(item["display"]).classes("health-value")
+                    ui.label(item["guide"]).classes("health-guide")
+                    with ui.expansion("意味と使い方", value=False).classes("health-help"):
+                        ui.label(item["meaning"]).classes("text-[9px] leading-relaxed")
+                        ui.label("次の行動：" + item["action"]).classes(
+                            "text-[9px] font-bold leading-relaxed q-mt-xs"
+                        )
+
+        with ui.expansion("財務の詳しい数字", icon="account_balance", value=False).classes(
+            "detail-drawer w-full q-mb-sm"
+        ):
+            for title, value, meaning in (
+                ("流動比率", _ratio(current["current_ratio"]), "短期の支払いに対する流動資産の厚み"),
+                ("運転資金", _money(working_capital), "流動資産から流動負債を引いた金額"),
+                ("借入残高", _money(total_debt), "短期借入金と長期借入金の合計"),
+                ("債務償還年数", f"{debt_payback_years:.1f}年" if debt_payback_years is not None else "算定不可", "現在の経常利益で返す場合の目安"),
+            ):
+                with ui.row().classes("w-full items-center justify-between no-wrap q-py-sm"):
+                    with ui.column().classes("gap-0 min-w-0"):
+                        ui.label(title).classes("text-xs font-bold")
+                        ui.label(meaning).classes("text-[8px] text-grey-6")
+                    ui.label(value).classes("compact-number")
 
         if decision["mode"] != "attack" and decision["attack_conditions"]:
             with ui.expansion("攻めに転じる条件", icon="rocket_launch", value=False).classes(
@@ -525,8 +532,9 @@ def financial_analysis_report_page(period: str):
                         ui.icon("radio_button_unchecked").classes("text-amber-8 text-sm")
                         ui.label(condition).classes("text-[10px] leading-relaxed")
 
-        ui.label("前期から何が変わったか").classes("report-section-title")
-        with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
+        with ui.expansion("前期との比較", icon="compare_arrows", value=False).classes(
+            "detail-drawer w-full q-mb-sm"
+        ):
             for title, now, before in (
                 ("売上高", report["current"]["sales"], report["previous"]["sales"]),
                 ("営業利益", current["operating_profit"], previous["operating_profit"]),
@@ -535,19 +543,16 @@ def financial_analysis_report_page(period: str):
                 ("純資産", current["equity"], previous["equity"]),
             ):
                 difference = now - before
-                with ui.element("div").classes("report-kpi"):
-                    ui.label(title).classes("text-[10px] text-grey-7")
-                    ui.label(("+" if difference > 0 else "") + _money(difference)).classes(
-                        "text-lg font-black text-positive" if difference >= 0 else "text-lg font-black text-negative"
-                    )
-                    ui.label(f"前期 {_money(before)} → 当期 {_money(now)}").classes("text-[8px] text-grey-6")
+                with ui.row().classes("w-full items-center justify-between no-wrap q-py-sm"):
+                    ui.label(title).classes("text-xs font-bold")
+                    ui.label(("+" if difference > 0 else "") + _money(difference)).classes("compact-number")
 
         ui.label("※診断は経営判断の補助です。最終的な会計・税務判断は顧問税理士と確認してください。").classes(
             "text-[9px] text-grey-6 q-mt-lg"
         )
         ui.add_css("""
         .report-hero{border-radius:28px;border:0;background:radial-gradient(circle at 90% 10%,rgba(214,170,92,.38),transparent 34%),linear-gradient(145deg,#102F27,#1D5945 70%,#76532E);box-shadow:0 20px 44px rgba(17,55,42,.25)}.report-hero.defense{background:radial-gradient(circle at 88% 8%,rgba(238,150,109,.35),transparent 35%),linear-gradient(145deg,#3B2020,#8B3832)}.report-hero.improve{background:radial-gradient(circle at 88% 8%,rgba(255,213,127,.35),transparent 35%),linear-gradient(145deg,#493411,#A06C22)}.report-hero.attack{background:radial-gradient(circle at 88% 8%,rgba(145,222,181,.32),transparent 35%),linear-gradient(145deg,#0E3A2B,#287C58)}.report-hero.verify{background:linear-gradient(145deg,#4A4F4C,#777F7A)}
-        .report-section-title{font-size:19px;font-weight:900;margin:16px 0 9px}.report-kpi{border-radius:18px;padding:16px;background:linear-gradient(145deg,#F1F7F3,#E8F1EC);min-width:0;color:#1B382C;border:1px solid #E0EAE4}.report-kpi.danger{background:linear-gradient(145deg,#FFF2EF,#FBE4E1);color:#873934;border-color:#F2D1CD}
-        .insight-card{border-radius:22px!important;background:#fff!important;border:1px solid #E5EAE7!important;box-shadow:0 9px 25px rgba(35,57,45,.06)!important}.driver-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 12px;margin-bottom:7px;border-radius:13px}.driver-row.amber{background:#FFF5E5;color:#805317}.driver-row.blue{background:#EAF3FF;color:#285786}.driver-row.green{background:#EAF5EE;color:#286447}.driver-row.red{background:#FDECEA;color:#943D38}
+        .report-section-title{font-size:18px;font-weight:900;margin:14px 0 8px}.report-kpi{border-radius:18px;padding:14px;background:linear-gradient(145deg,#F1F7F3,#E8F1EC);min-width:0;max-width:100%;overflow:hidden;color:#1B382C;border:1px solid #E0EAE4}.report-kpi .text-xl,.report-kpi .text-lg{font-size:clamp(14px,4.5vw,20px)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.report-kpi.danger{background:linear-gradient(145deg,#FFF2EF,#FBE4E1);color:#873934;border-color:#F2D1CD}
+        .health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.health-card{border-radius:18px;padding:13px;min-width:0;overflow:hidden;border:1px solid #E2E9E5;background:#F3F7F4}.health-card.good{background:#EAF5EE;color:#245F43}.health-card.caution{background:#FFF5E2;color:#805817}.health-card.danger{background:#FDECEA;color:#923D37}.health-card.unknown{background:#F1F3F2;color:#68716C}.health-title{font-size:10px;font-weight:900;min-width:0}.health-dot{width:8px;height:8px;flex:none;border-radius:50%;background:currentColor}.health-value{font-size:clamp(18px,6vw,27px);font-weight:900;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:5px}.health-guide{font-size:8px;opacity:.72;min-height:22px;line-height:1.35}.health-help .q-item{min-height:30px!important;padding:3px 0!important;font-size:9px}.health-help .q-expansion-item__content{padding-top:5px}.detail-drawer{border-radius:18px!important;background:#fff!important;border:1px solid #E4E9E6!important}.compact-number{font-size:clamp(11px,3.8vw,16px);font-weight:900;max-width:44%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
         .decision-card{border-radius:22px!important;background:#F3F8F5!important;border:1px solid #DDEAE2!important;box-shadow:none!important}.decision-verification{border-radius:22px!important;background:#FFF3DF!important;color:#83581B!important;border:1px solid #F0D8AC!important;box-shadow:none!important}.action-card{border-radius:18px!important;background:#fff!important;border:1px solid #E4E9E6!important;box-shadow:0 7px 20px rgba(35,57,45,.05)!important}.attack-conditions{border-radius:18px!important;background:#FFF8EA!important;border:1px solid #F1E0BA!important}.priority-number{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#FFF0E4;color:#9A5C24;font-weight:900;flex:none}
         """)

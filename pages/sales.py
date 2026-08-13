@@ -20,7 +20,7 @@ def sales_page():
     content = Theme.shell(
         "売上入力",
         "その日の売上を、1回入力するだけ",
-        back_to="/mirai-kessan",
+        back_to="/mirai-kessan/dashboard",
     )
 
     with content:

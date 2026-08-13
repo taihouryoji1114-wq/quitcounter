@@ -16,7 +16,7 @@ def purchase_page():
     content = Theme.shell(
         "仕入れノート",
         "普段は合計だけ、必要な時だけ税率別に記録",
-        back_to="/mirai-kessan",
+        back_to="/mirai-kessan/dashboard",
     )
 
     with content:

@@ -125,6 +125,25 @@ class AnnualReportManagerTest(unittest.TestCase):
         self.assertEqual(result["operating_profit"], 1000)
         self.assertEqual(result["net_income"], 1000)
 
+    def test_restaurant_health_compares_cost_and_personnel_to_sales(self):
+        health = {item["key"]: item for item in self.reports.restaurant_health({
+            "sales": 10000, "purchases": 4000, "salaries": 4000,
+        })}
+        self.assertEqual(health["cost"]["status"], "danger")
+        self.assertEqual(health["personnel"]["status"], "danger")
+        self.assertEqual(health["cost"]["display"], "40.0%")
+
+    def test_decision_turns_restaurant_ratio_gap_into_yen_action(self):
+        values = {
+            "cash_on_hand": 1000, "capital": 1000,
+            "sales": 10000, "purchases": 4000, "salaries": 4000,
+            "rent": 2500,
+        }
+        decision = self.reports.management_decision(values, {})
+        actions = " ".join(decision["actions"])
+        self.assertIn("400円が改善検討額", actions)
+        self.assertIn("700円が改善検討額", actions)
+
 
 if __name__ == "__main__":
     unittest.main()
