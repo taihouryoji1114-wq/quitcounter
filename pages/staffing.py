@@ -16,6 +16,15 @@ def staffing_page():
     with content:
         wages = staffing.wages()
         salaries = staffing.monthly_salaries()
+        current_month = today_jst().strftime("%Y-%m")
+        current_summary = staffing.month_cost_summary(current_month)
+        with ui.card().classes("staff-total-card w-full q-pa-lg q-mb-sm text-white"):
+            ui.label("今月の会社総負担").classes("text-[10px] opacity-70")
+            ui.label(f"¥{current_summary['company_cost']:,}").classes(
+                "text-3xl font-black q-mt-xs")
+            ui.label(
+                f"額面 ¥{current_summary['gross_wages']:,}・交通費 ¥{current_summary['transportation']:,}・会社負担保険 ¥{current_summary['employer_insurance']:,}"
+            ).classes("text-[9px] opacity-75 q-mt-sm")
         with ui.expansion("店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
             salary_inputs = {
@@ -169,6 +178,6 @@ def staffing_page():
                     summary = staffing.month_cost_summary(record_date[:7])
                     ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-[10px] text-grey-7 q-mt-xs")
                     ui.label(f"会社の総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
-            date_input.on("change", lambda: render_day(date_input.value))
-            render_day(selected)
-        ui.add_css(".staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
+        date_input.on("change", lambda: render_day(date_input.value))
+        render_day(selected)
+        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
