@@ -85,6 +85,7 @@ def _render_future_financials_home(selected_month=None):
         operating_profit - consumption_tax_estimate - operations["loan_payment"]
     )
     cost_rate = purchase_total / sales_total if sales_total else 0
+    personnel_rate = operations["personnel"] / sales_total if sales_total else None
     labor_rate = operations["personnel"] / gross_profit if gross_profit > 0 else None
     monthly_entry_items = (
         ("人件費", operations["personnel"]),
@@ -145,6 +146,15 @@ def _render_future_financials_home(selected_month=None):
                 ):
                     ui.label("粗利").classes("text-[10px] opacity-70")
                     ui.label(f"¥{gross_profit:,}").classes("font-bold")
+            with ui.element("div").classes("snapshot-ratio-grid w-full q-mt-sm"):
+                for title, value in (
+                    ("原価率", f"{cost_rate * 100:.1f}%" if sales_total else "—"),
+                    ("人件費率", f"{personnel_rate * 100:.1f}%" if personnel_rate is not None else "—"),
+                    ("労働分配率", f"{labor_rate * 100:.1f}%" if labor_rate is not None else "—"),
+                ):
+                    with ui.element("div").classes("snapshot-ratio-card"):
+                        ui.label(title).classes("snapshot-ratio-label")
+                        ui.label(value).classes("snapshot-ratio-value")
             with ui.row().classes("items-center gap-1 q-mt-sm opacity-70"):
                 ui.label("タップして費用・税金・返済を確認").classes("text-[9px]")
                 ui.icon("expand_more").classes("text-sm")
@@ -291,6 +301,7 @@ def _render_future_financials_home(selected_month=None):
         .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
         .metric-value,.rounded-xl .font-bold{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .actual-box-map{width:calc(100% + 12px)!important;margin-left:-6px;margin-right:-6px;height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}.actual-money-box{min-height:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}.actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}.actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}.actual-cost-block>.actual-money-box,.actual-gross-block>.actual-money-box{width:100%}.actual-gross-block{grid-column:2;grid-row:2;min-height:0;display:flex}.actual-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}.actual-block-title{font-size:9px;font-weight:800;line-height:1.1}.actual-block-value{font-size:10px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap}.actual-block-note{font-size:7px;line-height:1.1;margin-top:2px;opacity:.9;white-space:nowrap}
+        .snapshot-ratio-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.snapshot-ratio-card{min-width:0;padding:8px 5px;border-radius:12px;background:rgba(255,255,255,.14);text-align:center}.snapshot-ratio-label{font-size:8px;opacity:.72;white-space:nowrap}.snapshot-ratio-value{font-size:15px;font-weight:900;white-space:nowrap;margin-top:2px}
         """)
         return
 
