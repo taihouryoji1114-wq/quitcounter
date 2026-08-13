@@ -15,10 +15,23 @@ def staffing_page():
                           back_to="/mirai-kessan/dashboard", brand="未来決算")
     with content:
         wages = staffing.wages()
+        salaries = staffing.monthly_salaries()
+        with ui.expansion("店長・社員の月額給与", icon="badge", value=False).classes(
+            "staff-panel w-full"):
+            salary_inputs = {
+                name: ui.number(f"{name}の額面給与", value=salaries[name] or None,
+                                min=0, step=1).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
+                for name in staffing.SALARIED_STAFF
+            }
+            def save_salaries():
+                staffing.save_monthly_salaries({name: field.value for name, field in salary_inputs.items()})
+                ui.notify("月額給与を保存しました", type="positive")
+            ui.button("月額給与を保存", icon="save", on_click=save_salaries).classes("w-full q-mt-md")
+
         with ui.expansion("スタッフ別の時給設定", icon="groups", value=False).classes("staff-panel w-full"):
             wage_inputs = {}
             with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
-                for name in staffing.STAFF:
+                for name in staffing.HOURLY_STAFF:
                     wage_inputs[name] = ui.number(name, value=wages[name] or None, min=0, step=1).props(
                         "outlined dense prefix=¥ suffix=/時 inputmode=numeric")
 
@@ -101,14 +114,18 @@ def staffing_page():
                     for name in staffing.STAFF:
                         shift_inputs[name] = {}
                         with ui.expansion(name, value=False).classes("staff-shift w-full q-mb-xs"):
-                            for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
-                                ui.label(label).classes("text-[10px] font-bold q-mt-xs")
-                                with ui.row().classes("w-full gap-2 no-wrap"):
-                                    for title, suffix in (("開始", "start"), ("終了", "end")):
-                                        key = f"{prefix}_{suffix}"
-                                        shift_inputs[name][key] = ui.input(
-                                            title, value=values[name][key]
-                                        ).props("outlined dense type=time step=60").classes("grow")
+                            if name in staffing.HOURLY_STAFF:
+                                for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
+                                    ui.label(label).classes("text-[10px] font-bold q-mt-xs")
+                                    with ui.row().classes("w-full gap-2 no-wrap"):
+                                        for title, suffix in (("開始", "start"), ("終了", "end")):
+                                            key = f"{prefix}_{suffix}"
+                                            shift_inputs[name][key] = ui.input(
+                                                title, value=values[name][key]
+                                            ).props("outlined dense type=time step=60").classes("grow")
+                            else:
+                                for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"):
+                                    shift_inputs[name][key] = ui.input(value="").props("type=hidden").classes("hidden")
                             shift_inputs[name]["transportation"] = ui.number(
                                 "この日の交通費", value=values[name]["transportation"] or None,
                                 min=0, step=1).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")

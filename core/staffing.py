@@ -9,6 +9,8 @@ from core.data import data
 
 class StaffingManager:
     STAFF = ("店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(15)))
+    SALARIED_STAFF = ("店長", "社員A")
+    HOURLY_STAFF = STAFF[2:]
     DEPENDENT_LIMITS = {
         "general": ("一般の税扶養", 1_230_000),
         "young": ("19〜22歳（控除維持）", 1_500_000),
@@ -66,6 +68,17 @@ class StaffingManager:
     def save_wages(self, values):
         cleaned = {name: self._amount(values.get(name, 0), "時給") for name in self.STAFF}
         self._data_manager.data["business_staff_wages"] = cleaned
+        self._data_manager.save()
+        return cleaned
+
+    def monthly_salaries(self):
+        stored = self._data_manager.data.get("business_staff_monthly_salaries", {})
+        return {name: int(stored.get(name, 0) or 0) for name in self.SALARIED_STAFF}
+
+    def save_monthly_salaries(self, values):
+        cleaned = {name: self._amount(values.get(name, 0), "月額給与")
+                   for name in self.SALARIED_STAFF}
+        self._data_manager.data["business_staff_monthly_salaries"] = cleaned
         self._data_manager.save()
         return cleaned
 
@@ -132,7 +145,8 @@ class StaffingManager:
 
     def day_total(self, record_date):
         wages, shifts = self.wages(), self.day(record_date)
-        return round(sum(self._shift_pay(wages[name], shifts[name]) + shifts[name]["transportation"] for name in self.STAFF))
+        return round(sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
+                     + sum(shifts[name]["transportation"] for name in self.STAFF))
 
     def month_total(self, month):
         datetime.strptime(month, "%Y-%m")
@@ -140,17 +154,22 @@ class StaffingManager:
         records = self._data_manager.data.get("business_staff_hours", {})
         return round(sum(self._shift_pay(wages[name], self.day(record_date)[name]) + self.day(record_date)[name]["transportation"]
                          for record_date in records if record_date.startswith(month)
-                         for name in self.STAFF))
+                         for name in self.HOURLY_STAFF)
+                     + sum(self.monthly_salaries().values())
+                     + round(sum(self.day(record_date)[name]["transportation"]
+                                 for record_date in records if record_date.startswith(month)
+                                 for name in self.SALARIED_STAFF)))
 
     def month_cost_summary(self, month):
         records = self._data_manager.data.get("business_staff_hours", {})
         wages, settings, rates = self.wages(), self.insurance_settings(), self.insurance_rates()
-        gross = transportation = 0
+        gross = sum(self.monthly_salaries().values())
+        transportation = 0
         for record_date in records:
             if not record_date.startswith(month):
                 continue
             shifts = self.day(record_date)
-            gross += sum(self._shift_pay(wages[name], shifts[name]) for name in self.STAFF)
+            gross += sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
             transportation += sum(shifts[name]["transportation"] for name in self.STAFF)
         social = labor = 0
         for name in self.STAFF:
@@ -161,7 +180,11 @@ class StaffingManager:
                     rate += rates["care"]
                 social += setting["standard_monthly"] * rate / 100
             if setting["employment"]:
-                staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name]) + self.day(day)[name]["transportation"] for day in records if day.startswith(month))
+                if name in self.SALARIED_STAFF:
+                    staff_gross = self.monthly_salaries()[name] + sum(
+                        self.day(day)[name]["transportation"] for day in records if day.startswith(month))
+                else:
+                    staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name]) + self.day(day)[name]["transportation"] for day in records if day.startswith(month))
                 labor += staff_gross * rates["employment"] / 100
         labor += (gross + transportation) * rates["workers_comp"] / 100
         employer_insurance = round(social + labor)

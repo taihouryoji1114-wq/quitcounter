@@ -69,15 +69,15 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(saved["スタッフA"]["limit"], 1_230_000)
 
     def test_company_cost_includes_transport_and_employer_insurance(self):
-        self.staffing.save_wages({"社員A": 1200})
-        self.staffing.save_day("2026-08-01", {"社員A": {
+        self.staffing.save_wages({"スタッフA": 1200})
+        self.staffing.save_day("2026-08-01", {"スタッフA": {
             "lunch_start": "10:00", "lunch_end": "15:00", "transportation": 500,
         }})
         self.staffing.save_insurance_rates({
             "health": 5, "pension": 9.15, "care": 0, "employment": .85,
             "workers_comp": .3, "other": 0,
         })
-        self.staffing.save_insurance_settings({"社員A": {
+        self.staffing.save_insurance_settings({"スタッフA": {
             "social": True, "standard_monthly": 100_000,
             "care": False, "employment": True,
         }})
@@ -86,6 +86,16 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(summary["transportation"], 500)
         self.assertGreater(summary["employer_insurance"], 14_000)
         self.assertEqual(summary["company_cost"], 6500 + summary["employer_insurance"])
+
+    def test_salaried_staff_use_monthly_gross_not_hours(self):
+        self.staffing.save_monthly_salaries({"店長": 350_000, "社員A": 280_000})
+        self.staffing.save_wages({"店長": 99_999})
+        self.staffing.save_day("2026-08-01", {"店長": {
+            "lunch_start": "10:00", "lunch_end": "20:00", "transportation": 500,
+        }})
+        summary = self.staffing.month_cost_summary("2026-08")
+        self.assertEqual(summary["gross_wages"], 630_000)
+        self.assertEqual(summary["transportation"], 500)
 
 
 if __name__ == "__main__":
