@@ -34,6 +34,7 @@ def _render_future_financials_home(selected_month=None):
                 ui.label("未来決算メニュー").classes("text-xl font-black")
                 ui.button(icon="close", on_click=menu_dialog.close).props("flat round")
             for title, icon, path in (
+                ("経営コンサル", "psychology", "/mirai-kessan/consulting"),
                 ("売上入力", "point_of_sale", "/mirai-kessan/sales"),
                 ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
                 ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),

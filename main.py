@@ -20,6 +20,7 @@ import pages.purchases
 import pages.sales
 import pages.future_financials
 import pages.financial_analysis
+import pages.consulting
 import pages.smoking
 import pages.settings
 import pages.workout
