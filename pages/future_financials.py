@@ -1,4 +1,5 @@
 import json
+from calendar import monthrange
 from datetime import datetime
 
 from nicegui import ui
@@ -69,6 +70,16 @@ def _render_future_financials_home(selected_month=None):
     payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
     advertising_summary = financials.get_monthly_advertising(current_month)
     advertising_total = advertising_summary["total"]
+    today = today_jst()
+    selected_year, selected_month_number = (int(part) for part in current_month.split("-"))
+    days_in_month = monthrange(selected_year, selected_month_number)[1]
+    if (selected_year, selected_month_number) < (today.year, today.month):
+        elapsed_days = days_in_month
+    elif (selected_year, selected_month_number) > (today.year, today.month):
+        elapsed_days = 0
+    else:
+        elapsed_days = min(today.day, days_in_month)
+    elapsed_ratio = elapsed_days / days_in_month
     purchase_tax = purchases.monthly_tax_summary(current_month)
     output_tax = sales_total * 10 // 110
     consumption_tax_estimate = max(
@@ -76,14 +87,17 @@ def _render_future_financials_home(selected_month=None):
         output_tax - purchase_tax["input_tax"] - advertising_summary["input_tax"],
     )
     operations = financials.get_monthly_operations(current_month)
-    staff_personnel_total = staffing.month_cost_summary(current_month)["company_cost"]
+    staff_personnel_total = staffing.month_cost_summary(current_month, today)["company_cost"]
     if staff_personnel_total:
         operations["personnel"] = staff_personnel_total
     gross_profit = sales_total - purchase_total
+    current_rent = round(operations["rent"] * elapsed_ratio)
+    current_utilities = round(operations["utilities"] * elapsed_ratio)
+    current_advertising = round(advertising_total * elapsed_ratio)
     operating_costs = (
-        operations["personnel"] + operations["rent"] + operations["utilities"]
+        operations["personnel"] + current_rent + current_utilities
         + operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees
-        + advertising_total
+        + current_advertising
     )
     operating_profit = gross_profit - operating_costs
     cash_after_tax_and_loan = (
@@ -267,9 +281,9 @@ def _render_future_financials_home(selected_month=None):
                 gross_share = max(gross_profit / sales_total, .015)
                 breakdown = (
                     ("人件費", operations["personnel"], "#4A9FD0", operations["personnel"] / gross_for_ratio),
-                    ("家賃", operations["rent"], "#8172B5", operations["rent"] / gross_for_ratio),
-                    ("水道光熱費", operations["utilities"], "#4CB7B4", operations["utilities"] / gross_for_ratio),
-                    ("広告費", advertising_total, "#D8943C", advertising_total / gross_for_ratio),
+                    ("家賃", current_rent, "#8172B5", current_rent / gross_for_ratio),
+                    ("水道光熱費", current_utilities, "#4CB7B4", current_utilities / gross_for_ratio),
+                    ("広告費", current_advertising, "#D8943C", current_advertising / gross_for_ratio),
                     ("その他管理費", operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees, "#99A29D", (operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees) / gross_for_ratio),
                     ("営業利益" if operating_profit >= 0 else "営業損失", abs(operating_profit), "#4B77B7" if operating_profit >= 0 else "#C85C57", abs(operating_profit) / gross_for_ratio),
                 )
