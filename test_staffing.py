@@ -17,8 +17,9 @@ class StaffingManagerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_has_fifteen_pseudonymous_staff_slots(self):
-        self.assertEqual(len(self.staffing.STAFF), 15)
-        self.assertEqual(self.staffing.STAFF[0], "スタッフA")
+        self.assertEqual(len(self.staffing.STAFF), 17)
+        self.assertEqual(self.staffing.STAFF[0], "店長")
+        self.assertEqual(self.staffing.STAFF[2], "スタッフA")
         self.assertEqual(self.staffing.STAFF[-1], "スタッフO")
 
     def test_month_total_uses_wage_and_daily_hours(self):
@@ -66,6 +67,25 @@ class StaffingManagerTest(unittest.TestCase):
         settings = {"スタッフA": {"mode": "general"}}
         saved = self.staffing.save_dependent_settings(settings)
         self.assertEqual(saved["スタッフA"]["limit"], 1_230_000)
+
+    def test_company_cost_includes_transport_and_employer_insurance(self):
+        self.staffing.save_wages({"社員A": 1200})
+        self.staffing.save_day("2026-08-01", {"社員A": {
+            "lunch_start": "10:00", "lunch_end": "15:00", "transportation": 500,
+        }})
+        self.staffing.save_insurance_rates({
+            "health": 5, "pension": 9.15, "care": 0, "employment": .85,
+            "workers_comp": .3, "other": 0,
+        })
+        self.staffing.save_insurance_settings({"社員A": {
+            "social": True, "standard_monthly": 100_000,
+            "care": False, "employment": True,
+        }})
+        summary = self.staffing.month_cost_summary("2026-08")
+        self.assertEqual(summary["gross_wages"], 6000)
+        self.assertEqual(summary["transportation"], 500)
+        self.assertGreater(summary["employer_insurance"], 14_000)
+        self.assertEqual(summary["company_cost"], 6500 + summary["employer_insurance"])
 
 
 if __name__ == "__main__":

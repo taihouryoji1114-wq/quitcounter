@@ -43,7 +43,10 @@ def staffing_page():
                         "年間上限（個別調整可）", value=settings[name]["limit"] or None,
                         min=0, step=1000).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
                     dependent_inputs[name]["prior_income"] = ui.number(
-                        "導入前・他社の今年の給与", value=settings[name]["prior_income"] or None,
+                        "当店の導入前給与", value=settings[name]["prior_income"] or None,
+                        min=0, step=1000).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
+                    dependent_inputs[name]["other_income"] = ui.number(
+                        "他社での今年の給与", value=settings[name]["other_income"] or None,
                         min=0, step=1000).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
 
             def save_dependent():
@@ -54,24 +57,34 @@ def staffing_page():
                 ui.navigate.to("/mirai-kessan/staffing")
             ui.button("扶養設定を保存", icon="save", on_click=save_dependent).classes("w-full q-mt-md")
 
-        ui.label("今年の扶養アラート").classes("text-lg font-black q-mt-md")
-        ui.label("確定判定ではなく、本人・勤務先・専門家へ早めに確認するための目安です").classes("text-[9px] text-grey-6 q-mb-sm")
-        year = today_jst().year
-        alerts = [(name, staffing.dependent_status(year, name, today_jst())) for name in staffing.STAFF]
-        visible_alerts = [(name, status) for name, status in alerts if status["mode"] != "none" and (status["earned"] or wages[name])]
-        if visible_alerts:
+        with ui.expansion("今年の扶養アラート", icon="warning", value=False).classes("staff-panel w-full q-mt-sm"):
+            year = today_jst().year
+            alerts = [(name, staffing.dependent_status(year, name, today_jst())) for name in staffing.STAFF]
+            visible_alerts = [(name, status) for name, status in alerts if status["mode"] != "none" and (status["earned"] or wages[name])]
             for name, status in visible_alerts:
                 colors = {"safe": "#E8F4EC", "warning": "#FFF4D9", "danger": "#FFE4D4", "over": "#FFE0E0"}
                 labels = {"safe": "余裕あり", "warning": "早めに確認", "danger": "要調整", "over": "上限到達"}
-                with ui.card().classes("dependent-card w-full q-pa-md q-mb-xs").style(
-                    f"background:{colors[status['level']]}"):
-                    with ui.row().classes("w-full justify-between items-center no-wrap"):
-                        ui.label(name).classes("text-sm font-black")
-                        ui.label(labels[status["level"]]).classes("dependent-badge")
-                    ui.label(f"今年の累計 ¥{status['earned']:,} ／ 上限 ¥{status['limit']:,}").classes("text-[10px] q-mt-xs")
-                    ui.label(f"年末予測 ¥{status['projected']:,}　残り ¥{status['remaining']:,}").classes("text-xs font-bold q-mt-xs")
-        else:
-            ui.label("時給と扶養設定を保存すると表示されます").classes("text-xs text-grey-6 q-pa-sm")
+                with ui.card().classes("dependent-card w-full q-pa-sm q-mb-xs").style(f"background:{colors[status['level']]}"):
+                    ui.label(f"{name}　{labels[status['level']]}　残り ¥{status['remaining']:,}").classes("text-xs font-bold")
+
+        insurance = staffing.insurance_settings()
+        rates = staffing.insurance_rates()
+        with ui.expansion("会社負担の社会保険設定", icon="health_and_safety", value=False).classes("staff-panel w-full q-mt-sm"):
+            ui.label("保険料額表の会社負担率を入力してください").classes("text-[9px] text-grey-6")
+            rate_inputs = {key: ui.number(label, value=rates[key], min=0, step=.001).props("outlined dense suffix=% inputmode=decimal").classes("w-full q-mt-xs") for key, label in (("health","健康保険"),("pension","厚生年金"),("care","介護保険"),("employment","雇用保険・会社負担"),("workers_comp","労災保険"),("other","子ども・子育て拠出金等"))}
+            insurance_inputs = {}
+            for name in staffing.STAFF:
+                insurance_inputs[name] = {}
+                with ui.expansion(name, value=False).classes("staff-shift w-full q-mb-xs"):
+                    insurance_inputs[name]["social"] = ui.checkbox("健康保険・厚生年金に加入", value=insurance[name]["social"])
+                    insurance_inputs[name]["standard_monthly"] = ui.number("標準報酬月額", value=insurance[name]["standard_monthly"] or None, min=0).props("outlined dense prefix=¥")
+                    insurance_inputs[name]["care"] = ui.checkbox("介護保険対象", value=insurance[name]["care"])
+                    insurance_inputs[name]["employment"] = ui.checkbox("雇用保険対象", value=insurance[name]["employment"])
+            def save_insurance():
+                staffing.save_insurance_rates({key: field.value for key, field in rate_inputs.items()})
+                staffing.save_insurance_settings({name: {key: field.value for key, field in fields.items()} for name, fields in insurance_inputs.items()})
+                ui.notify("社会保険設定を保存しました", type="positive")
+            ui.button("保険設定を保存", on_click=save_insurance).classes("w-full q-mt-sm")
 
         selected = today_jst().isoformat()
         ui.label("勤務時間を入力").classes("text-lg font-black q-mt-md")
@@ -96,6 +109,9 @@ def staffing_page():
                                         shift_inputs[name][key] = ui.input(
                                             title, value=values[name][key]
                                         ).props("outlined dense type=time step=60").classes("grow")
+                            shift_inputs[name]["transportation"] = ui.number(
+                                "この日の交通費", value=values[name]["transportation"] or None,
+                                min=0, step=1).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
                             detail = staffing.day_detail(record_date, name)
                             if detail["total_minutes"]:
                                 ui.label(
@@ -117,6 +133,9 @@ def staffing_page():
                     ui.button("勤務時間を保存", icon="save", on_click=save_day).classes("w-full q-mt-md")
                     ui.label(f"この日の人件費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
                     ui.label(f"今月の人件費　¥{staffing.month_total(record_date[:7]):,}").classes("text-xl font-black q-mt-xs")
+                    summary = staffing.month_cost_summary(record_date[:7])
+                    ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-[10px] text-grey-7 q-mt-xs")
+                    ui.label(f"会社の総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
         date_input.on("change", lambda: render_day(date_input.value))
         render_day(selected)
         ui.add_css(".staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")

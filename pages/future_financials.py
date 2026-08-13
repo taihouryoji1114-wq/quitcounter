@@ -76,7 +76,7 @@ def _render_future_financials_home(selected_month=None):
         output_tax - purchase_tax["input_tax"] - advertising_summary["input_tax"],
     )
     operations = financials.get_monthly_operations(current_month)
-    staff_personnel_total = staffing.month_total(current_month)
+    staff_personnel_total = staffing.month_cost_summary(current_month)["company_cost"]
     if staff_personnel_total:
         operations["personnel"] = staff_personnel_total
     gross_profit = sales_total - purchase_total

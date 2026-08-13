@@ -8,7 +8,7 @@ from core.data import data
 
 
 class StaffingManager:
-    STAFF = tuple(f"スタッフ{chr(65 + index)}" for index in range(15))
+    STAFF = ("店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(15)))
     DEPENDENT_LIMITS = {
         "general": ("一般の税扶養", 1_230_000),
         "young": ("19〜22歳（控除維持）", 1_500_000),
@@ -25,6 +25,44 @@ class StaffingManager:
         stored = self._data_manager.data.get("business_staff_wages", {})
         return {name: int(stored.get(name, 0) or 0) for name in self.STAFF}
 
+    def insurance_rates(self):
+        stored = self._data_manager.data.get("business_employer_insurance_rates", {})
+        return {"health": float(stored.get("health", 0) or 0),
+                "pension": float(stored.get("pension", 9.15) or 9.15),
+                "care": float(stored.get("care", 0.795) or 0.795),
+                "employment": float(stored.get("employment", 0.85) or 0.85),
+                "workers_comp": float(stored.get("workers_comp", 0.3) or 0.3),
+                "other": float(stored.get("other", 0) or 0)}
+
+    def save_insurance_rates(self, values):
+        cleaned = {}
+        for key in ("health", "pension", "care", "employment", "workers_comp", "other"):
+            rate = float(values.get(key, 0) or 0)
+            if rate < 0 or rate > 100:
+                raise ValueError("保険料率は0〜100%で入力してください。")
+            cleaned[key] = round(rate, 4)
+        self._data_manager.data["business_employer_insurance_rates"] = cleaned
+        self._data_manager.save()
+        return cleaned
+
+    def insurance_settings(self):
+        stored = self._data_manager.data.get("business_staff_insurance_settings", {})
+        return {name: {"social": bool(stored.get(name, {}).get("social", False)),
+                       "standard_monthly": int(stored.get(name, {}).get("standard_monthly", 0) or 0),
+                       "care": bool(stored.get(name, {}).get("care", False)),
+                       "employment": bool(stored.get(name, {}).get("employment", False))}
+                for name in self.STAFF}
+
+    def save_insurance_settings(self, values):
+        cleaned = {name: {"social": bool(values.get(name, {}).get("social", False)),
+                          "standard_monthly": self._amount(values.get(name, {}).get("standard_monthly", 0), "標準報酬月額"),
+                          "care": bool(values.get(name, {}).get("care", False)),
+                          "employment": bool(values.get(name, {}).get("employment", False))}
+                   for name in self.STAFF}
+        self._data_manager.data["business_staff_insurance_settings"] = cleaned
+        self._data_manager.save()
+        return cleaned
+
     def save_wages(self, values):
         cleaned = {name: self._amount(values.get(name, 0), "時給") for name in self.STAFF}
         self._data_manager.data["business_staff_wages"] = cleaned
@@ -40,8 +78,10 @@ class StaffingManager:
             if mode not in self.DEPENDENT_LIMITS:
                 mode = "social"
             default_limit = self.DEPENDENT_LIMITS[mode][1]
+            legacy = int(value.get("prior_income", 0) or 0)
             result[name] = {"mode": mode, "limit": int(value.get("limit", default_limit) or default_limit),
-                            "prior_income": int(value.get("prior_income", 0) or 0)}
+                            "prior_income": int(value.get("store_prior_income", legacy) or 0),
+                            "other_income": int(value.get("other_income", 0) or 0)}
         return result
 
     def save_dependent_settings(self, values):
@@ -54,7 +94,8 @@ class StaffingManager:
             default_limit = self.DEPENDENT_LIMITS[mode][1]
             cleaned[name] = {"mode": mode,
                              "limit": self._amount(value.get("limit", default_limit), "上限額") if mode != "none" else 0,
-                             "prior_income": self._amount(value.get("prior_income", 0), "導入前・他社給与")}
+                             "store_prior_income": self._amount(value.get("prior_income", 0), "当店の導入前給与"),
+                             "other_income": self._amount(value.get("other_income", 0), "他社給与")}
         self._data_manager.data["business_staff_dependent_settings"] = cleaned
         self._data_manager.save()
         return cleaned
@@ -68,8 +109,9 @@ class StaffingManager:
             if isinstance(value, dict):
                 result[name] = {key: str(value.get(key, "") or "") for key in
                                 ("lunch_start", "lunch_end", "dinner_start", "dinner_end")}
+                result[name]["transportation"] = int(value.get("transportation", 0) or 0)
             else:  # Preserve older duration-only entries.
-                result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": ""}
+                result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0}
         return result
 
     def save_day(self, record_date, values):
@@ -79,6 +121,7 @@ class StaffingManager:
             value = values.get(name, {}) if isinstance(values.get(name, {}), dict) else {}
             cleaned[name] = {key: self._time(value.get(key, "")) for key in
                              ("lunch_start", "lunch_end", "dinner_start", "dinner_end")}
+            cleaned[name]["transportation"] = self._amount(value.get("transportation", 0), "交通費")
             for prefix in ("lunch", "dinner"):
                 start, end = cleaned[name][f"{prefix}_start"], cleaned[name][f"{prefix}_end"]
                 if bool(start) != bool(end):
@@ -89,15 +132,42 @@ class StaffingManager:
 
     def day_total(self, record_date):
         wages, shifts = self.wages(), self.day(record_date)
-        return round(sum(self._shift_pay(wages[name], shifts[name]) for name in self.STAFF))
+        return round(sum(self._shift_pay(wages[name], shifts[name]) + shifts[name]["transportation"] for name in self.STAFF))
 
     def month_total(self, month):
         datetime.strptime(month, "%Y-%m")
         wages = self.wages()
         records = self._data_manager.data.get("business_staff_hours", {})
-        return round(sum(self._shift_pay(wages[name], self.day(record_date)[name])
+        return round(sum(self._shift_pay(wages[name], self.day(record_date)[name]) + self.day(record_date)[name]["transportation"]
                          for record_date in records if record_date.startswith(month)
                          for name in self.STAFF))
+
+    def month_cost_summary(self, month):
+        records = self._data_manager.data.get("business_staff_hours", {})
+        wages, settings, rates = self.wages(), self.insurance_settings(), self.insurance_rates()
+        gross = transportation = 0
+        for record_date in records:
+            if not record_date.startswith(month):
+                continue
+            shifts = self.day(record_date)
+            gross += sum(self._shift_pay(wages[name], shifts[name]) for name in self.STAFF)
+            transportation += sum(shifts[name]["transportation"] for name in self.STAFF)
+        social = labor = 0
+        for name in self.STAFF:
+            setting = settings[name]
+            if setting["social"]:
+                rate = rates["health"] + rates["pension"] + rates["other"]
+                if setting["care"]:
+                    rate += rates["care"]
+                social += setting["standard_monthly"] * rate / 100
+            if setting["employment"]:
+                staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name]) + self.day(day)[name]["transportation"] for day in records if day.startswith(month))
+                labor += staff_gross * rates["employment"] / 100
+        labor += (gross + transportation) * rates["workers_comp"] / 100
+        employer_insurance = round(social + labor)
+        return {"gross_wages": round(gross), "transportation": round(transportation),
+                "employer_insurance": employer_insurance,
+                "company_cost": round(gross + transportation + employer_insurance)}
 
     def year_staff_total(self, year, name):
         records = self._data_manager.data.get("business_staff_hours", {})
@@ -108,7 +178,7 @@ class StaffingManager:
     def dependent_status(self, year, name, as_of=None):
         as_of = as_of or datetime.now().date()
         setting = self.dependent_settings()[name]
-        earned = self.year_staff_total(year, name) + setting["prior_income"]
+        earned = self.year_staff_total(year, name) + setting["prior_income"] + setting["other_income"]
         if setting["mode"] == "none":
             return {"mode": "none", "earned": earned, "limit": 0, "remaining": None,
                     "projected": earned, "level": "none"}
