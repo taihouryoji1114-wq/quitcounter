@@ -247,28 +247,42 @@ def _render_future_financials_home(selected_month=None):
                     icon="open_in_new", on_click=lambda: ui.navigate.to("/mirai-kessan/block-map")
                 ).props("flat round aria-label='利益シミュレーションを開く'")
             if sales_total:
-                compact_gross = max(gross_profit, 1)
-                components = (
-                    ("原価", purchase_total, "#82988D"),
-                    ("人件費", operations["personnel"], "#4A9FD0"),
-                    ("固定費等", operating_costs - operations["personnel"], "#99A29D"),
-                    ("営業利益" if operating_profit >= 0 else "営業損失", abs(operating_profit), "#4B77B7" if operating_profit >= 0 else "#C85C57"),
+                gross_for_ratio = max(gross_profit, 1)
+                cost_share = max(purchase_total / sales_total, .015)
+                gross_share = max(gross_profit / sales_total, .015)
+                breakdown = (
+                    ("人件費", operations["personnel"], "#4A9FD0", operations["personnel"] / gross_for_ratio),
+                    ("家賃", operations["rent"], "#8172B5", operations["rent"] / gross_for_ratio),
+                    ("水道光熱費", operations["utilities"], "#4CB7B4", operations["utilities"] / gross_for_ratio),
+                    ("広告費", advertising_total, "#D8943C", advertising_total / gross_for_ratio),
+                    ("その他管理費", operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees, "#99A29D", (operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees) / gross_for_ratio),
+                    ("営業利益" if operating_profit >= 0 else "営業損失", abs(operating_profit), "#4B77B7" if operating_profit >= 0 else "#C85C57", abs(operating_profit) / gross_for_ratio),
                 )
-                with ui.element("div").classes("dashboard-profit-block"):
-                    for title, value, color in components:
-                        share = max(abs(value) / max(sales_total, compact_gross), .04)
-                        with ui.element("div").classes("dashboard-profit-part").style(
-                            f"background:{color};flex:{share}"
-                        ):
-                            ui.label(title).classes("text-[9px] font-bold")
-                            if share >= .12:
-                                ui.label(f"¥{value:,}").classes("dashboard-block-value")
-                with ui.row().classes("w-full justify-between items-center q-mt-sm no-wrap"):
-                    ui.label("暫定営業利益").classes("text-[10px] text-grey-7")
-                    ui.label(f"¥{operating_profit:,}").classes(
-                        "dashboard-profit-total text-negative" if operating_profit < 0
-                        else "dashboard-profit-total text-primary"
-                    )
+
+                def dashboard_block(title, value, color, flex, note=""):
+                    with ui.element("div").classes("actual-money-box").style(
+                        f"background:{color};flex:{max(flex, .015)}"
+                    ):
+                        ui.label(title).classes("actual-block-title")
+                        if flex >= .07:
+                            ui.label(f"¥{value:,}").classes("actual-block-value")
+                        if note and flex >= .11:
+                            ui.label(note).classes("actual-block-note")
+
+                with ui.element("div").classes("actual-box-map").style(
+                    f"grid-template-rows:{cost_share}fr {gross_share}fr"
+                ):
+                    dashboard_block("売上", sales_total, "#355F4C", 1, "100%")
+                    with ui.element("div").classes("actual-cost-block"):
+                        dashboard_block("仕入れ・原価", purchase_total, "#82988D", 1, f"原価率 {cost_rate*100:.1f}%")
+                    with ui.element("div").classes("actual-gross-block"):
+                        dashboard_block("粗利", gross_profit, "#4F8C70", 1, f"粗利率 {gross_profit/sales_total*100:.1f}%")
+                    with ui.element("div").classes("actual-breakdown"):
+                        for title, value, color, flex in breakdown:
+                            note = f"分配率 {labor_rate*100:.1f}%" if title == "人件費" and labor_rate is not None else ""
+                            if title in ("営業利益", "営業損失"):
+                                note = f"利益率 {operating_profit/sales_total*100:.1f}%"
+                            dashboard_block(title, value, color, flex, note)
             else:
                 ui.label("売上を入力すると表示されます").classes(
                     "text-xs text-grey-6 text-center q-pa-md"
@@ -276,7 +290,7 @@ def _render_future_financials_home(selected_month=None):
         ui.add_css("""
         .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
         .metric-value,.rounded-xl .font-bold{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .dashboard-profit-block{height:180px;display:flex;flex-direction:column;overflow:hidden;border-radius:16px;background:#EEF1EF}.dashboard-profit-part{min-height:18px;display:flex;align-items:center;justify-content:space-between;color:#fff;padding:4px 10px;overflow:hidden}.dashboard-block-value{font-size:11px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dashboard-profit-total{font-size:clamp(15px,5vw,21px);font-weight:900;max-width:58%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .actual-box-map{width:calc(100% + 12px)!important;margin-left:-6px;margin-right:-6px;height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}.actual-money-box{min-height:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}.actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}.actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}.actual-cost-block>.actual-money-box,.actual-gross-block>.actual-money-box{width:100%}.actual-gross-block{grid-column:2;grid-row:2;min-height:0;display:flex}.actual-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}.actual-block-title{font-size:9px;font-weight:800;line-height:1.1}.actual-block-value{font-size:10px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap}.actual-block-note{font-size:7px;line-height:1.1;margin-top:2px;opacity:.9;white-space:nowrap}
         """)
         return
 

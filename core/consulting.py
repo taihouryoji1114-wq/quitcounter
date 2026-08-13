@@ -12,6 +12,15 @@ from core.purchases import purchases
 
 class ConsultingManager:
     VALID_STATUSES = {"not_started", "in_progress", "completed"}
+    QUESTIONS = (
+        ("cash", "資金はいつまで持つ？"),
+        ("loss", "赤字をどう解消する？"),
+        ("debt", "借入は多すぎる？"),
+        ("personnel", "人件費を見直すべき？"),
+        ("cost", "原価を下げるべき？"),
+        ("sales", "売上をいくら増やせばよい？"),
+        ("investment", "新しい投資をしてよい？"),
+    )
 
     def __init__(self, data_manager=None):
         self._data_manager = data_manager or data
@@ -103,6 +112,86 @@ class ConsultingManager:
             "primary": recommendations[0], "sales": sales,
             "operating_profit": operating_profit,
         }
+
+    def answer(self, month, question):
+        """Turn stored figures into one decision, its basis and next actions."""
+        labels = dict(self.QUESTIONS)
+        if question not in labels:
+            raise ValueError("質問を選んでください。")
+        sales = financials.monthly_sales_total(month)
+        summary = financials.monthly_sales_summary(month)
+        cost = purchases.monthly_total(month, kind="cost")
+        operations = financials.get_monthly_operations(month)
+        supplies = purchases.monthly_total(month, kind="operating_supply")
+        expenses = purchases.monthly_total(month, kind="expense")
+        fees = financials.monthly_payment_summary(month)["total_fees"]
+        ads = financials.get_monthly_advertising(month)["total"]
+        gross = sales - cost
+        fixed = sum((operations["personnel"], operations["rent"], operations["utilities"],
+                     operations["other_admin"], supplies, expenses, fees, ads))
+        profit = gross - fixed
+        annual_periods = annual_reports.list_periods()
+        annual = annual_reports.get_report(annual_periods[0]) if annual_periods else None
+        values = annual["current"] if annual else {}
+        result = annual_reports.calculate(values) if annual else None
+        cash = sum(int(values.get(key, 0) or 0) for key in
+                   ("cash_on_hand", "checking_deposit", "ordinary_deposit"))
+        debt = sum(int(values.get(key, 0) or 0) for key in
+                   ("short_term_loans", "long_term_loans"))
+        one_percent = round(sales * .01)
+        customers = summary["lunch_customers"] + summary["dinner_customers"]
+
+        answer = {"question": labels[question], "actions": [], "target": ""}
+        if question == "cash":
+            if profit < 0 and cash:
+                months = cash / abs(profit)
+                answer.update(conclusion=f"今の赤字ペースなら、手元資金は約{months:.1f}か月分です。",
+                              reason=f"決算時点の現預金 ¥{cash:,} ÷ 今月の暫定営業赤字 ¥{abs(profit):,} の概算です。税金・返済・入出金時期は未反映です。",
+                              target="12か月資金繰りを入力し、不足月の3か月前に相談")
+            else:
+                answer.update(conclusion="現時点の入力だけでは、資金が尽きる月を確定できません。",
+                              reason=f"決算時点の現預金は ¥{cash:,}。入金日・支払日・税金・元金返済の月別予定が必要です。",
+                              target="今後12か月の月末現金をすべてプラスにする")
+            answer["actions"] = ["12か月の入金・仕入支払・税金・返済を月別に入力", "最初に現金が不足する月を確認", "不足予測の3か月前を金融機関への相談期限にする"]
+        elif question == "loss":
+            gap = max(0, -profit)
+            answer.update(conclusion=(f"まず月 ¥{gap:,} の改善が必要です。" if gap else "入力済み実績では営業黒字です。"),
+                          reason=f"売上 ¥{sales:,}、粗利 ¥{gross:,}、入力済み営業利益 ¥{profit:,}です。",
+                          target=f"月間営業利益を最低 ¥{max(1, round(sales*.03)):,} にする",
+                          actions=["原価1%・人件費1%・客単価100円の効果を比較", "金額効果が大きく実行しやすい施策を1つ選ぶ", "翌月に実績との差を確認"])
+        elif question == "debt":
+            ordinary = result["ordinary_profit"] if result else 0
+            years = debt / ordinary if debt and ordinary > 0 else None
+            answer.update(conclusion=(f"利益基準の返済年数は約{years:.1f}年です。" if years else "現在の利益では借入の返済年数を算定できません。"),
+                          reason=f"借入残高 ¥{debt:,}、年間経常利益 ¥{ordinary:,}です。",
+                          target="年間返済額・返済後現金・黒字目標を同時に確定",
+                          actions=["年間の元金返済予定を確認", "本業利益から返済できる額を計算", "不足する場合は借換え・返済条件を早めに相談"])
+        elif question in ("personnel", "cost"):
+            value = operations["personnel"] if question == "personnel" else cost
+            base = gross if question == "personnel" else sales
+            rate = value / base if base > 0 else None
+            name = "労働分配率" if question == "personnel" else "原価率"
+            answer.update(conclusion=(f"現在の{name}は {rate*100:.1f}%です。" if rate is not None else f"{name}はまだ計算できません。"),
+                          reason=f"1%改善すると今月約 ¥{one_percent:,}、同水準なら年間約 ¥{one_percent*12:,} 改善します。",
+                          target=f"まず1%改善し、月 ¥{one_percent:,} を残す",
+                          actions=(["時間帯別売上とシフトを照合", "売上の薄い時間から配置を調整", "サービス品質を落とさず翌月比較"] if question == "personnel" else ["高原価商品・仕入単価・廃棄を確認", "値上げと仕入先交渉の効果を比較", "翌月の原価率で検証"]))
+        elif question == "sales":
+            margin = gross / sales if sales > 0 else 0
+            needed = round(abs(profit) / margin) if profit < 0 and margin > 0 else 0
+            spend_effect = customers * 100
+            answer.update(conclusion=(f"現状の粗利率なら、赤字解消に月約 ¥{needed:,} の追加売上が必要です。" if needed else "入力済み実績は黒字です。利益目標から逆算できます。"),
+                          reason=f"客単価を100円上げると、入力済み客数 {customers:,}人では月約 ¥{spend_effect:,} の売上効果です。",
+                          target=f"追加売上 ¥{needed:,} または同額以上の費用改善",
+                          actions=["客単価100円の効果と費用1%改善を比較", "必要売上を営業日数で割り1日目標にする", "ランチ・ディナー別に実績確認"])
+        else:
+            safe = bool(result and not result["balance_gap"] and result["equity"] > 0 and
+                        result["current_assets"] >= result["current_liabilities"] and
+                        (result["cash_months"] or 0) >= 2 and profit > 0)
+            answer.update(conclusion=("条件付きで小さな投資を試せます。" if safe else "今は大きな新規投資より、資金防衛と黒字化を優先です。"),
+                          reason="営業黒字・債務超過なし・流動資産が流動負債以上・現預金2か月分を安全条件にしています。",
+                          target="投資上限と回収期限を決め、条件を満たしてから実行",
+                          actions=["投資後も3か月分の支払資金が残るか確認", "最悪時の損失上限を決める", "小さく試し回収実績を見て拡大"])
+        return answer
 
     def get_review(self, month):
         value = self._data_manager.data.get("business_consulting_reviews", {}).get(month, {})
