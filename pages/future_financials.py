@@ -7,6 +7,7 @@ from core.auth import require_login
 from core.clock import today_jst
 from core.financials import financials
 from core.purchases import purchases
+from core.staffing import staffing
 from core.theme import Theme
 
 
@@ -35,6 +36,7 @@ def _render_future_financials_home(selected_month=None):
                 ui.button(icon="close", on_click=menu_dialog.close).props("flat round")
             for title, icon, path in (
                 ("経営コンサル", "psychology", "/mirai-kessan/consulting"),
+                ("人件費管理", "groups", "/mirai-kessan/staffing"),
                 ("売上入力", "point_of_sale", "/mirai-kessan/sales"),
                 ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
                 ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),
@@ -74,6 +76,9 @@ def _render_future_financials_home(selected_month=None):
         output_tax - purchase_tax["input_tax"] - advertising_summary["input_tax"],
     )
     operations = financials.get_monthly_operations(current_month)
+    staff_personnel_total = staffing.month_total(current_month)
+    if staff_personnel_total:
+        operations["personnel"] = staff_personnel_total
     gross_profit = sales_total - purchase_total
     operating_costs = (
         operations["personnel"] + operations["rent"] + operations["utilities"]

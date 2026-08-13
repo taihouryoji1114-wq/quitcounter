@@ -21,6 +21,7 @@ import pages.sales
 import pages.future_financials
 import pages.financial_analysis
 import pages.consulting
+import pages.staffing
 import pages.smoking
 import pages.settings
 import pages.workout
