@@ -9,9 +9,9 @@ from core.data import data
 
 
 class StaffingManager:
-    STAFF = ("店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(15)))
-    SALARIED_STAFF = ("店長", "社員A")
-    HOURLY_STAFF = STAFF[2:]
+    STAFF = ("副社長", "店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(15)))
+    SALARIED_STAFF = ("副社長", "店長", "社員A")
+    HOURLY_STAFF = STAFF[3:]
     MONTHLY_REST_DAYS = 10
     SALARIED_DAILY_HOURS = 10
     DEPENDENT_LIMITS = {

@@ -17,9 +17,9 @@ class StaffingManagerTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_has_fifteen_pseudonymous_staff_slots(self):
-        self.assertEqual(len(self.staffing.STAFF), 17)
-        self.assertEqual(self.staffing.STAFF[0], "店長")
-        self.assertEqual(self.staffing.STAFF[2], "スタッフA")
+        self.assertEqual(len(self.staffing.STAFF), 18)
+        self.assertEqual(self.staffing.STAFF[0], "副社長")
+        self.assertEqual(self.staffing.STAFF[3], "スタッフA")
         self.assertEqual(self.staffing.STAFF[-1], "スタッフO")
 
     def test_month_total_uses_wage_and_daily_hours(self):
@@ -108,6 +108,14 @@ class StaffingManagerTest(unittest.TestCase):
             self.staffing.save_day(f"2026-08-{day:02d}", {"店長": {"attended": True}})
         summary = self.staffing.month_cost_summary("2026-08")
         self.assertEqual(summary["gross_wages"], 310_000)
+
+    def test_vice_president_is_regular_salaried_staff(self):
+        self.staffing.save_monthly_salaries({"副社長": 420_000})
+        self.staffing.save_day("2026-08-01", {"副社長": {"attended": True}})
+        summary = self.staffing.month_cost_summary("2026-08")
+        self.assertEqual(summary["attendance"]["副社長"], 1)
+        self.assertEqual(summary["gross_wages"], 20_000)
+        self.assertEqual(summary["forecast_gross_wages"], 420_000)
 
 
 if __name__ == "__main__":
