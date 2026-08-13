@@ -9,6 +9,14 @@ from core.data import data
 
 class StaffingManager:
     STAFF = tuple(f"スタッフ{chr(65 + index)}" for index in range(15))
+    DEPENDENT_LIMITS = {
+        "general": ("一般の税扶養", 1_230_000),
+        "young": ("19〜22歳（控除維持）", 1_500_000),
+        "social": ("社会保険の扶養", 1_300_000),
+        "senior": ("60歳以上・一定の障害（社保）", 1_800_000),
+        "custom": ("個別設定", 0),
+        "none": ("扶養管理なし", 0),
+    }
 
     def __init__(self, manager=None):
         self._data_manager = manager or data
@@ -20,6 +28,34 @@ class StaffingManager:
     def save_wages(self, values):
         cleaned = {name: self._amount(values.get(name, 0), "時給") for name in self.STAFF}
         self._data_manager.data["business_staff_wages"] = cleaned
+        self._data_manager.save()
+        return cleaned
+
+    def dependent_settings(self):
+        stored = self._data_manager.data.get("business_staff_dependent_settings", {})
+        result = {}
+        for name in self.STAFF:
+            value = stored.get(name, {}) if isinstance(stored.get(name, {}), dict) else {}
+            mode = value.get("mode", "social")
+            if mode not in self.DEPENDENT_LIMITS:
+                mode = "social"
+            default_limit = self.DEPENDENT_LIMITS[mode][1]
+            result[name] = {"mode": mode, "limit": int(value.get("limit", default_limit) or default_limit),
+                            "prior_income": int(value.get("prior_income", 0) or 0)}
+        return result
+
+    def save_dependent_settings(self, values):
+        cleaned = {}
+        for name in self.STAFF:
+            value = values.get(name, {})
+            mode = value.get("mode", "social")
+            if mode not in self.DEPENDENT_LIMITS:
+                raise ValueError("扶養区分が正しくありません。")
+            default_limit = self.DEPENDENT_LIMITS[mode][1]
+            cleaned[name] = {"mode": mode,
+                             "limit": self._amount(value.get("limit", default_limit), "上限額") if mode != "none" else 0,
+                             "prior_income": self._amount(value.get("prior_income", 0), "導入前・他社給与")}
+        self._data_manager.data["business_staff_dependent_settings"] = cleaned
         self._data_manager.save()
         return cleaned
 
@@ -62,6 +98,27 @@ class StaffingManager:
         return round(sum(self._shift_pay(wages[name], self.day(record_date)[name])
                          for record_date in records if record_date.startswith(month)
                          for name in self.STAFF))
+
+    def year_staff_total(self, year, name):
+        records = self._data_manager.data.get("business_staff_hours", {})
+        wage = self.wages()[name]
+        return round(sum(self._shift_pay(wage, self.day(record_date)[name])
+                         for record_date in records if record_date.startswith(f"{int(year):04d}-")))
+
+    def dependent_status(self, year, name, as_of=None):
+        as_of = as_of or datetime.now().date()
+        setting = self.dependent_settings()[name]
+        earned = self.year_staff_total(year, name) + setting["prior_income"]
+        if setting["mode"] == "none":
+            return {"mode": "none", "earned": earned, "limit": 0, "remaining": None,
+                    "projected": earned, "level": "none"}
+        elapsed = max(1, as_of.timetuple().tm_yday) if as_of.year == int(year) else 365
+        projected = round(earned / elapsed * 365) if earned else 0
+        limit = setting["limit"]
+        ratio = max(earned, projected) / limit if limit else 0
+        level = "over" if earned >= limit else "danger" if ratio >= .95 else "warning" if ratio >= .8 else "safe"
+        return {"mode": setting["mode"], "earned": earned, "limit": limit,
+                "remaining": max(0, limit - earned), "projected": projected, "level": level}
 
     def day_detail(self, record_date, name):
         shift = self.day(record_date)[name]

@@ -27,6 +27,52 @@ def staffing_page():
                 ui.notify("時給設定を保存しました", type="positive")
             ui.button("時給を保存", icon="save", on_click=save_wages).classes("w-full q-mt-md")
 
+        settings = staffing.dependent_settings()
+        with ui.expansion("扶養アラート設定", icon="notifications_active", value=False).classes(
+            "staff-panel w-full q-mt-sm"):
+            ui.label("実名は使わず、本人が希望する管理基準を確認して設定してください。").classes("text-[9px] text-grey-6 q-mb-sm")
+            dependent_inputs = {}
+            options = {key: label for key, (label, _) in staffing.DEPENDENT_LIMITS.items()}
+            for name in staffing.STAFF:
+                dependent_inputs[name] = {}
+                with ui.expansion(name, value=False).classes("staff-shift w-full q-mb-xs"):
+                    dependent_inputs[name]["mode"] = ui.select(
+                        options, value=settings[name]["mode"], label="管理する基準"
+                    ).props("outlined dense options-dense").classes("w-full")
+                    dependent_inputs[name]["limit"] = ui.number(
+                        "年間上限（個別調整可）", value=settings[name]["limit"] or None,
+                        min=0, step=1000).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
+                    dependent_inputs[name]["prior_income"] = ui.number(
+                        "導入前・他社の今年の給与", value=settings[name]["prior_income"] or None,
+                        min=0, step=1000).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
+
+            def save_dependent():
+                staffing.save_dependent_settings({name: {
+                    key: field.value for key, field in fields.items()
+                } for name, fields in dependent_inputs.items()})
+                ui.notify("扶養アラート設定を保存しました", type="positive")
+                ui.navigate.to("/mirai-kessan/staffing")
+            ui.button("扶養設定を保存", icon="save", on_click=save_dependent).classes("w-full q-mt-md")
+
+        ui.label("今年の扶養アラート").classes("text-lg font-black q-mt-md")
+        ui.label("確定判定ではなく、本人・勤務先・専門家へ早めに確認するための目安です").classes("text-[9px] text-grey-6 q-mb-sm")
+        year = today_jst().year
+        alerts = [(name, staffing.dependent_status(year, name, today_jst())) for name in staffing.STAFF]
+        visible_alerts = [(name, status) for name, status in alerts if status["mode"] != "none" and (status["earned"] or wages[name])]
+        if visible_alerts:
+            for name, status in visible_alerts:
+                colors = {"safe": "#E8F4EC", "warning": "#FFF4D9", "danger": "#FFE4D4", "over": "#FFE0E0"}
+                labels = {"safe": "余裕あり", "warning": "早めに確認", "danger": "要調整", "over": "上限到達"}
+                with ui.card().classes("dependent-card w-full q-pa-md q-mb-xs").style(
+                    f"background:{colors[status['level']]}"):
+                    with ui.row().classes("w-full justify-between items-center no-wrap"):
+                        ui.label(name).classes("text-sm font-black")
+                        ui.label(labels[status["level"]]).classes("dependent-badge")
+                    ui.label(f"今年の累計 ¥{status['earned']:,} ／ 上限 ¥{status['limit']:,}").classes("text-[10px] q-mt-xs")
+                    ui.label(f"年末予測 ¥{status['projected']:,}　残り ¥{status['remaining']:,}").classes("text-xs font-bold q-mt-xs")
+        else:
+            ui.label("時給と扶養設定を保存すると表示されます").classes("text-xs text-grey-6 q-pa-sm")
+
         selected = today_jst().isoformat()
         ui.label("勤務時間を入力").classes("text-lg font-black q-mt-md")
         date_input = ui.input("日付", value=selected).props("outlined dense type=date").classes("w-full")
@@ -73,4 +119,4 @@ def staffing_page():
                     ui.label(f"今月の人件費　¥{staffing.month_total(record_date[:7]):,}").classes("text-xl font-black q-mt-xs")
         date_input.on("change", lambda: render_day(date_input.value))
         render_day(selected)
-        ui.add_css(".staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}")
+        ui.add_css(".staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")

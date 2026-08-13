@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from core.data import DataManager
@@ -47,6 +48,24 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(detail["normal_minutes"], 60)
         self.assertEqual(detail["night_minutes"], 180)
         self.assertEqual(detail["pay"], 5700)
+
+    def test_dependent_alert_uses_prior_income_and_projection(self):
+        self.staffing.save_wages({"スタッフA": 1200})
+        self.staffing.save_dependent_settings({
+            "スタッフA": {"mode": "social", "limit": 1_300_000, "prior_income": 1_000_000}
+        })
+        self.staffing.save_day("2026-01-01", {
+            "スタッフA": {"lunch_start": "10:00", "lunch_end": "15:00"}
+        })
+        status = self.staffing.dependent_status(2026, "スタッフA", date(2026, 8, 13))
+        self.assertEqual(status["earned"], 1_006_000)
+        self.assertEqual(status["remaining"], 294_000)
+        self.assertIn(status["level"], ("warning", "danger", "over"))
+
+    def test_general_tax_limit_defaults_to_1230000(self):
+        settings = {"スタッフA": {"mode": "general"}}
+        saved = self.staffing.save_dependent_settings(settings)
+        self.assertEqual(saved["スタッフA"]["limit"], 1_230_000)
 
 
 if __name__ == "__main__":
