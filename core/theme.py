@@ -10,6 +10,10 @@ class Theme:
             manifest = "/static/mirai-kessan-manifest.json"
             icon = "/static/mirai_kessan_icon.png"
             theme_color = "#164A38"
+        elif app_name == "store-ops":
+            manifest = "/static/store-ops-manifest.json"
+            icon = "/static/store_ops_icon.svg"
+            theme_color = "#164A38"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

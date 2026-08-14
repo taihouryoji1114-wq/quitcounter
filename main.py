@@ -22,6 +22,7 @@ import pages.future_financials
 import pages.financial_analysis
 import pages.consulting
 import pages.staffing
+import pages.store_operations
 import pages.smoking
 import pages.settings
 import pages.workout

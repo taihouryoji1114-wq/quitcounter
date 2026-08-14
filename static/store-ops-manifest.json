@@ -1,0 +1,13 @@
+{
+  "name": "店舗運営",
+  "short_name": "店舗運営",
+  "description": "在庫不足から発注、店舗の共有まで",
+  "start_url": "/store-ops",
+  "scope": "/store-ops",
+  "display": "standalone",
+  "background_color": "#F7F7F5",
+  "theme_color": "#164A38",
+  "icons": [
+    {"src": "/static/store_ops_icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
