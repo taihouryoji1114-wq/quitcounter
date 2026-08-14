@@ -243,6 +243,14 @@ class StoreOperationsManager:
         self._data_manager.save()
         return dict(item)
 
+    def delete_handover_template(self, template_id):
+        for item in self._data_manager.data.setdefault("store_handover_templates", []):
+            if isinstance(item, dict) and item.get("id") == template_id and item.get("active", True):
+                item["active"] = False
+                self._data_manager.save()
+                return
+        raise ValueError("引き継ぎ項目が見つかりません。")
+
     def handover_checks(self, record_date):
         self._date(record_date)
         states = self._data_manager.data.get("store_handover_checks", {}).get(record_date, {})

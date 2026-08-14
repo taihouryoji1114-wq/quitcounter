@@ -97,6 +97,14 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.set_handover_check("2026-08-14", item["id"], True)
         self.assertTrue(self.manager.handover_checks("2026-08-14")[0]["checked"])
 
+    def test_deleted_handover_template_is_hidden_but_record_remains(self):
+        item = self.manager.add_handover_template("予約席を確認", "ホール")
+        self.manager.set_handover_check("2026-08-14", item["id"], True)
+        self.manager.delete_handover_template(item["id"])
+        self.assertEqual(self.manager.handover_templates(), [])
+        self.assertTrue(
+            self.data.data["store_handover_checks"]["2026-08-14"][item["id"]])
+
     def test_handover_can_be_manually_sent_to_next_day_prep(self):
         item = self.manager.add_handover_template("唐揚げを仕込む", "厨房", "その他")
         self.manager.set_handover_check("2026-08-14", item["id"], False)
