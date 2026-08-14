@@ -116,6 +116,46 @@ def store_operations_page():
                 reload("登録しました")
             ui.button("登録する", icon="add", on_click=add_item).classes("w-full q-mt-md")
 
+        with ui.dialog() as prep_add_dialog, ui.card().classes("store-dialog q-pa-lg"):
+            with ui.row().classes("w-full items-center justify-between"):
+                ui.label("仕込み項目を登録").classes("text-xl font-black")
+                ui.button(icon="close", on_click=prep_add_dialog.close).props("flat round")
+            prep_name = ui.input("仕込み項目").props("outlined dense").classes("w-full")
+            prep_area = ui.select(["厨房", "デシャップ", "ホール"], value="厨房",
+                                  label="場所").props("outlined dense").classes("w-full")
+
+            def add_prep():
+                try:
+                    store_ops.add_prep_template(prep_name.value, prep_area.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                prep_add_dialog.close()
+                reload("仕込み項目を追加しました")
+            ui.button("登録する", icon="add", on_click=add_prep).classes("w-full q-mt-md")
+
+        with ui.dialog() as handover_add_dialog, ui.card().classes("store-dialog q-pa-lg"):
+            with ui.row().classes("w-full items-center justify-between"):
+                ui.label("引き継ぎ項目を登録").classes("text-xl font-black")
+                ui.button(icon="close", on_click=handover_add_dialog.close).props("flat round")
+            check_name = ui.input("チェック項目").props("outlined dense").classes("w-full")
+            check_area = ui.select(["ホール", "デシャップ", "厨房"], value="厨房",
+                                   label="場所").props("outlined dense").classes("w-full")
+            check_category = ui.select(["ちゃんこ", "深川", "魚", "米", "その他"], value="その他",
+                                       label="厨房分類（厨房以外では不要）").props(
+                                           "outlined dense").classes("w-full")
+
+            def add_check_item():
+                try:
+                    store_ops.add_handover_template(
+                        check_name.value, check_area.value, check_category.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                handover_add_dialog.close()
+                reload("引き継ぎチェックを追加しました")
+            ui.button("登録する", icon="add", on_click=add_check_item).classes("w-full q-mt-md")
+
         with ui.card().classes("store-hero w-full q-pa-lg text-white"):
             with ui.row().classes("w-full items-start justify-between no-wrap"):
                 with ui.column().classes("gap-0"):
@@ -136,9 +176,6 @@ def store_operations_page():
                         ui.label(f"引き継ぎ {incomplete_handover}件").classes("alert-chip")
                     if incomplete_orders:
                         ui.label(f"発注 {incomplete_orders}件").classes("alert-chip")
-            with ui.row().classes("w-full gap-2 q-mt-md"):
-                ui.button("商品を追加", icon="add", on_click=add_dialog.open).props(
-                    "unelevated no-caps").classes("store-hero-button grow")
 
         with ui.expansion(f"今日の発注チェック　{len(orders)}品", icon="shopping_cart",
                           value=False).classes("store-panel order-panel w-full q-mt-sm"):
@@ -256,21 +293,8 @@ def store_operations_page():
 
         with ui.expansion("今日の作業・仕込み", icon="soup_kitchen", value=False).classes(
             "store-panel prep-panel w-full q-mt-sm"):
-            with ui.row().classes("w-full items-end gap-2 q-mb-sm"):
-                prep_name = ui.input("仕込み項目を追加").props("outlined dense").classes("grow")
-                prep_area = ui.select(["厨房", "デシャップ", "ホール"], value="厨房",
-                                      label="場所").props("outlined dense").classes("prep-area")
-
-                def add_prep():
-                    try:
-                        store_ops.add_prep_template(prep_name.value, prep_area.value)
-                    except ValueError as error:
-                        ui.notify(str(error), type="negative")
-                        return
-                    reload("仕込み項目を追加しました")
-                ui.button(icon="add", on_click=add_prep).props("unelevated round")
             if not prep_items:
-                ui.label("よく行う仕込みを登録すると、毎日同じ一覧で確認できます").classes(
+                ui.label("設定から仕込み項目を登録できます").classes(
                     "text-xs text-grey-6 q-pa-sm")
             for item in prep_items:
                 with ui.row().classes("inventory-row w-full items-center no-wrap"):
@@ -295,42 +319,6 @@ def store_operations_page():
         with ui.expansion(f"今日の引き継ぎ　{sum(not value['confirmed'] for value in handovers)}件未確認",
                           icon="campaign", value=False).classes(
                               "store-panel handover-panel w-full q-mt-sm"):
-            ui.label("チェック項目を登録").classes("text-xs font-black q-mb-xs")
-            with ui.row().classes("w-full items-end gap-2 q-mb-sm"):
-                check_name = ui.input("チェック項目を追加").props("outlined dense").classes("grow")
-                check_area = ui.select(["ホール", "デシャップ", "厨房"], value="厨房",
-                                       label="場所").props("outlined dense").classes("prep-area")
-                check_category = ui.select(["ちゃんこ", "深川", "魚", "米", "その他"], value="その他",
-                                           label="厨房分類").props("outlined dense").classes("prep-area")
-
-                def add_check_item():
-                    try:
-                        store_ops.add_handover_template(
-                            check_name.value, check_area.value, check_category.value)
-                    except ValueError as error:
-                        ui.notify(str(error), type="negative")
-                        return
-                    reload("引き継ぎチェックを追加しました")
-                ui.button(icon="add", on_click=add_check_item).props("unelevated round")
-
-            ui.separator().classes("q-my-md")
-            ui.label("自由記入を追加").classes("text-xs font-black q-mb-xs")
-            handover_area = ui.select(["ホール", "デシャップ", "厨房"], value="厨房",
-                                      label="場所").props("outlined dense").classes("w-full")
-            handover_category = ui.select(["ちゃんこ", "深川", "魚", "米", "その他"], value="その他",
-                                          label="厨房分類").props("outlined dense").classes("w-full")
-            handover_message = ui.textarea("引き継ぎ内容").props("outlined autogrow").classes("w-full")
-
-            def add_handover():
-                try:
-                    store_ops.add_handover(
-                        today, handover_message.value, handover_area.value, handover_category.value)
-                except ValueError as error:
-                    ui.notify(str(error), type="negative")
-                    return
-                reload("引き継ぎを追加しました")
-            ui.button("引き継ぎを追加", icon="add", on_click=add_handover).classes("w-full q-mb-md")
-
             def render_handover_items(checks, notes):
                 for item in checks:
                     with ui.row().classes("w-full items-center no-wrap handover-check-row"):
@@ -375,6 +363,39 @@ def store_operations_page():
                         else:
                             render_handover_items(checks, notes)
 
+            with ui.expansion("自由記入を追加", icon="edit_note", value=False).classes(
+                "handover-compose w-full q-mt-sm"):
+                handover_area = ui.select(["ホール", "デシャップ", "厨房"], value="厨房",
+                                          label="場所").props("outlined dense").classes("w-full")
+                handover_category = ui.select(["ちゃんこ", "深川", "魚", "米", "その他"],
+                                              value="その他", label="厨房分類").props(
+                                                  "outlined dense").classes("w-full")
+                handover_message = ui.textarea("引き継ぎ内容").props(
+                    "outlined autogrow").classes("w-full")
+
+                def add_handover():
+                    try:
+                        store_ops.add_handover(
+                            today, handover_message.value, handover_area.value,
+                            handover_category.value)
+                    except ValueError as error:
+                        ui.notify(str(error), type="negative")
+                        return
+                    reload("引き継ぎを追加しました")
+                ui.button("引き継ぎを追加", icon="add", on_click=add_handover).classes("w-full")
+
+        with ui.expansion("店舗運営の設定", icon="settings", value=False).classes(
+            "store-panel settings-panel w-full q-mt-sm"):
+            ui.label("普段は使わない登録機能をまとめています").classes(
+                "text-[10px] text-grey-6 q-mb-sm")
+            with ui.column().classes("w-full gap-2"):
+                ui.button("商品・備品を登録", icon="inventory_2", on_click=add_dialog.open).props(
+                    "outline no-caps").classes("w-full")
+                ui.button("仕込み項目を登録", icon="soup_kitchen",
+                          on_click=prep_add_dialog.open).props("outline no-caps").classes("w-full")
+                ui.button("引き継ぎ項目を登録", icon="campaign",
+                          on_click=handover_add_dialog.open).props("outline no-caps").classes("w-full")
+
         with ui.card().classes("future-card future-panel w-full q-pa-md q-mt-sm"):
             ui.label("次の開発").classes("text-[9px] font-black text-primary")
             ui.label("タスク・清掃管理").classes("text-base font-black q-mt-xs")
@@ -391,7 +412,8 @@ def store_operations_page():
           .inventory-panel{grid-column:1;grid-row:3}
           .hygiene-panel{grid-column:2;grid-row:2 / span 2;position:sticky;top:18px}
           .prep-panel{grid-column:1;grid-row:4}.handover-panel{grid-column:2;grid-row:4}
-          .future-panel{grid-column:1 / -1;grid-row:5}
+          .settings-panel{grid-column:1 / -1;grid-row:5}
+          .future-panel{grid-column:1 / -1;grid-row:6}
           .store-panel{margin-top:14px!important}
           .store-panel .q-item{min-height:64px!important;padding:0 20px!important;font-size:16px}
           .inventory-row{gap:10px;padding:12px 8px}.inventory-name{min-width:150px}
