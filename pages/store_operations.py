@@ -47,6 +47,31 @@ def store_operations_page():
             delete_name.set_text(item["name"])
             delete_dialog.open()
 
+        prep_delete_target = {"id": None, "name": ""}
+        with ui.dialog() as prep_delete_dialog, ui.card().classes("store-dialog q-pa-lg"):
+            ui.label("この仕込み項目を削除しますか？").classes("text-lg font-black")
+            prep_delete_name = ui.label().classes("text-sm text-grey-7 q-mt-xs")
+            ui.label("過去の記録は残り、今後の一覧から非表示になります").classes(
+                "text-[10px] text-grey-6 q-mt-xs")
+
+            def confirm_prep_delete():
+                try:
+                    store_ops.delete_prep_template(prep_delete_target["id"])
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                prep_delete_dialog.close()
+                reload("仕込み項目を削除しました")
+            with ui.row().classes("w-full gap-2 q-mt-md"):
+                ui.button("キャンセル", on_click=prep_delete_dialog.close).props("flat").classes("grow")
+                ui.button("削除する", icon="delete", on_click=confirm_prep_delete).props(
+                    "unelevated color=negative").classes("grow")
+
+        def open_prep_delete(item):
+            prep_delete_target.update(id=item["id"], name=item["name"])
+            prep_delete_name.set_text(item["name"])
+            prep_delete_dialog.open()
+
         with ui.dialog() as add_dialog, ui.card().classes("store-dialog q-pa-lg"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("商品を登録").classes("text-xl font-black")
@@ -241,6 +266,11 @@ def store_operations_page():
                             store_ops.set_prep_status(today, item_id, value), reload()
                         )).props("unelevated dense no-caps").classes(
                             f"prep-button {'active-prep-' + status if active else ''}")
+                    if item.get("source") == "prep":
+                        ui.button(icon="delete_outline",
+                                  on_click=lambda _, value=item: open_prep_delete(value)).props(
+                                      "flat round dense color=negative aria-label='仕込み項目を削除'").tooltip(
+                                          "仕込み項目を削除")
 
         handovers = store_ops.handovers(today)
         handover_checks = store_ops.handover_checks(today)

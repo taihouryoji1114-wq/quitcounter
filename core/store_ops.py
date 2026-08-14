@@ -183,6 +183,14 @@ class StoreOperationsManager:
         self._data_manager.save()
         return dict(item)
 
+    def delete_prep_template(self, item_id):
+        for item in self._data_manager.data.setdefault("store_prep_templates", []):
+            if isinstance(item, dict) and item.get("id") == item_id and item.get("active", True):
+                item["active"] = False
+                self._data_manager.save()
+                return
+        raise ValueError("仕込み項目が見つかりません。")
+
     def prep_items(self, record_date):
         day = self._date(record_date)
         states = self._data_manager.data.get("store_prep_records", {}).get(record_date, {})

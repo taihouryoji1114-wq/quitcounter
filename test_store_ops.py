@@ -67,6 +67,14 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.prep_items("2026-08-14")[0]["status"], "done")
         self.assertEqual(self.manager.prep_items("2026-08-15")[0]["status"], "incomplete")
 
+    def test_deleted_prep_template_is_hidden_but_record_remains(self):
+        item = self.manager.add_prep_template("鶏団子", "厨房")
+        self.manager.set_prep_status("2026-08-14", item["id"], "done")
+        self.manager.delete_prep_template(item["id"])
+        self.assertEqual(self.manager.prep_templates(), [])
+        self.assertEqual(
+            self.data.data["store_prep_records"]["2026-08-14"][item["id"]], "done")
+
     def test_handover_can_be_confirmed(self):
         item = self.manager.add_handover("2026-08-14", "ガスボンベ残り1本", "厨房")
         self.manager.confirm_handover("2026-08-14", item["id"])
