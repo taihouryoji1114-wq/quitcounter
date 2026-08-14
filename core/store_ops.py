@@ -200,18 +200,16 @@ class StoreOperationsManager:
                    "carried_over": previous_states.get(item["id"]) in {"incomplete", "pending", "missed"},
                    "source": "prep"}
                   for item in self.prep_templates()]
-        previous_checks = self._data_manager.data.get("store_handover_checks", {}).get(previous_date, {})
         existing_ids = {value["id"] for value in result}
-        for template in self.handover_templates():
-            created_date = template.get("created_date", "")
-            if created_date and created_date > previous_date:
+        carried_tasks = self._data_manager.data.get("store_carried_tasks", {}).get(record_date, [])
+        for task in carried_tasks:
+            if not isinstance(task, dict):
                 continue
-            if previous_checks.get(template["id"], False):
-                continue
-            carry_id = f"handover:{template['id']}"
+            carry_id = task.get("id", "")
             if carry_id in existing_ids:
                 continue
-            result.insert(0, {"id": carry_id, "name": template["name"], "area": template["area"],
+            result.insert(0, {"id": carry_id, "name": task.get("name", "引き継ぎ"),
+                              "area": task.get("area", "厨房"),
                               "status": states.get(carry_id, "incomplete"), "carried_over": True,
                               "source": "handover"})
         return result
@@ -229,7 +227,7 @@ class StoreOperationsManager:
         values = self._data_manager.data.get("store_handover_templates", [])
         return [dict(value) for value in values if isinstance(value, dict) and value.get("active", True)]
 
-    def add_handover_template(self, name, area):
+    def add_handover_template(self, name, area, category=""):
         name = str(name or "").strip()
         area = self._handover_area(area)
         if not name:
@@ -237,7 +235,9 @@ class StoreOperationsManager:
         if any(value.get("name") == name and value.get("area") == area
                for value in self.handover_templates()):
             raise ValueError("同じチェック項目が登録されています。")
-        item = {"id": uuid4().hex, "name": name, "area": area, "active": True,
+        category = self._handover_category(area, category)
+        item = {"id": uuid4().hex, "name": name, "area": area, "category": category,
+                "active": True,
                 "created_date": datetime.now().date().isoformat()}
         self._data_manager.data.setdefault("store_handover_templates", []).append(item)
         self._data_manager.save()
@@ -257,18 +257,34 @@ class StoreOperationsManager:
             record_date, {})[template_id] = bool(checked)
         self._data_manager.save()
 
+    def carry_handover(self, record_date, template_id):
+        day = self._date(record_date)
+        template = next((value for value in self.handover_templates()
+                         if value["id"] == template_id), None)
+        if not template:
+            raise ValueError("引き継ぎ項目が見つかりません。")
+        target_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
+        carry_id = f"handover:{record_date}:{template_id}"
+        tasks = self._data_manager.data.setdefault("store_carried_tasks", {}).setdefault(target_date, [])
+        if not any(isinstance(value, dict) and value.get("id") == carry_id for value in tasks):
+            tasks.append({"id": carry_id, "name": template["name"], "area": template["area"],
+                          "category": template.get("category", ""), "from_date": record_date})
+            self._data_manager.save()
+        return target_date
+
     def handovers(self, record_date):
         self._date(record_date)
         values = self._data_manager.data.get("store_handovers", {}).get(record_date, [])
         return [dict(value) for value in values if isinstance(value, dict)]
 
-    def add_handover(self, record_date, message, area="厨房"):
+    def add_handover(self, record_date, message, area="厨房", category=""):
         self._date(record_date)
         message = str(message or "").strip()
         if not message:
             raise ValueError("引き継ぎ内容を入力してください。")
+        area = self._handover_area(area)
         item = {"id": uuid4().hex, "message": message[:500],
-                "area": self._handover_area(area), "confirmed": False,
+                "area": area, "category": self._handover_category(area, category), "confirmed": False,
                 "created_at": datetime.now().isoformat(timespec="minutes")}
         self._data_manager.data.setdefault("store_handovers", {}).setdefault(record_date, []).append(item)
         self._data_manager.save()
@@ -299,6 +315,15 @@ class StoreOperationsManager:
         value = str(value or "").strip()
         if value not in {"ホール", "デシャップ", "厨房"}:
             raise ValueError("引き継ぎ場所を選んでください。")
+        return value
+
+    @staticmethod
+    def _handover_category(area, value):
+        if area != "厨房":
+            return ""
+        value = str(value or "その他").strip()
+        if value not in {"ちゃんこ", "深川", "魚", "米", "その他"}:
+            return "その他"
         return value
 
     @staticmethod

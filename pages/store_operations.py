@@ -17,6 +17,17 @@ def store_operations_page():
     )
     items = store_ops.items()
     orders = store_ops.order_list()
+    today = today_jst().isoformat()
+    hygiene = store_ops.hygiene_record(today)
+    prep_items = store_ops.prep_items(today)
+    handovers = store_ops.handovers(today)
+    handover_checks = store_ops.handover_checks(today)
+    incomplete_work = sum(value["status"] != "done" for value in prep_items)
+    incomplete_handover = sum(not value["checked"] for value in handover_checks)
+    incomplete_orders = sum(value["order_state"] == "needed" for value in orders)
+    hygiene_missing = not store_ops.hygiene_complete(today)
+    alert_count = (int(not store_ops.hygiene_complete(today))
+                   + incomplete_work + incomplete_handover + incomplete_orders)
 
     def reload(message=None):
         if message:
@@ -113,11 +124,23 @@ def store_operations_page():
                     ui.label("気づいた人が在庫状態を押すだけ").classes(
                         "text-[9px] opacity-75 q-mt-sm")
                 ui.icon("inventory_2").classes("text-4xl opacity-70")
+            if alert_count:
+                ui.label(f"未完了・未入力が {alert_count}件あります").classes(
+                    "store-alert q-mt-md")
+                with ui.row().classes("w-full gap-1 q-mt-xs"):
+                    if hygiene_missing:
+                        ui.label("温度・衛生 未入力").classes("alert-chip")
+                    if incomplete_work:
+                        ui.label(f"作業 {incomplete_work}件").classes("alert-chip")
+                    if incomplete_handover:
+                        ui.label(f"引き継ぎ {incomplete_handover}件").classes("alert-chip")
+                    if incomplete_orders:
+                        ui.label(f"発注 {incomplete_orders}件").classes("alert-chip")
             with ui.row().classes("w-full gap-2 q-mt-md"):
                 ui.button("商品を追加", icon="add", on_click=add_dialog.open).props(
                     "unelevated no-caps").classes("store-hero-button grow")
 
-        with ui.expansion(f"不足・発注リスト　{len(orders)}品", icon="shopping_cart",
+        with ui.expansion(f"今日の発注チェック　{len(orders)}品", icon="shopping_cart",
                           value=False).classes("store-panel order-panel w-full q-mt-sm"):
             if not orders:
                 ui.label("現在、補充が必要なものはありません").classes(
@@ -190,8 +213,6 @@ def store_operations_page():
                             ui.button(icon="delete_outline", on_click=lambda _, value=item: open_delete(value)).props(
                                 "flat round dense color=negative aria-label='商品を削除'").tooltip("商品を削除")
 
-        today = today_jst().isoformat()
-        hygiene = store_ops.hygiene_record(today)
         with ui.expansion("今日の温度・衛生チェック", icon="health_and_safety",
                           value=False).classes(
             "store-panel hygiene-panel w-full q-mt-sm"):
@@ -233,8 +254,7 @@ def store_operations_page():
             ui.button("今日の記録を保存", icon="save", on_click=save_hygiene).classes(
                 "w-full q-mt-md")
 
-        prep_items = store_ops.prep_items(today)
-        with ui.expansion("今日の仕込み状況", icon="soup_kitchen", value=False).classes(
+        with ui.expansion("今日の作業・仕込み", icon="soup_kitchen", value=False).classes(
             "store-panel prep-panel w-full q-mt-sm"):
             with ui.row().classes("w-full items-end gap-2 q-mb-sm"):
                 prep_name = ui.input("仕込み項目を追加").props("outlined dense").classes("grow")
@@ -272,62 +292,88 @@ def store_operations_page():
                                       "flat round dense color=negative aria-label='仕込み項目を削除'").tooltip(
                                           "仕込み項目を削除")
 
-        handovers = store_ops.handovers(today)
-        handover_checks = store_ops.handover_checks(today)
         with ui.expansion(f"今日の引き継ぎ　{sum(not value['confirmed'] for value in handovers)}件未確認",
                           icon="campaign", value=False).classes(
                               "store-panel handover-panel w-full q-mt-sm"):
-            ui.label("定型チェック項目").classes("text-xs font-black q-mb-xs")
+            ui.label("チェック項目を登録").classes("text-xs font-black q-mb-xs")
             with ui.row().classes("w-full items-end gap-2 q-mb-sm"):
                 check_name = ui.input("チェック項目を追加").props("outlined dense").classes("grow")
                 check_area = ui.select(["ホール", "デシャップ", "厨房"], value="厨房",
                                        label="場所").props("outlined dense").classes("prep-area")
+                check_category = ui.select(["ちゃんこ", "深川", "魚", "米", "その他"], value="その他",
+                                           label="厨房分類").props("outlined dense").classes("prep-area")
 
                 def add_check_item():
                     try:
-                        store_ops.add_handover_template(check_name.value, check_area.value)
+                        store_ops.add_handover_template(
+                            check_name.value, check_area.value, check_category.value)
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
                         return
                     reload("引き継ぎチェックを追加しました")
                 ui.button(icon="add", on_click=add_check_item).props("unelevated round")
-            for area in ("ホール", "デシャップ", "厨房"):
-                area_items = [value for value in handover_checks if value["area"] == area]
-                if not area_items:
-                    continue
-                ui.label(area).classes("category-title")
-                for item in area_items:
-                    ui.checkbox(item["name"], value=item["checked"], on_change=lambda event,
-                                item_id=item["id"]: store_ops.set_handover_check(
-                                    today, item_id, event.value)).classes("w-full hygiene-check")
 
             ui.separator().classes("q-my-md")
-            ui.label("自由記入").classes("text-xs font-black q-mb-xs")
+            ui.label("自由記入を追加").classes("text-xs font-black q-mb-xs")
             handover_area = ui.select(["ホール", "デシャップ", "厨房"], value="厨房",
                                       label="場所").props("outlined dense").classes("w-full")
+            handover_category = ui.select(["ちゃんこ", "深川", "魚", "米", "その他"], value="その他",
+                                          label="厨房分類").props("outlined dense").classes("w-full")
             handover_message = ui.textarea("引き継ぎ内容").props("outlined autogrow").classes("w-full")
 
             def add_handover():
                 try:
-                    store_ops.add_handover(today, handover_message.value, handover_area.value)
+                    store_ops.add_handover(
+                        today, handover_message.value, handover_area.value, handover_category.value)
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
                 reload("引き継ぎを追加しました")
             ui.button("引き継ぎを追加", icon="add", on_click=add_handover).classes("w-full q-mb-md")
-            if not handovers:
-                ui.label("今日の引き継ぎはありません").classes("text-xs text-grey-6 q-pa-sm")
-            for item in reversed(handovers):
-                with ui.card().classes("handover-card w-full q-pa-md q-mb-xs"):
-                    ui.label(item["message"]).classes("text-sm font-bold")
-                    ui.label(f"{item.get('area', '厨房')}・{item['created_at'][-5:]}").classes(
-                        "text-[9px] text-grey-6 q-mt-xs")
-                    if item["confirmed"]:
-                        ui.label("確認済み").classes("text-[10px] text-positive font-bold q-mt-xs")
-                    else:
-                        ui.button("確認しました", icon="done", on_click=lambda _, item_id=item["id"]: (
-                            store_ops.confirm_handover(today, item_id), reload("確認済みにしました")
-                        )).props("flat dense no-caps").classes("w-full q-mt-xs")
+
+            def render_handover_items(checks, notes):
+                for item in checks:
+                    with ui.row().classes("w-full items-center no-wrap handover-check-row"):
+                        ui.checkbox(item["name"], value=item["checked"], on_change=lambda event,
+                                    item_id=item["id"]: store_ops.set_handover_check(
+                                        today, item_id, event.value)).classes("grow hygiene-check")
+                        ui.button("翌日へ", icon="redo", on_click=lambda _, item_id=item["id"]: (
+                            store_ops.carry_handover(today, item_id),
+                            ui.notify("翌日の作業へ追加しました", type="positive")
+                        )).props("flat dense no-caps").classes("carry-button")
+                for item in reversed(notes):
+                    with ui.card().classes("handover-card w-full q-pa-md q-mb-xs"):
+                        ui.label(item["message"]).classes("text-sm font-bold")
+                        ui.label(item["created_at"][-5:]).classes("text-[9px] text-grey-6 q-mt-xs")
+                        if item["confirmed"]:
+                            ui.label("確認済み").classes(
+                                "text-[10px] text-positive font-bold q-mt-xs")
+                        else:
+                            ui.button("確認しました", icon="done",
+                                      on_click=lambda _, item_id=item["id"]: (
+                                          store_ops.confirm_handover(today, item_id),
+                                          reload("確認済みにしました")
+                                      )).props("flat dense no-caps").classes("w-full q-mt-xs")
+
+            for area in ("ホール", "デシャップ", "厨房"):
+                area_checks = [value for value in handover_checks if value["area"] == area]
+                area_notes = [value for value in handovers if value.get("area", "厨房") == area]
+                with ui.expansion(f"{area}　{len(area_checks) + len(area_notes)}件", icon="folder",
+                                  value=False).classes("handover-category w-full"):
+                    categories = ("ちゃんこ", "深川", "魚", "米", "その他") if area == "厨房" else ("",)
+                    for category_name in categories:
+                        checks = [value for value in area_checks
+                                  if (value.get("category") or ("その他" if area == "厨房" else "")) == category_name]
+                        notes = [value for value in area_notes
+                                 if (value.get("category") or ("その他" if area == "厨房" else "")) == category_name]
+                        if not checks and not notes:
+                            continue
+                        if area == "厨房":
+                            with ui.expansion(f"{category_name}　{len(checks) + len(notes)}件",
+                                              value=False).classes("kitchen-category w-full"):
+                                render_handover_items(checks, notes)
+                        else:
+                            render_handover_items(checks, notes)
 
         with ui.card().classes("future-card future-panel w-full q-pa-md q-mt-sm"):
             ui.label("次の開発").classes("text-[9px] font-black text-primary")
@@ -336,7 +382,7 @@ def store_operations_page():
                 "text-[9px] text-grey-6 q-mt-xs")
 
         ui.add_css("""
-        .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item{min-height:46px!important}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
+        .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){
           .app-shell{width:min(100%,1180px)!important;padding:38px 36px 68px!important}
           .app-shell>div:last-child{display:grid!important;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);column-gap:18px;align-items:start}

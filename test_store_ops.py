@@ -97,13 +97,18 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.set_handover_check("2026-08-14", item["id"], True)
         self.assertTrue(self.manager.handover_checks("2026-08-14")[0]["checked"])
 
-    def test_unchecked_handover_becomes_next_day_prep(self):
-        item = self.manager.add_handover_template("唐揚げを仕込む", "厨房")
+    def test_handover_can_be_manually_sent_to_next_day_prep(self):
+        item = self.manager.add_handover_template("唐揚げを仕込む", "厨房", "その他")
         self.manager.set_handover_check("2026-08-14", item["id"], False)
+        self.manager.carry_handover("2026-08-14", item["id"])
         carried = [value for value in self.manager.prep_items("2026-08-15")
-                   if value["id"] == f"handover:{item['id']}"]
+                   if value["id"] == f"handover:2026-08-14:{item['id']}"]
         self.assertEqual(len(carried), 1)
         self.assertTrue(carried[0]["carried_over"])
+
+    def test_kitchen_handover_category_is_saved(self):
+        item = self.manager.add_handover_template("出汁を確認", "厨房", "ちゃんこ")
+        self.assertEqual(item["category"], "ちゃんこ")
 
 
 if __name__ == "__main__":
