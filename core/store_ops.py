@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from core.data import data
@@ -10,7 +10,7 @@ from core.data import data
 
 class StoreOperationsManager:
     STATUSES = {"enough", "low", "out"}
-    PREP_STATUSES = {"pending", "doing", "done"}
+    PREP_STATUSES = {"pending", "done", "missed"}
     TEMPERATURE_LOCATIONS = (
         "デシャップ冷蔵庫1", "デシャップ冷蔵庫2", "デシャップ冷蔵庫3",
         "厨房冷蔵庫1", "厨房冷蔵庫2", "厨房冷蔵庫3", "厨房冷蔵庫4", "厨房冷蔵庫5",
@@ -71,6 +71,14 @@ class StoreOperationsManager:
         self._event("count", item, count=number, status=item["status"])
         self._data_manager.save()
         return dict(item)
+
+    def delete_item(self, item_id):
+        item = self._find(item_id)
+        item["active"] = False
+        item["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        self._data_manager.data.setdefault("store_active_orders", {}).pop(item_id, None)
+        self._event("deleted", item)
+        self._data_manager.save()
 
     def set_status(self, item_id, status):
         if status not in self.STATUSES:
@@ -176,9 +184,12 @@ class StoreOperationsManager:
         return dict(item)
 
     def prep_items(self, record_date):
-        self._date(record_date)
+        day = self._date(record_date)
         states = self._data_manager.data.get("store_prep_records", {}).get(record_date, {})
-        return [{**item, "status": states.get(item["id"], "pending")}
+        previous_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
+        previous_states = self._data_manager.data.get("store_prep_records", {}).get(previous_date, {})
+        return [{**item, "status": states.get(item["id"], "pending"),
+                 "carried_over": previous_states.get(item["id"]) == "missed"}
                 for item in self.prep_templates()]
 
     def set_prep_status(self, record_date, item_id, status):
@@ -190,18 +201,49 @@ class StoreOperationsManager:
         self._data_manager.data.setdefault("store_prep_records", {}).setdefault(record_date, {})[item_id] = status
         self._data_manager.save()
 
+    def handover_templates(self):
+        values = self._data_manager.data.get("store_handover_templates", [])
+        return [dict(value) for value in values if isinstance(value, dict) and value.get("active", True)]
+
+    def add_handover_template(self, name, area):
+        name = str(name or "").strip()
+        area = self._handover_area(area)
+        if not name:
+            raise ValueError("チェック項目を入力してください。")
+        if any(value.get("name") == name and value.get("area") == area
+               for value in self.handover_templates()):
+            raise ValueError("同じチェック項目が登録されています。")
+        item = {"id": uuid4().hex, "name": name, "area": area, "active": True}
+        self._data_manager.data.setdefault("store_handover_templates", []).append(item)
+        self._data_manager.save()
+        return dict(item)
+
+    def handover_checks(self, record_date):
+        self._date(record_date)
+        states = self._data_manager.data.get("store_handover_checks", {}).get(record_date, {})
+        return [{**item, "checked": bool(states.get(item["id"], False))}
+                for item in self.handover_templates()]
+
+    def set_handover_check(self, record_date, template_id, checked):
+        self._date(record_date)
+        if not any(value["id"] == template_id for value in self.handover_templates()):
+            raise ValueError("チェック項目が見つかりません。")
+        self._data_manager.data.setdefault("store_handover_checks", {}).setdefault(
+            record_date, {})[template_id] = bool(checked)
+        self._data_manager.save()
+
     def handovers(self, record_date):
         self._date(record_date)
         values = self._data_manager.data.get("store_handovers", {}).get(record_date, [])
         return [dict(value) for value in values if isinstance(value, dict)]
 
-    def add_handover(self, record_date, message, author=""):
+    def add_handover(self, record_date, message, area="厨房"):
         self._date(record_date)
         message = str(message or "").strip()
         if not message:
             raise ValueError("引き継ぎ内容を入力してください。")
         item = {"id": uuid4().hex, "message": message[:500],
-                "author": str(author or "").strip()[:30], "confirmed": False,
+                "area": self._handover_area(area), "confirmed": False,
                 "created_at": datetime.now().isoformat(timespec="minutes")}
         self._data_manager.data.setdefault("store_handovers", {}).setdefault(record_date, []).append(item)
         self._data_manager.save()
@@ -226,6 +268,13 @@ class StoreOperationsManager:
             "type": event_type, "item_id": item["id"], "item_name": item["name"],
             "at": datetime.now().isoformat(timespec="seconds"), **extra,
         })
+
+    @staticmethod
+    def _handover_area(value):
+        value = str(value or "").strip()
+        if value not in {"ホール", "デシャップ", "厨房"}:
+            raise ValueError("引き継ぎ場所を選んでください。")
+        return value
 
     @staticmethod
     def _optional_number(value, label):

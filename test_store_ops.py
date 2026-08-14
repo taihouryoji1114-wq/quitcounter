@@ -68,9 +68,26 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.prep_items("2026-08-15")[0]["status"], "pending")
 
     def test_handover_can_be_confirmed(self):
-        item = self.manager.add_handover("2026-08-14", "ガスボンベ残り1本", "店長")
+        item = self.manager.add_handover("2026-08-14", "ガスボンベ残り1本", "厨房")
         self.manager.confirm_handover("2026-08-14", item["id"])
         self.assertTrue(self.manager.handovers("2026-08-14")[0]["confirmed"])
+
+    def test_deleted_inventory_item_is_hidden(self):
+        item = self.manager.add_item("誤登録")
+        self.manager.delete_item(item["id"])
+        self.assertEqual(self.manager.items(), [])
+
+    def test_missed_prep_is_carried_to_next_day(self):
+        item = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.set_prep_status("2026-08-14", item["id"], "missed")
+        next_item = self.manager.prep_items("2026-08-15")[0]
+        self.assertTrue(next_item["carried_over"])
+        self.assertEqual(next_item["status"], "pending")
+
+    def test_handover_check_is_saved_by_area(self):
+        item = self.manager.add_handover_template("予約席を確認", "ホール")
+        self.manager.set_handover_check("2026-08-14", item["id"], True)
+        self.assertTrue(self.manager.handover_checks("2026-08-14")[0]["checked"])
 
 
 if __name__ == "__main__":
