@@ -31,6 +31,13 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.items()[0]["status"], "enough")
         self.assertEqual(self.manager.order_list(), [])
 
+    def test_counted_stock_enters_order_list_at_reorder_point(self):
+        item = self.manager.add_item("ガスボンベ", "消耗品", "本", "", 6, "count", 2, 5)
+        self.assertEqual(item["status"], "enough")
+        updated = self.manager.set_count(item["id"], 2)
+        self.assertEqual(updated["status"], "low")
+        self.assertEqual(self.manager.order_list()[0]["name"], "ガスボンベ")
+
     def test_duplicate_item_name_is_rejected(self):
         self.manager.add_item("醤油")
         with self.assertRaises(ValueError):
@@ -53,6 +60,17 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.data.data["business_sales"] = [{"id": "keep"}]
         self.manager.add_item("塩")
         self.assertEqual(self.data.data["business_sales"], [{"id": "keep"}])
+
+    def test_prep_progress_is_saved_per_day(self):
+        item = self.manager.add_prep_template("鶏団子", "厨房")
+        self.manager.set_prep_status("2026-08-14", item["id"], "done")
+        self.assertEqual(self.manager.prep_items("2026-08-14")[0]["status"], "done")
+        self.assertEqual(self.manager.prep_items("2026-08-15")[0]["status"], "pending")
+
+    def test_handover_can_be_confirmed(self):
+        item = self.manager.add_handover("2026-08-14", "ガスボンベ残り1本", "店長")
+        self.manager.confirm_handover("2026-08-14", item["id"])
+        self.assertTrue(self.manager.handovers("2026-08-14")[0]["confirmed"])
 
 
 if __name__ == "__main__":

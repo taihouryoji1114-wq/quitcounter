@@ -10,6 +10,7 @@ from core.data import data
 
 class StoreOperationsManager:
     STATUSES = {"enough", "low", "out"}
+    PREP_STATUSES = {"pending", "doing", "done"}
     TEMPERATURE_LOCATIONS = (
         "デシャップ冷蔵庫1", "デシャップ冷蔵庫2", "デシャップ冷蔵庫3",
         "厨房冷蔵庫1", "厨房冷蔵庫2", "厨房冷蔵庫3", "厨房冷蔵庫4", "厨房冷蔵庫5",
@@ -26,19 +27,48 @@ class StoreOperationsManager:
             items = [value for value in items if value.get("active", True)]
         return sorted(items, key=lambda value: (value.get("category", ""), value.get("name", "")))
 
-    def add_item(self, name, category="食材", unit="個", supplier="", required_stock=""):
+    def add_item(self, name, category="食材", unit="個", supplier="", required_stock="",
+                 tracking_mode="simple", reorder_point="", current_stock=""):
         name = str(name or "").strip()
         if not name:
             raise ValueError("商品名を入力してください。")
         if any(value["name"] == name for value in self.items()):
             raise ValueError("同じ名前の商品が登録されています。")
+        if tracking_mode not in {"simple", "count"}:
+            tracking_mode = "simple"
+        required_number = self._optional_number(required_stock, "必要在庫数") if tracking_mode == "count" else None
+        reorder_number = self._optional_number(reorder_point, "発注ライン") if tracking_mode == "count" else None
+        current_number = self._optional_number(current_stock, "現在庫数") if tracking_mode == "count" else None
+        if tracking_mode == "count" and required_number is not None and reorder_number is not None:
+            if reorder_number > required_number:
+                raise ValueError("発注ラインは必要在庫数以下にしてください。")
         item = {
             "id": uuid4().hex, "name": name, "category": str(category or "その他").strip(),
             "unit": str(unit or "個").strip(), "supplier": str(supplier or "").strip(),
-            "required_stock": str(required_stock or "").strip(), "status": "enough",
+            "required_stock": required_number if tracking_mode == "count" else str(required_stock or "").strip(),
+            "reorder_point": reorder_number, "current_stock": current_number,
+            "tracking_mode": tracking_mode, "status": "enough",
             "active": True, "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
+        if tracking_mode == "count" and current_number is not None:
+            item["status"] = self._status_for_count(current_number, reorder_number)
         self._data_manager.data.setdefault("store_inventory_items", []).append(item)
+        self._data_manager.save()
+        return dict(item)
+
+    def set_count(self, item_id, count):
+        item = self._find(item_id)
+        if item.get("tracking_mode") != "count":
+            raise ValueError("この商品は個数管理ではありません。")
+        number = self._optional_number(count, "現在庫数")
+        if number is None:
+            raise ValueError("現在庫数を入力してください。")
+        item["current_stock"] = number
+        item["status"] = self._status_for_count(number, item.get("reorder_point"))
+        item["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        if item["status"] == "enough":
+            self._data_manager.data.setdefault("store_active_orders", {}).pop(item_id, None)
+        self._event("count", item, count=number, status=item["status"])
         self._data_manager.save()
         return dict(item)
 
@@ -129,6 +159,62 @@ class StoreOperationsManager:
         return (all(value is not None for value in record["temperatures"].values())
                 and all(record["checks"].values()))
 
+    def prep_templates(self):
+        values = self._data_manager.data.get("store_prep_templates", [])
+        return [dict(value) for value in values if isinstance(value, dict) and value.get("active", True)]
+
+    def add_prep_template(self, name, area="厨房"):
+        name = str(name or "").strip()
+        if not name:
+            raise ValueError("仕込み名を入力してください。")
+        if any(value.get("name") == name for value in self.prep_templates()):
+            raise ValueError("同じ仕込み項目が登録されています。")
+        item = {"id": uuid4().hex, "name": name, "area": str(area or "厨房").strip(),
+                "active": True}
+        self._data_manager.data.setdefault("store_prep_templates", []).append(item)
+        self._data_manager.save()
+        return dict(item)
+
+    def prep_items(self, record_date):
+        self._date(record_date)
+        states = self._data_manager.data.get("store_prep_records", {}).get(record_date, {})
+        return [{**item, "status": states.get(item["id"], "pending")}
+                for item in self.prep_templates()]
+
+    def set_prep_status(self, record_date, item_id, status):
+        self._date(record_date)
+        if status not in self.PREP_STATUSES:
+            raise ValueError("仕込み状況が正しくありません。")
+        if not any(value["id"] == item_id for value in self.prep_templates()):
+            raise ValueError("仕込み項目が見つかりません。")
+        self._data_manager.data.setdefault("store_prep_records", {}).setdefault(record_date, {})[item_id] = status
+        self._data_manager.save()
+
+    def handovers(self, record_date):
+        self._date(record_date)
+        values = self._data_manager.data.get("store_handovers", {}).get(record_date, [])
+        return [dict(value) for value in values if isinstance(value, dict)]
+
+    def add_handover(self, record_date, message, author=""):
+        self._date(record_date)
+        message = str(message or "").strip()
+        if not message:
+            raise ValueError("引き継ぎ内容を入力してください。")
+        item = {"id": uuid4().hex, "message": message[:500],
+                "author": str(author or "").strip()[:30], "confirmed": False,
+                "created_at": datetime.now().isoformat(timespec="minutes")}
+        self._data_manager.data.setdefault("store_handovers", {}).setdefault(record_date, []).append(item)
+        self._data_manager.save()
+        return dict(item)
+
+    def confirm_handover(self, record_date, handover_id):
+        for item in self._data_manager.data.setdefault("store_handovers", {}).setdefault(record_date, []):
+            if isinstance(item, dict) and item.get("id") == handover_id:
+                item["confirmed"] = True
+                self._data_manager.save()
+                return
+        raise ValueError("引き継ぎが見つかりません。")
+
     def _find(self, item_id):
         for item in self._data_manager.data.setdefault("store_inventory_items", []):
             if isinstance(item, dict) and item.get("id") == item_id and item.get("active", True):
@@ -140,6 +226,26 @@ class StoreOperationsManager:
             "type": event_type, "item_id": item["id"], "item_name": item["name"],
             "at": datetime.now().isoformat(timespec="seconds"), **extra,
         })
+
+    @staticmethod
+    def _optional_number(value, label):
+        if value in (None, ""):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label}は数字で入力してください。") from error
+        if number < 0:
+            raise ValueError(f"{label}は0以上で入力してください。")
+        return int(number) if number.is_integer() else round(number, 2)
+
+    @staticmethod
+    def _status_for_count(count, reorder_point):
+        if count <= 0:
+            return "out"
+        if reorder_point is not None and count <= reorder_point:
+            return "low"
+        return "enough"
 
     @staticmethod
     def _date(value):
