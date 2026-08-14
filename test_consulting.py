@@ -87,6 +87,33 @@ class ConsultingManagerTest(unittest.TestCase):
         self.assertIn("毎月1つずつ", answer["conclusion"])
         self.assertIn("食材で年間", answer["actions"][4])
 
+    def test_executive_overview_marks_whole_company_red_and_keeps_good_items(self):
+        snapshot = {
+            "sales": 100_000_000, "cost": 30_000_000, "gross": 70_000_000,
+            "personnel": 25_000_000, "profit": 5_000_000, "cash": 1_000_000,
+            "debt": 20_000_000, "result": {
+                "balance_gap": 0, "current_assets": 5_000_000,
+                "current_liabilities": 12_000_000, "equity": -3_000_000,
+            }, "values": {}, "period": "2026-09",
+        }
+        with patch.object(self.manager, "annual_snapshot", return_value=snapshot):
+            overview = self.manager.executive_overview("2026-08")
+        self.assertEqual(overview["level"], "danger")
+        self.assertTrue(any(item["level"] == "danger" for item in overview["items"]))
+        self.assertTrue(any(item["level"] == "good" for item in overview["items"]))
+        self.assertIn("借入残高", "".join(overview["unknown"]))
+
+    def test_sales_stress_explains_profit_buffer(self):
+        snapshot = {
+            "sales": 100_000_000, "cost": 40_000_000, "gross": 60_000_000,
+            "personnel": 20_000_000, "profit": 6_000_000, "cash": 1,
+            "debt": 0, "result": {}, "values": {}, "period": "2026-09",
+        }
+        with patch.object(self.manager, "annual_snapshot", return_value=snapshot):
+            answer = self.manager.answer("2026-08", "stress")
+        self.assertIn("10,000,000", answer["conclusion"])
+        self.assertIn("10.0%", answer["conclusion"])
+
 
 if __name__ == "__main__":
     unittest.main()

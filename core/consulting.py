@@ -21,6 +21,8 @@ class ConsultingManager:
         ("sales", "売上をいくら増やせばよい？"),
         ("investment", "新しい投資をしてよい？"),
         ("year_plan", "この1年間でやるべきこと"),
+        ("compare", "去年より良くなった？"),
+        ("stress", "売上が下がってもどこまで耐えられる？"),
     )
 
     def __init__(self, data_manager=None):
@@ -126,6 +128,67 @@ class ConsultingManager:
             "operating_profit": operating_profit,
         }
 
+    def executive_overview(self, month):
+        """Plain-language, decision-first summary for the company owner."""
+        snapshot = self.annual_snapshot(month)
+        if not snapshot:
+            return {
+                "level": "unknown", "label": "まだ判断できません",
+                "headline": "決算書を入力すると、会社全体の状態が分かります",
+                "items": [],
+                "known": ["日々入力した売上・仕入れ・人件費"],
+                "unknown": ["会社全体の安全性", "債務超過の状態", "借入を含む将来のお金"],
+                "next_input": "最新の決算書を入力 → 会社の安全性と債務超過の状態が分かる",
+            }
+        result = snapshot["result"]
+        sales, cost, gross, profit = (snapshot[key] for key in ("sales", "cost", "gross", "profit"))
+        personnel = snapshot["personnel"]
+        items = []
+
+        def add(level, title, detail):
+            items.append({"level": level, "title": title, "detail": detail})
+
+        if result.get("balance_gap"):
+            add("danger", "決算書の数字が左右で合っていません",
+                f"差は ¥{abs(result['balance_gap']):,}。安全性の判定前に入力を確認してください")
+        else:
+            short_gap = result.get("current_assets", 0) - result.get("current_liabilities", 0)
+            if short_gap < 0:
+                add("danger", "近い将来の支払いに注意",
+                    f"決算日時点では、1年以内に払う金額が現金化しやすい資産を ¥{abs(short_gap):,}上回っています")
+            else:
+                add("good", "近い将来の支払い余力", f"決算日時点では ¥{short_gap:,}の余裕があります")
+            if result.get("equity", 0) < 0:
+                add("danger", "会社に残る財産がマイナス",
+                    f"返すお金が会社の財産を ¥{abs(result['equity']):,}上回っています")
+            else:
+                add("good", "会社に残る財産", f"¥{result.get('equity', 0):,}のプラスです")
+        add("good" if profit > 0 else "danger", "本業の利益",
+            f"年間 ¥{profit:,}の{'黒字' if profit > 0 else '赤字'}です")
+        cost_rate = cost / sales if sales else None
+        labor_rate = personnel / gross if gross > 0 else None
+        if cost_rate is not None:
+            add("good" if cost_rate <= .36 else "warning", "食材の使い方",
+                f"売上の {cost_rate*100:.1f}%です")
+        if labor_rate is not None:
+            add("good" if labor_rate <= .50 else "warning", "人件費の使い方",
+                f"食材を引いた利益の {labor_rate*100:.1f}%です")
+        if any(item["level"] == "danger" for item in items):
+            level, label = "danger", "危険な点があります"
+            headline = "会社全体は赤判定です。良い部分を守りながら、赤い原因から確認しましょう"
+        elif any(item["level"] == "warning" for item in items):
+            level, label = "warning", "注意が必要です"
+            headline = "大きな危険は見つかっていませんが、今のうちに見直したい項目があります"
+        else:
+            level, label = "good", "現在は順調です"
+            headline = "今の良い状態を守りながら、将来と成長の選択肢を確認できます"
+        return {
+            "level": level, "label": label, "headline": headline, "items": items,
+            "known": ["最新決算時点の会社の安全性", "年間の本業利益", "食材と人件費の使い方"],
+            "unknown": ["実際にお金が足りなくなる月", "借入残高の毎月の減り方", "1年後の通帳残高"],
+            "next_input": "借入の返済予定・税金の支払予定を登録 → お金が足りなくなる月と金額が分かる",
+        }
+
     def answer(self, month, question):
         """Turn stored figures into one decision, its basis and next actions."""
         labels = dict(self.QUESTIONS)
@@ -224,6 +287,51 @@ class ConsultingManager:
                         else f"1年後までに年間 ¥{abs(profit):,}の赤字をなくし、支払い後の通帳残高を減らさない"),
                 actions=roadmap,
             )
+        elif question == "compare":
+            report = annual_reports.get_report(snapshot["period"])
+            previous_values = report.get("previous", {})
+            if not previous_values or not any(previous_values.values()):
+                answer.update(
+                    conclusion="前年の決算書がないため、まだ比べられません。",
+                    reason="今年と前年の決算書がそろうと、売上・本業利益・会社に残る財産・借入を比較できます。",
+                    actions=["前年の決算書を登録する"],
+                    target="前年と今年の2期分をそろえる",
+                )
+            else:
+                previous = annual_reports.calculate(previous_values)
+                previous_sales = int(previous_values.get("sales", 0) or 0)
+                previous_debt = sum(int(previous_values.get(key, 0) or 0) for key in
+                                    ("short_term_loans", "long_term_loans"))
+                changes = [
+                    f"売上は前年より ¥{sales-previous_sales:+,}",
+                    f"本業利益は前年より ¥{profit-previous.get('operating_profit', 0):+,}",
+                    f"会社に残る財産は前年より ¥{result.get('equity', 0)-previous.get('equity', 0):+,}",
+                    f"借入は前年より ¥{debt-previous_debt:+,}",
+                ]
+                improved = profit >= previous.get("operating_profit", 0) and result.get("equity", 0) >= previous.get("equity", 0)
+                answer.update(
+                    conclusion="前年より良くなっています。" if improved else "良くなった部分と、悪くなった部分があります。",
+                    reason="／".join(changes), actions=changes,
+                    target="本業利益・会社に残る財産を増やし、借入を減らす",
+                )
+        elif question == "stress":
+            gross_margin = gross / sales if sales else 0
+            sales_buffer = round(profit / gross_margin) if profit > 0 and gross_margin > 0 else 0
+            decline_rate = sales_buffer / sales if sales else 0
+            if sales_buffer > 0:
+                answer.update(
+                    conclusion=f"単純計算では、年間売上が約 ¥{sales_buffer:,}（{decline_rate*100:.1f}%）下がると本業利益が0円になります。",
+                    reason="食材の割合と固定費が今と同じ前提で、現在の本業利益がなくなる売上減少額を計算しています。",
+                    actions=["5%売上減の場合を試す", "10%売上減の場合を試す", "そのときも支払い用の現金が残るか確認する"],
+                    target="売上が10%下がっても、本業黒字と支払い資金を守れる状態",
+                )
+            else:
+                answer.update(
+                    conclusion="現在は売上減少に耐える余裕を計算できません。",
+                    reason="本業利益が0円以下、または売上・食材の数字が不足しています。",
+                    actions=["まず本業を黒字にする", "売上と食材原価を確定する"],
+                    target="売上減少に耐えられる黒字幅を作る",
+                )
         else:
             safe = bool(result and not result["balance_gap"] and result["equity"] > 0 and
                         result["current_assets"] >= result["current_liabilities"] and

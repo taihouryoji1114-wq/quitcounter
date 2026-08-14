@@ -12,118 +12,156 @@ def consulting_page():
         return
     Theme.page("経営コンサル｜未来決算", app_name="mirai-kessan")
     month = today_jst().strftime("%Y-%m")
+    overview = consulting.executive_overview(month)
     diagnosis = consulting.diagnose(month)
     snapshot = consulting.annual_snapshot(month)
     content = Theme.shell(
-        "経営コンサル", "数字を、今月の具体的な行動へ変える",
+        "経営コンサル", "会社の状態を、社長の言葉で判断する",
         back_to="/mirai-kessan/dashboard", brand="未来決算",
     )
-    status_options = {
-        "not_started": "未着手", "in_progress": "実行中", "completed": "完了",
+    colors = {
+        "danger": ("#9E2F38", "#FFF1F1", "error"),
+        "warning": ("#A46B16", "#FFF7E8", "warning"),
+        "good": ("#23704A", "#ECF7F0", "check_circle"),
+        "unknown": ("#5D6670", "#F1F3F4", "help"),
     }
+    groups = {
+        "今を知る": [
+            ("priority", "まず何から直すべき？"),
+            ("loss", "本業は大丈夫？"),
+            ("compare", "去年より良くなった？"),
+        ],
+        "未来を知る": [
+            ("cash", "お金が足りなくなる可能性は？"),
+            ("stress", "売上が下がってもどこまで耐えられる？"),
+            ("debt", "借入はどう減らしていく？"),
+            ("investment", "いつから攻めてよい？"),
+        ],
+        "方法を比べる": [
+            ("cost", "食材を見直すべき？"),
+            ("personnel", "人件費を見直すべき？"),
+            ("sales", "売上をどれだけ増やすべき？"),
+        ],
+        "計画を作る": [
+            ("year_plan", "この1年間、何をすればいい？"),
+        ],
+    }
+
     with content:
-        with ui.row().classes("w-full items-center justify-between q-mb-md no-wrap"):
-            ui.label("最新の決算書を基準に診断").classes("text-xs font-bold text-primary")
+        with ui.row().classes("w-full items-center justify-between q-mb-sm no-wrap"):
+            ui.label("会社は今、大丈夫？").classes("text-xl font-black")
             ui.label(snapshot["period"] if snapshot else "決算書未入力").classes("period-chip")
-        ui.label("今、一番知りたいことは？").classes("text-xl font-black q-mb-xs")
-        ui.label("難しい会計用語を使わず、今やることを順番に伝えます").classes("text-[10px] text-grey-6 q-mb-sm")
+
+        main_color, main_bg, main_icon = colors[overview["level"]]
+        with ui.card().classes("owner-status w-full q-pa-lg text-white").style(
+            f"background:linear-gradient(145deg,{main_color},#243B31)"):
+            with ui.row().classes("w-full items-center no-wrap gap-2"):
+                ui.icon(main_icon).classes("text-2xl")
+                ui.label(overview["label"]).classes("text-2xl font-black")
+            ui.label(overview["headline"]).classes("text-xs leading-relaxed opacity-90 q-mt-sm")
+
+        if overview["items"]:
+            with ui.element("div").classes("status-grid w-full q-mt-sm"):
+                for item in overview["items"]:
+                    color, bg, icon = colors[item["level"]]
+                    with ui.element("div").classes("status-item").style(f"background:{bg}"):
+                        with ui.row().classes("items-center no-wrap gap-1"):
+                            ui.icon(icon).style(f"color:{color}").classes("text-base")
+                            ui.label(item["title"]).classes("text-[10px] font-black")
+                        ui.label(item["detail"]).classes("text-[9px] leading-snug text-grey-7 q-mt-xs")
+
+        with ui.expansion("今わかること・まだわからないこと", icon="fact_check", value=False).classes(
+            "consult-fold w-full q-mt-sm"):
+            with ui.element("div").classes("knowledge-grid w-full"):
+                with ui.element("div").classes("knowledge-card known"):
+                    ui.label("今わかる").classes("text-[9px] font-black text-positive")
+                    for text in overview["known"]:
+                        ui.label(f"✓ {text}").classes("text-[9px] q-mt-xs")
+                with ui.element("div").classes("knowledge-card unknown"):
+                    ui.label("まだわからない").classes("text-[9px] font-black text-grey-7")
+                    for text in overview["unknown"]:
+                        ui.label(f"・{text}").classes("text-[9px] q-mt-xs")
+            with ui.element("div").classes("unlock-card q-mt-sm"):
+                ui.label("次に入力すると分かること").classes("text-[9px] font-black")
+                ui.label(overview["next_input"]).classes("text-[10px] leading-relaxed q-mt-xs")
+
+        ui.label("詳しく相談する").classes("text-lg font-black q-mt-lg q-mb-xs")
+        ui.label("知りたい目的を1つ選んでください").classes("text-[10px] text-grey-6 q-mb-sm")
+        menu_area = ui.column().classes("w-full gap-0")
         answer_area = ui.column().classes("w-full gap-0")
 
-        def show_answer(key):
-            answer = consulting.answer(month, key)
+        def render_answer(answer):
             answer_area.clear()
             with answer_area:
-                with ui.card().classes("consult-answer w-full q-pa-lg q-mt-md"):
+                with ui.card().classes("consult-answer w-full q-pa-lg q-mt-sm"):
                     ui.label("まず答え").classes("answer-kicker")
-                    ui.label(answer["conclusion"]).classes("text-xl font-black q-mb-sm")
-                    ui.label("なぜそう言える？").classes("answer-kicker q-mt-sm")
-                    ui.label(answer["reason"]).classes("text-xs leading-relaxed text-grey-7")
-                    ui.separator().classes("q-my-md")
-                    ui.label("この順番でやる").classes("answer-kicker")
-                    for index, action in enumerate(answer["actions"], 1):
-                        with ui.row().classes("w-full items-start no-wrap gap-2 q-mt-xs"):
-                            ui.label(str(index)).classes("mini-number")
-                            ui.label(action).classes("text-xs leading-relaxed")
-                    ui.label("できたと判断する基準").classes("answer-kicker q-mt-md")
+                    ui.label(answer["conclusion"]).classes("text-lg font-black q-mt-xs")
+                    with ui.expansion("なぜ？", icon="help_outline", value=False).classes("answer-fold w-full q-mt-sm"):
+                        ui.label(answer["reason"]).classes("text-[10px] leading-relaxed text-grey-7")
+                    with ui.expansion("選択肢・確認すること", icon="rule", value=False).classes("answer-fold w-full"):
+                        for action in answer["actions"]:
+                            ui.label(f"・{action}").classes("text-[10px] leading-relaxed q-mt-xs")
+                    ui.label("できたと判断する基準").classes("answer-kicker q-mt-sm")
                     ui.label(answer["target"]).classes("answer-target")
 
-        with ui.element("div").classes("consult-question-grid w-full"):
-            for key, label in consulting.QUESTIONS:
-                ui.button(label, on_click=lambda _, selected=key: show_answer(selected)).props(
-                    "flat no-caps"
-                ).classes("consult-question")
+        def show_answer(key):
+            render_answer(consulting.answer(month, key))
 
-        with ui.expansion("改善シミュレーション", icon="tune", value=False).classes(
-            "consult-info w-full q-mt-md"
-        ):
-            ui.label("数字を変えた場合の年間営業利益を試算").classes("text-xs font-bold q-mb-sm")
-            cost_change = ui.number("原価率を何%下げる？", min=0, max=20, step=.1).props(
-                "outlined dense suffix=% inputmode=decimal").classes("w-full")
-            personnel_change = ui.number("人件費率を何%下げる？", min=0, max=20, step=.1).props(
-                "outlined dense suffix=% inputmode=decimal").classes("w-full q-mt-xs")
-            spend_change = ui.number("客単価を何円上げる？", min=0, step=10).props(
-                "outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
-            annual_customers = ui.number("年間客数（分かる場合だけ）", min=0, step=1).props(
-                "outlined dense suffix=人 inputmode=numeric").classes("w-full q-mt-xs")
-            ui.label("数日分の客数から年間推計はしません").classes("text-[9px] text-grey-6 q-mt-xs")
-            simulation_area = ui.column().classes("w-full gap-0")
+        def show_priority(index=0):
+            recommendations = diagnosis["recommendations"]
+            item = recommendations[min(index, len(recommendations) - 1)]
+            answer_area.clear()
+            with answer_area:
+                with ui.card().classes("consult-answer w-full q-pa-lg q-mt-sm"):
+                    ui.label(f"優先順位 {index + 1}/{len(recommendations)}").classes("answer-kicker")
+                    ui.label(item["title"]).classes("text-xl font-black q-mt-xs")
+                    with ui.expansion("なぜ？", icon="help_outline", value=False).classes("answer-fold w-full q-mt-sm"):
+                        ui.label(item["why"]).classes("text-[10px] leading-relaxed")
+                    ui.label("考える選択肢").classes("answer-kicker q-mt-sm")
+                    ui.label(item["action"]).classes("text-xs leading-relaxed")
+                    if index + 1 < len(recommendations):
+                        ui.button("次に直すべきものを見る", icon="arrow_forward",
+                                  on_click=lambda: show_priority(index + 1)).props("flat no-caps").classes("w-full q-mt-md")
 
-            def run_simulation():
-                result = consulting.simulate(month, cost_change.value or 0,
-                                             personnel_change.value or 0,
-                                             spend_change.value or 0,
-                                             annual_customers.value or 0)
-                simulation_area.clear()
-                with simulation_area:
-                    if not result:
-                        ui.label("先に決算書を入力してください").classes("text-negative q-mt-sm")
-                        return
-                    with ui.element("div").classes("simulation-result q-mt-md"):
-                        for label, value in (
-                            ("原価改善", result["cost_effect"]),
-                            ("人件費改善", result["personnel_effect"]),
-                            ("客単価改善", result["spend_effect"]),
-                        ):
-                            with ui.row().classes("w-full justify-between no-wrap"):
-                                ui.label(label).classes("text-[10px] text-grey-7")
-                                ui.label(f"年間 +¥{value:,}").classes("text-xs font-bold")
-                        ui.separator().classes("q-my-sm")
-                        ui.label("改善後の年間営業利益").classes("text-[9px] text-grey-6")
-                        ui.label(f"¥{result['new_profit']:,}").classes(
-                            "text-2xl font-black text-positive" if result["new_profit"] >= 0
-                            else "text-2xl font-black text-negative")
-            ui.button("この条件で試算", icon="calculate", on_click=run_simulation).classes(
-                "w-full q-mt-sm")
+        def show_group(group_name):
+            menu_area.clear()
+            answer_area.clear()
+            with menu_area:
+                with ui.row().classes("w-full items-center justify-between no-wrap q-mb-xs"):
+                    ui.label(group_name).classes("text-base font-black")
+                    ui.button("戻る", icon="arrow_back", on_click=render_groups).props("flat dense no-caps")
+                for key, label in groups[group_name]:
+                    handler = (lambda: show_priority()) if key == "priority" else (
+                        lambda _, selected=key: show_answer(selected))
+                    ui.button(label, on_click=handler).props("flat no-caps icon-right=chevron_right").classes(
+                        "consult-topic w-full")
 
-        with ui.expansion("自動診断と行動管理", icon="assignment", value=False).classes(
-            "consult-info w-full q-mt-md"
-        ):
-            primary = diagnosis["primary"]
-            with ui.card().classes("consult-hero w-full q-pa-lg q-mb-md text-white"):
-                ui.label("今月の最優先").classes("text-[10px] opacity-70")
-                ui.label(primary["title"]).classes("text-xl font-black q-mt-xs")
-                ui.label(primary["why"]).classes("text-xs leading-relaxed opacity-85 q-mt-sm")
-            for index, item in enumerate(diagnosis["recommendations"][:5], 1):
-                with ui.card().classes("consult-action w-full q-pa-md q-mb-sm"):
-                    ui.label(f"{index}. {item['title']}").classes("text-sm font-black")
-                    ui.label(item["action"]).classes("text-[10px] leading-relaxed q-mt-xs")
-                    status = ui.select(status_options, value=item["status"], label="進捗").props(
-                        "outlined dense options-dense").classes("w-full q-mt-sm")
-                    note = ui.input("実行メモ", value=item["note"]).props("outlined dense").classes("w-full q-mt-xs")
+        def render_groups():
+            menu_area.clear()
+            answer_area.clear()
+            icons = {"今を知る": "monitor_heart", "未来を知る": "timeline",
+                     "方法を比べる": "balance", "計画を作る": "event_note"}
+            with menu_area:
+                with ui.element("div").classes("consult-group-grid w-full"):
+                    for name in groups:
+                        with ui.button(on_click=lambda _, selected=name: show_group(selected)).props(
+                            "flat no-caps").classes("consult-group"):
+                            ui.icon(icons[name]).classes("text-2xl")
+                            ui.label(name).classes("text-sm font-black")
 
-                    def save(_, action=item, status_field=status, note_field=note):
-                        consulting.save_item(month, action["key"], status_field.value, note_field.value)
-                        ui.notify("行動記録を保存しました", type="positive")
-                    ui.button("記録する", icon="check", on_click=save).props("flat dense no-caps").classes("self-end")
+        render_groups()
+        with ui.expansion("この診断について", icon="info", value=False).classes(
+            "consult-fold w-full q-mt-md"):
+            ui.label("決算書と入力済みの数字だけで判断します。未入力の税金・返済・特別な支払いは安全判定に含めず、まだ分からないこととして表示します。").classes(
+                "text-[10px] leading-relaxed")
 
-        with ui.expansion("判断の前提", icon="info", value=False).classes(
-            "consult-info w-full q-mt-sm"
-        ):
-            ui.label(
-                "最新の決算書を基準に、財務安全性・年間営業利益・原価率・人件費率を確認しています。"
-                "客単価の試算は、年間客数を入力した場合だけ計算します。"
-                "参考値は絶対的な合否ではなく、行動の優先順位を決める目安です。"
-            ).classes("text-[10px] leading-relaxed")
         ui.add_css("""
-        .period-chip{padding:5px 9px;border-radius:999px;background:#E8F1EC;color:#315F49;font-size:9px;font-weight:900}.consult-question-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.consult-question{min-height:58px!important;border-radius:17px!important;background:#fff!important;border:1px solid #DDE7E1!important;color:#20382D!important;font-size:12px!important;font-weight:800!important;line-height:1.25!important;padding:8px!important}.consult-answer{border-radius:25px!important;border:1px solid #DCE8E1!important;background:linear-gradient(155deg,#fff,#F4F8F5)!important;box-shadow:0 16px 38px rgba(32,61,46,.1)!important}.answer-kicker{font-size:9px;font-weight:900;letter-spacing:.12em;color:#56806B}.answer-target{padding:10px 12px;border-radius:13px;background:#E4F2E9;color:#285941;font-size:12px;font-weight:900}.mini-number{width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex:none;border-radius:50%;background:#315F49;color:#fff;font-size:9px;font-weight:900}.simulation-result{padding:14px;border-radius:16px;background:#F3F7F4}.consult-hero{border-radius:22px!important;border:0!important;background:linear-gradient(145deg,#173D30,#765225)!important}.consult-action{border-radius:18px!important;border:1px solid #E2E9E5!important;box-shadow:none!important}.consult-info{border-radius:18px!important;background:#fff!important;border:1px solid #E4E9E6!important}
+        .period-chip{padding:5px 9px;border-radius:999px;background:#E8F1EC;color:#315F49;font-size:9px;font-weight:900}
+        .owner-status{border:0!important;border-radius:25px!important;box-shadow:0 14px 34px rgba(45,55,48,.18)!important}
+        .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.status-item{min-width:0;padding:11px;border-radius:15px}.status-item .q-label{overflow-wrap:anywhere}
+        .consult-fold,.answer-fold{border-radius:16px!important;background:#fff!important;border:1px solid #E2E9E5!important}.consult-fold .q-item,.answer-fold .q-item{min-height:44px!important}
+        .knowledge-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.knowledge-card{padding:11px;border-radius:14px}.knowledge-card.known{background:#EDF7F1}.knowledge-card.unknown{background:#F3F4F4}.unlock-card{padding:12px;border-radius:14px;background:#FFF5DC;border:1px solid #F1DFB0}
+        .consult-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.consult-group{min-height:92px!important;border-radius:19px!important;background:#fff!important;border:1px solid #DDE7E1!important;color:#20382D!important;display:flex!important;flex-direction:column!important;gap:5px!important}
+        .consult-topic{min-height:52px!important;border-radius:15px!important;background:#fff!important;border:1px solid #E1E8E4!important;color:#263C32!important;justify-content:space-between!important;margin-bottom:7px!important;padding:8px 12px!important}
+        .consult-answer{border-radius:23px!important;border:1px solid #DCE8E1!important;background:linear-gradient(155deg,#fff,#F4F8F5)!important;box-shadow:0 14px 32px rgba(32,61,46,.09)!important}.answer-kicker{font-size:9px;font-weight:900;letter-spacing:.08em;color:#56806B}.answer-target{padding:10px 12px;border-radius:13px;background:#E4F2E9;color:#285941;font-size:11px;font-weight:900;margin-top:4px}
         """)
