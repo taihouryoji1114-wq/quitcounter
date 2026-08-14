@@ -33,12 +33,12 @@ def store_operations_page():
                                  value="食材", label="分類").props("outlined dense").classes("w-full q-mt-xs")
             unit = ui.input("単位", value="個").props("outlined dense").classes("w-full q-mt-xs")
             supplier = ui.input("いつもの仕入先（任意）").props("outlined dense").classes("w-full q-mt-xs")
-            order_quantity = ui.input("いつもの発注量（例：2箱）").props("outlined dense").classes("w-full q-mt-xs")
+            required_stock = ui.input("必要在庫数（例：2箱）").props("outlined dense").classes("w-full q-mt-xs")
 
             def add_item():
                 try:
                     store_ops.add_item(name.value, category.value, unit.value,
-                                       supplier.value, order_quantity.value)
+                                       supplier.value, required_stock.value)
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -71,7 +71,8 @@ def store_operations_page():
                                 ui.label(item["name"]).classes("text-sm font-black")
                                 detail = "・".join(value for value in (
                                     item["supplier"],
-                                    f"発注 {item['order_quantity']}" if item["order_quantity"] else "",
+                                    (f"必要在庫 {item.get('required_stock') or item.get('order_quantity')}"
+                                     if item.get("required_stock") or item.get("order_quantity") else ""),
                                 ) if value)
                                 ui.label(detail or "仕入先・発注量は未設定").classes(
                                     "text-[9px] text-grey-6 q-mt-xs")
@@ -121,11 +122,19 @@ def store_operations_page():
             "store-panel hygiene-panel w-full q-mt-sm"):
             ui.label("温度").classes("text-xs font-black q-mb-xs")
             temperature_inputs = {}
-            with ui.element("div").classes("temperature-grid w-full"):
-                for appliance in ("冷蔵庫1", "冷蔵庫2", "冷凍庫"):
-                    temperature_inputs[appliance] = ui.number(
-                        appliance, value=hygiene["temperatures"][appliance], step=.1
-                    ).props("outlined dense suffix=℃ inputmode=decimal")
+            temperature_groups = (
+                ("デシャップ・冷蔵庫", store_ops.TEMPERATURE_LOCATIONS[0:3]),
+                ("厨房・冷蔵庫", store_ops.TEMPERATURE_LOCATIONS[3:8]),
+                ("冷凍庫", store_ops.TEMPERATURE_LOCATIONS[8:11]),
+            )
+            for group_label, appliances in temperature_groups:
+                ui.label(group_label).classes("temperature-group-label")
+                with ui.element("div").classes("temperature-grid w-full"):
+                    for appliance in appliances:
+                        short_label = appliance.replace("デシャップ", "").replace("厨房", "").replace("外", "外 ")
+                        temperature_inputs[appliance] = ui.number(
+                            short_label, value=hygiene["temperatures"][appliance], step=.1
+                        ).props("outlined dense suffix=℃ inputmode=decimal")
             ui.label("衛生チェック").classes("text-xs font-black q-mt-md q-mb-xs")
             check_labels = {
                 "receiving": "届いた食材に問題なし", "equipment": "器具の洗浄・消毒",
@@ -156,7 +165,7 @@ def store_operations_page():
                 "text-[9px] text-grey-6 q-mt-xs")
 
         ui.add_css("""
-        .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.temperature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
+        .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){
           .app-shell{width:min(100%,1180px)!important;padding:38px 36px 68px!important}
           .app-shell>div:last-child{display:grid!important;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);column-gap:18px;align-items:start}
@@ -171,7 +180,8 @@ def store_operations_page():
           .inventory-name .text-xs{font-size:14px!important}.inventory-name .text-\[8px\]{font-size:11px!important}
           .stock-button{min-width:70px!important;min-height:42px!important;font-size:12px!important}
           .order-card{padding:18px!important}.stock-pill{font-size:10px;padding:7px 10px}
-          .temperature-grid{gap:10px}.temperature-grid .q-field__label{font-size:11px!important}
+          .temperature-grid{grid-template-columns:repeat(3,1fr);gap:10px}.temperature-grid .q-field__label{font-size:11px!important}
+          .temperature-group-label{font-size:11px;margin-top:12px}
           .hygiene-check{padding:8px 10px;margin-bottom:7px}.hygiene-check .q-checkbox__label{font-size:13px}
         }
         @media (min-width:700px) and (max-width:850px) and (orientation:portrait){

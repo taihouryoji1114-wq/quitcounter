@@ -10,6 +10,11 @@ from core.data import data
 
 class StoreOperationsManager:
     STATUSES = {"enough", "low", "out"}
+    TEMPERATURE_LOCATIONS = (
+        "デシャップ冷蔵庫1", "デシャップ冷蔵庫2", "デシャップ冷蔵庫3",
+        "厨房冷蔵庫1", "厨房冷蔵庫2", "厨房冷蔵庫3", "厨房冷蔵庫4", "厨房冷蔵庫5",
+        "デシャップ冷凍庫", "厨房冷凍庫", "外冷凍庫",
+    )
 
     def __init__(self, data_manager=None):
         self._data_manager = data_manager or data
@@ -21,7 +26,7 @@ class StoreOperationsManager:
             items = [value for value in items if value.get("active", True)]
         return sorted(items, key=lambda value: (value.get("category", ""), value.get("name", "")))
 
-    def add_item(self, name, category="食材", unit="個", supplier="", order_quantity=""):
+    def add_item(self, name, category="食材", unit="個", supplier="", required_stock=""):
         name = str(name or "").strip()
         if not name:
             raise ValueError("商品名を入力してください。")
@@ -30,7 +35,7 @@ class StoreOperationsManager:
         item = {
             "id": uuid4().hex, "name": name, "category": str(category or "その他").strip(),
             "unit": str(unit or "個").strip(), "supplier": str(supplier or "").strip(),
-            "order_quantity": str(order_quantity or "").strip(), "status": "enough",
+            "required_stock": str(required_stock or "").strip(), "status": "enough",
             "active": True, "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
         self._data_manager.data.setdefault("store_inventory_items", []).append(item)
@@ -89,7 +94,7 @@ class StoreOperationsManager:
         temperatures = stored.get("temperatures", {}) if isinstance(stored, dict) else {}
         checks = stored.get("checks", {}) if isinstance(stored, dict) else {}
         return {
-            "temperatures": {name: temperatures.get(name) for name in ("冷蔵庫1", "冷蔵庫2", "冷凍庫")},
+            "temperatures": {name: temperatures.get(name) for name in self.TEMPERATURE_LOCATIONS},
             "checks": {key: bool(checks.get(key, False)) for key in
                        ("receiving", "equipment", "toilet", "handwash")},
             "note": str(stored.get("note", "") if isinstance(stored, dict) else ""),
@@ -98,7 +103,7 @@ class StoreOperationsManager:
     def save_hygiene(self, record_date, temperatures, checks, note=""):
         self._date(record_date)
         cleaned_temperatures = {}
-        for name in ("冷蔵庫1", "冷蔵庫2", "冷凍庫"):
+        for name in self.TEMPERATURE_LOCATIONS:
             value = temperatures.get(name)
             if value in (None, ""):
                 cleaned_temperatures[name] = None

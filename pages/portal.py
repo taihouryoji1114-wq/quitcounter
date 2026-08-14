@@ -41,7 +41,7 @@ def portal():
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/store-ops")):
             with ui.row().classes("w-full items-center no-wrap"):
-                ui.image("/static/store_ops_icon.svg").classes(
+                ui.image("/static/store_ops_chanko_icon.png").classes(
                     "w-14 h-14 rounded-xl q-mr-md"
                 )
                 with ui.column().classes("gap-0"):

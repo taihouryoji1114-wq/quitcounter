@@ -12,7 +12,7 @@ class Theme:
             theme_color = "#164A38"
         elif app_name == "store-ops":
             manifest = "/static/store-ops-manifest.json"
-            icon = "/static/store_ops_icon.svg"
+            icon = "/static/store_ops_chanko_icon.png"
             theme_color = "#164A38"
         else:
             manifest = "/static/manifest.json"
