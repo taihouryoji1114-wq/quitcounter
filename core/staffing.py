@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime
+from statistics import median
 
 from core.data import data
 
@@ -169,6 +170,72 @@ class StaffingManager:
         return round(sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
                      + self._day_transport(shifts))
 
+    def shift_templates(self, as_of=None):
+        """Return robust staff/session templates learned from recorded shifts."""
+        as_of = as_of or date.today()
+        cutoff = as_of.isoformat()
+        records = self._data_manager.data.get("business_staff_hours", {})
+        result = {}
+        for name in self.HOURLY_STAFF:
+            result[name] = {}
+            worked_days = []
+            for prefix in ("lunch", "dinner"):
+                samples = []
+                for record_date in sorted(records, reverse=True):
+                    if record_date > cutoff:
+                        continue
+                    shift = self.day(record_date)[name]
+                    start, end = shift[f"{prefix}_start"], shift[f"{prefix}_end"]
+                    if not start or not end:
+                        continue
+                    start_minute = self._clock_minutes(start)
+                    end_minute = self._clock_minutes(end)
+                    duration = end_minute - start_minute
+                    if duration <= 0:
+                        duration += 24 * 60
+                    samples.append((start_minute, duration))
+                    if len(samples) == 20:
+                        break
+                if samples:
+                    start_minute = round(median(value[0] for value in samples))
+                    duration = round(median(value[1] for value in samples))
+                    result[name][prefix] = {
+                        "start": self._format_minutes(start_minute),
+                        "end": self._format_minutes(start_minute + duration),
+                        "sample_count": len(samples),
+                    }
+            for record_date in sorted(records, reverse=True):
+                if record_date > cutoff:
+                    continue
+                shift = self.day(record_date)[name]
+                if self._worked(shift):
+                    worked_days.append(shift["break_minutes"])
+                    if len(worked_days) == 20:
+                        break
+            result[name]["break_minutes"] = round(median(worked_days)) if worked_days else 0
+        return result
+
+    def save_simple_plan(self, record_date, selections, as_of=None):
+        """Save a future shift plan using learned lunch/dinner templates."""
+        target = self._date(record_date).date()
+        as_of = as_of or date.today()
+        if target <= as_of:
+            raise ValueError("簡単シフト入力は明日以降の日付を選んでください。")
+        templates = self.shift_templates(as_of)
+        values = self.day(record_date)
+        for name in self.HOURLY_STAFF:
+            chosen = selections.get(name, {})
+            for prefix in ("lunch", "dinner"):
+                template = templates[name].get(prefix)
+                enabled = bool(chosen.get(prefix, False))
+                if enabled and not template:
+                    raise ValueError(f"{name}の{prefix}実績がないため、最初の1回は時刻を入力してください。")
+                values[name][f"{prefix}_start"] = template["start"] if enabled else ""
+                values[name][f"{prefix}_end"] = template["end"] if enabled else ""
+            values[name]["break_minutes"] = templates[name]["break_minutes"] if any(
+                bool(chosen.get(prefix, False)) for prefix in ("lunch", "dinner")) else 0
+        return self.save_day(record_date, values)
+
     def month_total(self, month):
         datetime.strptime(month, "%Y-%m")
         wages = self.wages()
@@ -184,6 +251,7 @@ class StaffingManager:
         records = self._data_manager.data.get("business_staff_hours", {})
         wages, settings, rates = self.wages(), self.insurance_settings(), self.insurance_rates()
         as_of = as_of or date.today()
+        actual_cutoff = as_of.isoformat()
         year, month_number = int(month[:4]), int(month[5:7])
         days_in_month = monthrange(year, month_number)[1]
         if (year, month_number) < (as_of.year, as_of.month):
@@ -195,7 +263,7 @@ class StaffingManager:
         vice_progress = elapsed_days / days_in_month
         planned_days = max(1, days_in_month - self.MONTHLY_REST_DAYS)
         attendance = {name: sum(
-            1 for day in records if day.startswith(month) and self.day(day)[name]["attended"]
+            1 for day in records if day.startswith(month) and day <= actual_cutoff and self.day(day)[name]["attended"]
         ) for name in self.SALARIED_STAFF}
         salaries = self.monthly_salaries()
         salaried_actual = round(salaries["副社長"] * vice_progress) + sum(
@@ -204,7 +272,7 @@ class StaffingManager:
         gross = salaried_actual
         salaried_transport = hourly_transport = 0
         for record_date in records:
-            if not record_date.startswith(month):
+            if not record_date.startswith(month) or record_date > actual_cutoff:
                 continue
             shifts = self.day(record_date)
             gross += sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
@@ -241,7 +309,7 @@ class StaffingManager:
                 else:
                     staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name])
                                       + (self.commute_rates()[name] if self._worked(self.day(day)[name]) else 0)
-                                      for day in records if day.startswith(month))
+                                      for day in records if day.startswith(month) and day <= actual_cutoff)
                 group = "salaried" if name in self.SALARIED_STAFF else "hourly"
                 employment_by_group[group] += staff_gross * rates["employment"] / 100
         hourly_gross = gross - salaried_actual
@@ -261,10 +329,25 @@ class StaffingManager:
                     rate += rates["care"]
                 group = "salaried" if name in self.SALARIED_STAFF else "hourly"
                 forecast_social_by_group[group] += setting["standard_monthly"] * rate / 100
-        forecast_gross = sum(salaries.values()) + hourly_gross
+        planned_hourly_gross = sum(
+            self._shift_pay(wages[name], self.day(record_date)[name])
+            for record_date in records if record_date.startswith(month) and record_date > actual_cutoff
+            for name in self.HOURLY_STAFF)
+        planned_hourly_transport = sum(
+            self.commute_rates()[name]
+            for record_date in records if record_date.startswith(month) and record_date > actual_cutoff
+            for name in self.HOURLY_STAFF if self._worked(self.day(record_date)[name]))
+        forecast_gross = sum(salaries.values()) + hourly_gross + planned_hourly_gross
+        forecast_transportation = transportation + planned_hourly_transport
+        planned_employment = sum(
+            (self._shift_pay(wages[name], self.day(record_date)[name])
+             + (self.commute_rates()[name] if self._worked(self.day(record_date)[name]) else 0))
+            * rates["employment"] / 100
+            for record_date in records if record_date.startswith(month) and record_date > actual_cutoff
+            for name in self.HOURLY_STAFF if settings[name]["employment"])
         forecast_insurance = round(sum(forecast_social_by_group.values())
-                                   + sum(employment_by_group.values())
-                                   + (forecast_gross + transportation) * rates["workers_comp"] / 100)
+                                   + sum(employment_by_group.values()) + planned_employment
+                                   + (forecast_gross + forecast_transportation) * rates["workers_comp"] / 100)
         groups = {
             "salaried": {"gross_wages": round(salaried_actual),
                          "transportation": round(salaried_transport),
@@ -283,7 +366,9 @@ class StaffingManager:
                 "daily_hours": self.SALARIED_DAILY_HOURS,
                 "forecast_gross_wages": round(forecast_gross),
                 "forecast_employer_insurance": forecast_insurance,
-                "forecast_company_cost": round(forecast_gross + transportation + forecast_insurance),
+                "forecast_transportation": round(forecast_transportation),
+                "planned_hourly_gross": round(planned_hourly_gross),
+                "forecast_company_cost": round(forecast_gross + forecast_transportation + forecast_insurance),
                 "groups": groups}
 
     def year_staff_total(self, year, name):
@@ -361,9 +446,16 @@ class StaffingManager:
         hour, minute = (int(part) for part in value.split(":"))
         return hour * 60 + minute
 
+    _clock_minutes = _minute
+
+    @staticmethod
+    def _format_minutes(value):
+        value %= 1440
+        return f"{value // 60:02d}:{value % 60:02d}"
+
     @staticmethod
     def _date(value):
-        datetime.strptime(str(value), "%Y-%m-%d")
+        return datetime.strptime(str(value), "%Y-%m-%d")
 
     @staticmethod
     def _amount(value, label):

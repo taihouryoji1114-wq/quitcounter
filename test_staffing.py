@@ -42,6 +42,37 @@ class StaffingManagerTest(unittest.TestCase):
         self.staffing.save_day("2026-08-01", {"スタッフA": {"lunch_start": "10:00", "lunch_end": "11:01"}})
         self.assertEqual(self.staffing.day_total("2026-08-01"), 1220)
 
+    def test_simple_future_plan_uses_median_recorded_shift(self):
+        self.staffing.save_wages({"スタッフA": 1200})
+        self.staffing.save_day("2026-08-01", {"スタッフA": {
+            "lunch_start": "10:00", "lunch_end": "15:00", "break_minutes": 30,
+        }})
+        self.staffing.save_day("2026-08-02", {"スタッフA": {
+            "lunch_start": "10:30", "lunch_end": "15:30", "break_minutes": 30,
+        }})
+        self.staffing.save_day("2026-08-03", {"スタッフA": {
+            "lunch_start": "10:00", "lunch_end": "15:00", "break_minutes": 30,
+        }})
+        self.staffing.save_simple_plan("2026-08-15", {
+            "スタッフA": {"lunch": True, "dinner": False},
+        }, date(2026, 8, 14))
+        planned = self.staffing.day("2026-08-15")["スタッフA"]
+        self.assertEqual((planned["lunch_start"], planned["lunch_end"]), ("10:00", "15:00"))
+        self.assertEqual(planned["break_minutes"], 30)
+
+    def test_future_plan_affects_forecast_but_not_current_actual(self):
+        self.staffing.save_wages({"スタッフA": 1200})
+        self.staffing.save_day("2026-08-01", {"スタッフA": {
+            "lunch_start": "10:00", "lunch_end": "15:00",
+        }})
+        self.staffing.save_simple_plan("2026-08-15", {
+            "スタッフA": {"lunch": True},
+        }, date(2026, 8, 14))
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 14))
+        self.assertEqual(summary["gross_wages"], 6000)
+        self.assertEqual(summary["planned_hourly_gross"], 6000)
+        self.assertEqual(summary["forecast_gross_wages"], 12000)
+
     def test_night_rate_and_crossing_midnight(self):
         self.staffing.save_wages({"スタッフA": 1200})
         self.staffing.save_day("2026-08-01", {"スタッフA": {"dinner_start": "21:00", "dinner_end": "01:00"}})
@@ -122,7 +153,7 @@ class StaffingManagerTest(unittest.TestCase):
         self.staffing.save_monthly_salaries({"店長": 310_000})
         for day in range(1, 23):
             self.staffing.save_day(f"2026-08-{day:02d}", {"店長": {"attended": True}})
-        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 1))
+        summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 31))
         self.assertEqual(summary["gross_wages"], 310_000)
 
     def test_vice_president_is_regular_salaried_staff(self):
