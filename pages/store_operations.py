@@ -59,7 +59,7 @@ def store_operations_page():
                     "unelevated no-caps").classes("store-hero-button grow")
 
         with ui.expansion(f"不足・発注リスト　{len(orders)}品", icon="shopping_cart",
-                          value=bool(orders)).classes("store-panel w-full q-mt-sm"):
+                          value=bool(orders)).classes("store-panel order-panel w-full q-mt-sm"):
             if not orders:
                 ui.label("現在、補充が必要なものはありません").classes(
                     "text-sm text-positive font-bold q-pa-md")
@@ -92,7 +92,7 @@ def store_operations_page():
                                           )).props("flat dense no-caps")
 
         with ui.expansion("在庫を確認", icon="checklist", value=True).classes(
-            "store-panel w-full q-mt-sm"):
+            "store-panel inventory-panel w-full q-mt-sm"):
             if not items:
                 ui.label("最初の商品を登録してください").classes("text-sm text-grey-6 q-pa-md")
             categories = []
@@ -118,7 +118,7 @@ def store_operations_page():
         hygiene = store_ops.hygiene_record(today)
         with ui.expansion("今日の温度・衛生チェック", icon="health_and_safety",
                           value=not store_ops.hygiene_complete(today)).classes(
-            "store-panel w-full q-mt-sm"):
+            "store-panel hygiene-panel w-full q-mt-sm"):
             ui.label("温度").classes("text-xs font-black q-mb-xs")
             temperature_inputs = {}
             with ui.element("div").classes("temperature-grid w-full"):
@@ -149,7 +149,7 @@ def store_operations_page():
             ui.button("今日の記録を保存", icon="save", on_click=save_hygiene).classes(
                 "w-full q-mt-md")
 
-        with ui.card().classes("future-card w-full q-pa-md q-mt-sm"):
+        with ui.card().classes("future-card future-panel w-full q-pa-md q-mt-sm"):
             ui.label("次の開発").classes("text-[9px] font-black text-primary")
             ui.label("仕込み状況・引き継ぎ").classes("text-base font-black q-mt-xs")
             ui.label("その後、タスク・清掃管理・マニュアル・行動指針へ広げます").classes(
@@ -157,4 +157,26 @@ def store_operations_page():
 
         ui.add_css("""
         .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.temperature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
+        @media (min-width:700px){
+          .app-shell{width:min(100%,1180px)!important;padding:38px 36px 68px!important}
+          .app-shell>div:last-child{display:grid!important;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);column-gap:18px;align-items:start}
+          .store-hero{grid-column:1 / -1;padding:28px 32px!important}
+          .order-panel{grid-column:1;grid-row:2}
+          .inventory-panel{grid-column:1;grid-row:3}
+          .hygiene-panel{grid-column:2;grid-row:2 / span 2;position:sticky;top:18px}
+          .future-panel{grid-column:1 / -1;grid-row:4}
+          .store-panel{margin-top:14px!important}
+          .store-panel .q-item{min-height:64px!important;padding:0 20px!important;font-size:16px}
+          .inventory-row{gap:10px;padding:12px 8px}.inventory-name{min-width:150px}
+          .inventory-name .text-xs{font-size:14px!important}.inventory-name .text-\[8px\]{font-size:11px!important}
+          .stock-button{min-width:70px!important;min-height:42px!important;font-size:12px!important}
+          .order-card{padding:18px!important}.stock-pill{font-size:10px;padding:7px 10px}
+          .temperature-grid{gap:10px}.temperature-grid .q-field__label{font-size:11px!important}
+          .hygiene-check{padding:8px 10px;margin-bottom:7px}.hygiene-check .q-checkbox__label{font-size:13px}
+        }
+        @media (min-width:700px) and (max-width:850px) and (orientation:portrait){
+          .app-shell>div:last-child{grid-template-columns:minmax(0,1fr) minmax(275px,.82fr);column-gap:12px}
+          .app-shell{padding-left:22px!important;padding-right:22px!important}
+          .stock-button{min-width:58px!important}
+        }
         """)
