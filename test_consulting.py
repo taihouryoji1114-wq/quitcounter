@@ -69,6 +69,22 @@ class ConsultingManagerTest(unittest.TestCase):
         self.assertIn("7,683,578", answer["target"])
         self.assertNotIn("4,523,723", answer["target"])
 
+    def test_year_plan_returns_twelve_ordered_monthly_actions(self):
+        snapshot = {
+            "sales": 100_000_000, "cost": 35_000_000, "gross": 65_000_000,
+            "personnel": 30_000_000, "profit": 5_000_000, "cash": 5_000_000,
+            "debt": 20_000_000, "result": {
+                "current_assets": 8_000_000, "current_liabilities": 10_000_000,
+                "equity": -3_000_000, "ordinary_profit": 4_000_000,
+            }, "values": {}, "period": "2026-09",
+        }
+        with patch.object(self.manager, "annual_snapshot", return_value=snapshot):
+            answer = self.manager.answer("2026-08", "year_plan")
+        self.assertEqual(len(answer["actions"]), 12)
+        self.assertTrue(answer["actions"][0].startswith("1か月目"))
+        self.assertTrue(answer["actions"][-1].startswith("12か月目"))
+        self.assertIn("運転資金不足", answer["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

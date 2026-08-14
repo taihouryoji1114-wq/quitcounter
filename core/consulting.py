@@ -20,6 +20,7 @@ class ConsultingManager:
         ("cost", "原価を下げるべき？"),
         ("sales", "売上をいくら増やせばよい？"),
         ("investment", "新しい投資をしてよい？"),
+        ("year_plan", "この1年間でやるべきこと"),
     )
 
     def __init__(self, data_manager=None):
@@ -184,6 +185,43 @@ class ConsultingManager:
                           reason="客単価の効果は、数日分の客数を年間換算せず、改善シミュレーションで年間客数を入力した場合だけ計算します。",
                           target=f"追加売上 ¥{needed:,} または同額以上の費用改善",
                           actions=["客単価100円の効果と費用1%改善を比較", "必要売上を営業日数で割り1日目標にする", "ランチ・ディナー別に実績確認"])
+        elif question == "year_plan":
+            working_capital = result.get("current_assets", 0) - result.get("current_liabilities", 0)
+            equity = result.get("equity", 0)
+            cost_rate = cost / sales if sales else 0
+            personnel_rate = snapshot["personnel"] / sales if sales else 0
+            roadmap = [
+                "1か月目｜決算入力の貸借差額を0円にし、現預金・借入残高・年間元金返済額を確定",
+                "2か月目｜今後12か月の入金・支払い・税金・返済を月別に並べ、資金不足月を特定",
+                "3か月目｜不足が見込まれる場合は、金融機関へ借換え・返済条件・必要資金を相談",
+                "4か月目｜月次の損益分岐点売上を決め、ランチ・ディナー別の必要売上へ分解",
+                "5か月目｜高原価商品・仕入単価・廃棄を確認し、原価率1%改善の施策を1つ実行",
+                "6か月目｜時間帯別売上とシフトを照合し、人件費を品質を落とさず1%改善できるか検証",
+                "7か月目｜値上げ・商品構成・客単価向上策を1つ試し、利益効果を翌月比較",
+                "8か月目｜借入返済後に現金が残るか確認し、返済計画と債務超過解消年数を更新",
+                "9か月目｜広告・予約媒体ごとの売上効果を確認し、回収できない支出を見直す",
+                "10か月目｜資金余力がある場合だけ、採用・設備・販促から小さな投資を1つ試す",
+                "11か月目｜次期の売上・原価・人件費・固定費・返済計画を作り、3パターンで試算",
+                "12か月目｜年間の予測と実績を比較し、改善額・未達理由・翌年の最優先3項目を決定",
+            ]
+            warnings = []
+            if working_capital < 0:
+                warnings.append(f"運転資金不足 ¥{abs(working_capital):,}")
+            if equity < 0:
+                warnings.append(f"債務超過 ¥{abs(equity):,}")
+            if profit < 0:
+                warnings.append(f"営業赤字 ¥{abs(profit):,}")
+            conclusion = "最初の3か月は資金防衛、その後に利益改善、最後に次期計画へ進みます。"
+            if not warnings and profit > 0:
+                conclusion = "黒字を守りながら、利益改善と小さな成長投資を1年間で進めます。"
+            answer.update(
+                conclusion=conclusion,
+                reason=("決算書から確認した優先課題：" + "・".join(warnings)) if warnings else
+                       f"年間営業利益 ¥{profit:,}、原価率 {cost_rate*100:.1f}%、人件費率 {personnel_rate*100:.1f}%を基準に作成しました。",
+                target=(f"1年後に営業利益を現在の ¥{profit:,} 以上へ改善し、月末現金を一度もマイナスにしない" if profit >= 0
+                        else f"1年後までに年間営業赤字 ¥{abs(profit):,} を解消し、月末現金を一度もマイナスにしない"),
+                actions=roadmap,
+            )
         else:
             safe = bool(result and not result["balance_gap"] and result["equity"] > 0 and
                         result["current_assets"] >= result["current_liabilities"] and
