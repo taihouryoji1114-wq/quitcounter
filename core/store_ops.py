@@ -10,7 +10,7 @@ from core.data import data
 
 class StoreOperationsManager:
     STATUSES = {"enough", "low", "out"}
-    PREP_STATUSES = {"pending", "done", "missed"}
+    PREP_STATUSES = {"incomplete", "done"}
     TEMPERATURE_LOCATIONS = (
         "デシャップ冷蔵庫1", "デシャップ冷蔵庫2", "デシャップ冷蔵庫3",
         "厨房冷蔵庫1", "厨房冷蔵庫2", "厨房冷蔵庫3", "厨房冷蔵庫4", "厨房冷蔵庫5",
@@ -188,15 +188,31 @@ class StoreOperationsManager:
         states = self._data_manager.data.get("store_prep_records", {}).get(record_date, {})
         previous_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
         previous_states = self._data_manager.data.get("store_prep_records", {}).get(previous_date, {})
-        return [{**item, "status": states.get(item["id"], "pending"),
-                 "carried_over": previous_states.get(item["id"]) == "missed"}
-                for item in self.prep_templates()]
+        result = [{**item, "status": ("done" if states.get(item["id"]) == "done" else "incomplete"),
+                   "carried_over": previous_states.get(item["id"]) in {"incomplete", "pending", "missed"},
+                   "source": "prep"}
+                  for item in self.prep_templates()]
+        previous_checks = self._data_manager.data.get("store_handover_checks", {}).get(previous_date, {})
+        existing_ids = {value["id"] for value in result}
+        for template in self.handover_templates():
+            created_date = template.get("created_date", "")
+            if created_date and created_date > previous_date:
+                continue
+            if previous_checks.get(template["id"], False):
+                continue
+            carry_id = f"handover:{template['id']}"
+            if carry_id in existing_ids:
+                continue
+            result.insert(0, {"id": carry_id, "name": template["name"], "area": template["area"],
+                              "status": states.get(carry_id, "incomplete"), "carried_over": True,
+                              "source": "handover"})
+        return result
 
     def set_prep_status(self, record_date, item_id, status):
         self._date(record_date)
         if status not in self.PREP_STATUSES:
             raise ValueError("仕込み状況が正しくありません。")
-        if not any(value["id"] == item_id for value in self.prep_templates()):
+        if not any(value["id"] == item_id for value in self.prep_items(record_date)):
             raise ValueError("仕込み項目が見つかりません。")
         self._data_manager.data.setdefault("store_prep_records", {}).setdefault(record_date, {})[item_id] = status
         self._data_manager.save()
@@ -213,7 +229,8 @@ class StoreOperationsManager:
         if any(value.get("name") == name and value.get("area") == area
                for value in self.handover_templates()):
             raise ValueError("同じチェック項目が登録されています。")
-        item = {"id": uuid4().hex, "name": name, "area": area, "active": True}
+        item = {"id": uuid4().hex, "name": name, "area": area, "active": True,
+                "created_date": datetime.now().date().isoformat()}
         self._data_manager.data.setdefault("store_handover_templates", []).append(item)
         self._data_manager.save()
         return dict(item)
