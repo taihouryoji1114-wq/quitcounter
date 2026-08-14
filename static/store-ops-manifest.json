@@ -8,6 +8,6 @@
   "background_color": "#F7F7F5",
   "theme_color": "#164A38",
   "icons": [
-    {"src": "/static/store_ops_chanko_icon.png", "sizes": "1024x1024", "type": "image/png"}
+    {"src": "/static/store_ops_chanko_icon_v2.png", "sizes": "1024x1024", "type": "image/png"}
   ]
 }
