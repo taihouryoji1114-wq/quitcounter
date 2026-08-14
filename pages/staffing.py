@@ -29,6 +29,13 @@ def staffing_page():
                 ui.label("月末着地予測").classes("text-[9px] opacity-70")
                 ui.label(f"¥{current_summary['forecast_company_cost']:,}").classes(
                     "text-base font-black")
+            with ui.element("div").classes("staff-group-grid w-full q-mt-sm"):
+                for title, key in (("社員系", "salaried"), ("アルバイト", "hourly")):
+                    group = current_summary["groups"][key]
+                    with ui.element("div").classes("staff-group-card"):
+                        ui.label(title).classes("text-[9px] opacity-70")
+                        ui.label(f"¥{group['company_cost']:,}").classes("text-base font-black")
+                        ui.label(f"給与 {group['gross_wages']:,}・交通 {group['transportation']:,}・保険 {group['employer_insurance']:,}").classes("text-[7px] opacity-70")
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
             ui.label("副社長は暦日按分、店長・社員は月10日休み・1出勤10時間を基準に配分します").classes(
@@ -197,4 +204,4 @@ def staffing_page():
                         "text-sm font-black q-mt-xs")
         date_input.on("change", lambda: render_day(date_input.value))
         render_day(selected)
-        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
+        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")

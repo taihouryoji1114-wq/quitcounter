@@ -9,7 +9,7 @@ from core.data import data
 
 
 class StaffingManager:
-    STAFF = ("副社長", "店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(15)))
+    STAFF = ("副社長", "店長", "社員A", *(f"スタッフ{chr(65 + index)}" for index in range(9)))
     SALARIED_STAFF = ("副社長", "店長", "社員A")
     HOURLY_STAFF = STAFF[3:]
     MONTHLY_REST_DAYS = 10
@@ -202,14 +202,20 @@ class StaffingManager:
             min(salaries[name], round(salaries[name] / planned_days * attendance[name]))
             for name in ("店長", "社員A"))
         gross = salaried_actual
-        transportation = 0
+        salaried_transport = hourly_transport = 0
         for record_date in records:
             if not record_date.startswith(month):
                 continue
             shifts = self.day(record_date)
             gross += sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)
-            transportation += self._day_transport(shifts)
-        social = labor = 0
+            rates_by_staff = self.commute_rates()
+            salaried_transport += sum(rates_by_staff[name] for name in self.SALARIED_STAFF
+                                      if shifts[name]["attended"])
+            hourly_transport += sum(rates_by_staff[name] for name in self.HOURLY_STAFF
+                                    if self._worked(shifts[name]))
+        transportation = salaried_transport + hourly_transport
+        social_by_group = {"salaried": 0.0, "hourly": 0.0}
+        employment_by_group = {"salaried": 0.0, "hourly": 0.0}
         for name in self.STAFF:
             setting = settings[name]
             if setting["social"]:
@@ -222,7 +228,8 @@ class StaffingManager:
                     factor = min(1, attendance[name] / planned_days)
                 else:
                     factor = 1
-                social += setting["standard_monthly"] * rate / 100 * factor
+                group = "salaried" if name in self.SALARIED_STAFF else "hourly"
+                social_by_group[group] += setting["standard_monthly"] * rate / 100 * factor
             if setting["employment"]:
                 if name in self.SALARIED_STAFF:
                     salary_actual = (round(salaries[name] * vice_progress) if name == "副社長"
@@ -235,20 +242,39 @@ class StaffingManager:
                     staff_gross = sum(self._shift_pay(wages[name], self.day(day)[name])
                                       + (self.commute_rates()[name] if self._worked(self.day(day)[name]) else 0)
                                       for day in records if day.startswith(month))
-                labor += staff_gross * rates["employment"] / 100
-        labor += (gross + transportation) * rates["workers_comp"] / 100
-        employer_insurance = round(social + labor)
-        forecast_social = 0
+                group = "salaried" if name in self.SALARIED_STAFF else "hourly"
+                employment_by_group[group] += staff_gross * rates["employment"] / 100
+        hourly_gross = gross - salaried_actual
+        insurance_by_group = {
+            "salaried": round(social_by_group["salaried"] + employment_by_group["salaried"]
+                               + (salaried_actual + salaried_transport) * rates["workers_comp"] / 100),
+            "hourly": round(social_by_group["hourly"] + employment_by_group["hourly"]
+                             + (hourly_gross + hourly_transport) * rates["workers_comp"] / 100),
+        }
+        employer_insurance = sum(insurance_by_group.values())
+        forecast_social_by_group = {"salaried": 0.0, "hourly": 0.0}
         for name in self.STAFF:
             setting = settings[name]
             if setting["social"]:
                 rate = rates["health"] + rates["pension"] + rates["other"]
                 if setting["care"]:
                     rate += rates["care"]
-                forecast_social += setting["standard_monthly"] * rate / 100
-        hourly_gross = gross - salaried_actual
+                group = "salaried" if name in self.SALARIED_STAFF else "hourly"
+                forecast_social_by_group[group] += setting["standard_monthly"] * rate / 100
         forecast_gross = sum(salaries.values()) + hourly_gross
-        forecast_insurance = round(forecast_social + labor)
+        forecast_insurance = round(sum(forecast_social_by_group.values())
+                                   + sum(employment_by_group.values())
+                                   + (forecast_gross + transportation) * rates["workers_comp"] / 100)
+        groups = {
+            "salaried": {"gross_wages": round(salaried_actual),
+                         "transportation": round(salaried_transport),
+                         "employer_insurance": insurance_by_group["salaried"]},
+            "hourly": {"gross_wages": round(hourly_gross),
+                       "transportation": round(hourly_transport),
+                       "employer_insurance": insurance_by_group["hourly"]},
+        }
+        for values in groups.values():
+            values["company_cost"] = sum(values.values())
         return {"gross_wages": round(gross), "transportation": round(transportation),
                 "employer_insurance": employer_insurance,
                 "company_cost": round(gross + transportation + employer_insurance),
@@ -257,7 +283,8 @@ class StaffingManager:
                 "daily_hours": self.SALARIED_DAILY_HOURS,
                 "forecast_gross_wages": round(forecast_gross),
                 "forecast_employer_insurance": forecast_insurance,
-                "forecast_company_cost": round(forecast_gross + transportation + forecast_insurance)}
+                "forecast_company_cost": round(forecast_gross + transportation + forecast_insurance),
+                "groups": groups}
 
     def year_staff_total(self, year, name):
         records = self._data_manager.data.get("business_staff_hours", {})

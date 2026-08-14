@@ -16,11 +16,11 @@ class StaffingManagerTest(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def test_has_fifteen_pseudonymous_staff_slots(self):
-        self.assertEqual(len(self.staffing.STAFF), 18)
+    def test_has_nine_pseudonymous_staff_slots(self):
+        self.assertEqual(len(self.staffing.STAFF), 12)
         self.assertEqual(self.staffing.STAFF[0], "副社長")
         self.assertEqual(self.staffing.STAFF[3], "スタッフA")
-        self.assertEqual(self.staffing.STAFF[-1], "スタッフO")
+        self.assertEqual(self.staffing.STAFF[-1], "スタッフI")
 
     def test_month_total_uses_wage_and_daily_hours(self):
         self.staffing.save_wages({"スタッフA": 1200, "スタッフB": 1500})
