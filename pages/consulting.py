@@ -26,7 +26,7 @@ def consulting_page():
             ui.label("最新の決算書を基準に診断").classes("text-xs font-bold text-primary")
             ui.label(snapshot["period"] if snapshot else "決算書未入力").classes("period-chip")
         ui.label("今、一番知りたいことは？").classes("text-xl font-black q-mb-xs")
-        ui.label("決算書の年間数字から、結論と次の行動を出します").classes("text-[10px] text-grey-6 q-mb-sm")
+        ui.label("難しい会計用語を使わず、今やることを順番に伝えます").classes("text-[10px] text-grey-6 q-mb-sm")
         answer_area = ui.column().classes("w-full gap-0")
 
         def show_answer(key):
@@ -34,16 +34,17 @@ def consulting_page():
             answer_area.clear()
             with answer_area:
                 with ui.card().classes("consult-answer w-full q-pa-lg q-mt-md"):
-                    ui.label("結論").classes("answer-kicker")
+                    ui.label("まず答え").classes("answer-kicker")
                     ui.label(answer["conclusion"]).classes("text-xl font-black q-mb-sm")
+                    ui.label("なぜそう言える？").classes("answer-kicker q-mt-sm")
                     ui.label(answer["reason"]).classes("text-xs leading-relaxed text-grey-7")
                     ui.separator().classes("q-my-md")
-                    ui.label("次にやること").classes("answer-kicker")
+                    ui.label("この順番でやる").classes("answer-kicker")
                     for index, action in enumerate(answer["actions"], 1):
                         with ui.row().classes("w-full items-start no-wrap gap-2 q-mt-xs"):
                             ui.label(str(index)).classes("mini-number")
                             ui.label(action).classes("text-xs leading-relaxed")
-                    ui.label("改善目標").classes("answer-kicker q-mt-md")
+                    ui.label("できたと判断する基準").classes("answer-kicker q-mt-md")
                     ui.label(answer["target"]).classes("answer-target")
 
         with ui.element("div").classes("consult-question-grid w-full"):

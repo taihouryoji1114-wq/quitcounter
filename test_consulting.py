@@ -83,7 +83,9 @@ class ConsultingManagerTest(unittest.TestCase):
         self.assertEqual(len(answer["actions"]), 12)
         self.assertTrue(answer["actions"][0].startswith("1か月目"))
         self.assertTrue(answer["actions"][-1].startswith("12か月目"))
-        self.assertIn("運転資金不足", answer["reason"])
+        self.assertIn("使えるお金", answer["reason"])
+        self.assertIn("毎月1つずつ", answer["conclusion"])
+        self.assertIn("食材で年間", answer["actions"][4])
 
 
 if __name__ == "__main__":
