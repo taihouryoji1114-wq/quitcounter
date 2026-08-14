@@ -176,6 +176,37 @@ class StaffingManager:
         cutoff = as_of.isoformat()
         records = self._data_manager.data.get("business_staff_hours", {})
         result = {}
+        global_samples = {"lunch": [], "dinner": []}
+        global_breaks = []
+        for record_date in sorted(records, reverse=True):
+            if record_date > cutoff:
+                continue
+            shifts = self.day(record_date)
+            for name in self.HOURLY_STAFF:
+                shift = shifts[name]
+                if self._worked(shift):
+                    global_breaks.append(shift["break_minutes"])
+                for prefix in ("lunch", "dinner"):
+                    start, end = shift[f"{prefix}_start"], shift[f"{prefix}_end"]
+                    if not start or not end:
+                        continue
+                    start_minute = self._clock_minutes(start)
+                    duration = self._clock_minutes(end) - start_minute
+                    if duration <= 0:
+                        duration += 24 * 60
+                    global_samples[prefix].append((start_minute, duration))
+        global_templates = {}
+        defaults = {"lunch": (10 * 60, 5 * 60), "dinner": (17 * 60, 6 * 60)}
+        for prefix in ("lunch", "dinner"):
+            samples = global_samples[prefix]
+            start_minute = round(median(value[0] for value in samples)) if samples else defaults[prefix][0]
+            duration = round(median(value[1] for value in samples)) if samples else defaults[prefix][1]
+            global_templates[prefix] = {
+                "start": self._format_minutes(start_minute),
+                "end": self._format_minutes(start_minute + duration),
+                "sample_count": len(samples),
+                "source": "全体実績" if samples else "初期設定",
+            }
         for name in self.HOURLY_STAFF:
             result[name] = {}
             worked_days = []
@@ -203,7 +234,10 @@ class StaffingManager:
                         "start": self._format_minutes(start_minute),
                         "end": self._format_minutes(start_minute + duration),
                         "sample_count": len(samples),
+                        "source": "本人実績",
                     }
+                else:
+                    result[name][prefix] = dict(global_templates[prefix])
             for record_date in sorted(records, reverse=True):
                 if record_date > cutoff:
                     continue
@@ -212,7 +246,8 @@ class StaffingManager:
                     worked_days.append(shift["break_minutes"])
                     if len(worked_days) == 20:
                         break
-            result[name]["break_minutes"] = round(median(worked_days)) if worked_days else 0
+            result[name]["break_minutes"] = round(median(worked_days)) if worked_days else (
+                round(median(global_breaks)) if global_breaks else 0)
         return result
 
     def save_simple_plan(self, record_date, selections, as_of=None):

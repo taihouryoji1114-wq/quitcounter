@@ -60,6 +60,18 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual((planned["lunch_start"], planned["lunch_end"]), ("10:00", "15:00"))
         self.assertEqual(planned["break_minutes"], 30)
 
+    def test_every_hourly_staff_gets_lunch_and_dinner_templates(self):
+        self.staffing.save_day("2026-08-01", {"スタッフB": {
+            "lunch_start": "10:30", "lunch_end": "15:30",
+            "dinner_start": "17:00", "dinner_end": "23:00",
+        }})
+        templates = self.staffing.shift_templates(date(2026, 8, 14))
+        for name in self.staffing.HOURLY_STAFF:
+            self.assertEqual(templates[name]["lunch"]["start"], "10:30")
+            self.assertEqual(templates[name]["lunch"]["end"], "15:30")
+            self.assertEqual(templates[name]["dinner"]["start"], "17:00")
+            self.assertEqual(templates[name]["dinner"]["end"], "23:00")
+
     def test_future_plan_affects_forecast_but_not_current_actual(self):
         self.staffing.save_wages({"スタッフA": 1200})
         self.staffing.save_day("2026-08-01", {"スタッフA": {

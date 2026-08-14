@@ -142,7 +142,7 @@ def staffing_page():
             ui.button("保険設定を保存", on_click=save_insurance).classes("w-full q-mt-sm")
 
         tomorrow = (today_jst() + timedelta(days=1)).isoformat()
-        with ui.expansion("明日以降のシフトを簡単入力", icon="event_available", value=True).classes(
+        with ui.expansion("明日以降のシフトを簡単入力", icon="event_available", value=False).classes(
             "staff-panel w-full q-mt-sm"):
             ui.label("ランチ／ディナーを選ぶだけ。時間は過去の実績から自動設定します").classes(
                 "text-[9px] text-grey-6 q-mb-sm")
@@ -158,19 +158,15 @@ def staffing_page():
                 selections = {}
                 for name in staffing.HOURLY_STAFF:
                     selections[name] = {}
-                    available = any(templates[name].get(prefix) for prefix in ("lunch", "dinner"))
-                    if not available and not any(existing[name].get(f"{prefix}_start") for prefix in ("lunch", "dinner")):
-                        continue
                     with ui.row().classes("simple-shift-row w-full items-center no-wrap"):
                         ui.label(name).classes("simple-shift-name")
                         for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
                             template = templates[name].get(prefix)
                             checked = bool(existing[name].get(f"{prefix}_start"))
                             text = label
-                            if template:
-                                text += f" {template['start']}〜{template['end']}"
+                            text += f" {template['start']}〜{template['end']}"
                             selections[name][prefix] = ui.checkbox(text, value=checked).props(
-                                "dense" + (" disable" if not template else ""))
+                                "dense")
 
                 def save_simple():
                     try:
@@ -185,9 +181,6 @@ def staffing_page():
                     ui.notify(f"予定を保存しました。月末予測 ¥{summary['forecast_company_cost']:,}", type="positive")
                     ui.navigate.to("/mirai-kessan/staffing")
                 ui.button("予定シフトを保存", icon="save", on_click=save_simple).classes("w-full q-mt-sm")
-                if not selections:
-                    ui.label("過去の勤務実績がまだありません。下の詳細入力で最初の時刻を登録してください。").classes(
-                        "text-[9px] text-orange-8")
 
         plan_date.on("change", lambda: render_simple_plan(plan_date.value))
         render_simple_plan(tomorrow)
