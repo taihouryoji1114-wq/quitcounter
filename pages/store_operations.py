@@ -59,7 +59,7 @@ def store_operations_page():
                     "unelevated no-caps").classes("store-hero-button grow")
 
         with ui.expansion(f"不足・発注リスト　{len(orders)}品", icon="shopping_cart",
-                          value=bool(orders)).classes("store-panel order-panel w-full q-mt-sm"):
+                          value=False).classes("store-panel order-panel w-full q-mt-sm"):
             if not orders:
                 ui.label("現在、補充が必要なものはありません").classes(
                     "text-sm text-positive font-bold q-pa-md")
@@ -92,7 +92,7 @@ def store_operations_page():
                                               store_ops.receive(item_id), reload("入荷を反映しました")
                                           )).props("flat dense no-caps")
 
-        with ui.expansion("在庫を確認", icon="checklist", value=True).classes(
+        with ui.expansion("在庫を確認", icon="checklist", value=False).classes(
             "store-panel inventory-panel w-full q-mt-sm"):
             if not items:
                 ui.label("最初の商品を登録してください").classes("text-sm text-grey-6 q-pa-md")
@@ -118,7 +118,7 @@ def store_operations_page():
         today = today_jst().isoformat()
         hygiene = store_ops.hygiene_record(today)
         with ui.expansion("今日の温度・衛生チェック", icon="health_and_safety",
-                          value=not store_ops.hygiene_complete(today)).classes(
+                          value=False).classes(
             "store-panel hygiene-panel w-full q-mt-sm"):
             ui.label("温度").classes("text-xs font-black q-mb-xs")
             temperature_inputs = {}
