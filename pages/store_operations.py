@@ -307,19 +307,8 @@ def store_operations_page():
                                   value=False).classes("inventory-category w-full"):
                     for item in category_items:
                         with ui.row().classes("inventory-row w-full items-center no-wrap"):
-                            with ui.column().classes("gap-0 inventory-name"):
-                                ui.label(item["name"]).classes("text-xs font-black")
-                                if item["supplier"]:
-                                    ui.label(item["supplier"]).classes("text-[8px] text-grey-6")
+                            ui.label(item["name"]).classes("text-xs font-black inventory-name")
                             if item.get("tracking_mode") == "count":
-                                unit_text = item.get("unit", "個")
-                                target_parts = []
-                                if item.get("required_stock") is not None:
-                                    target_parts.append(f"必要 {item.get('required_stock')}{unit_text}")
-                                if item.get("reorder_point") is not None:
-                                    target_parts.append(f"発注ライン {item.get('reorder_point')}{unit_text}")
-                                target_text = " ・ ".join(target_parts) or "必要在庫は未設定"
-                                ui.label(target_text).classes("text-[8px] text-grey-6")
                                 count_input = ui.number(value=item.get("current_stock"), suffix=item.get("unit", "個"),
                                                         step=.1).props("outlined dense inputmode=decimal").classes(
                                                             "count-input")
@@ -334,11 +323,6 @@ def store_operations_page():
                                         store_ops.set_status(item_id, value), reload()
                                     )).props("unelevated dense no-caps").classes(
                                         f"stock-button {'active-' + status if active else ''}")
-                            if has_permission("store_manage"):
-                                ui.button(icon="tune", on_click=lambda _, value=item: open_count_settings(value)).props(
-                                    "flat round dense aria-label='数量管理を設定'").tooltip("数量管理を設定")
-                                ui.button(icon="delete_outline", on_click=lambda _, value=item: open_delete(value)).props(
-                                    "flat round dense color=negative aria-label='商品を削除'").tooltip("商品を削除")
 
         with ui.expansion("今日の温度・衛生チェック", icon="health_and_safety",
                           value=False).classes(
@@ -486,6 +470,28 @@ def store_operations_page():
                               on_click=prep_add_dialog.open).props("outline no-caps").classes("w-full")
                     ui.button("引き継ぎ項目を登録", icon="campaign",
                               on_click=handover_add_dialog.open).props("outline no-caps").classes("w-full")
+                if items:
+                    ui.separator().classes("q-my-md")
+                    with ui.expansion(f"登録済みの商品・備品　{len(items)}件", icon="inventory_2",
+                                      value=False).classes("w-full"):
+                        ui.label("単位・必要在庫・発注ラインの変更と削除").classes(
+                            "text-[9px] text-grey-6 q-mb-xs")
+                        for item in items:
+                            with ui.row().classes("settings-item w-full items-center no-wrap"):
+                                with ui.column().classes("gap-0 grow min-w-0"):
+                                    ui.label(item["name"]).classes("text-xs font-bold")
+                                    if item.get("tracking_mode") == "count":
+                                        unit_text = item.get("unit", "個")
+                                        ui.label(
+                                            f"必要 {item.get('required_stock')}{unit_text}・"
+                                            f"発注 {item.get('reorder_point')}{unit_text}"
+                                        ).classes("text-[9px] text-grey-6")
+                                    else:
+                                        ui.label("3段階のかんたん管理").classes("text-[9px] text-grey-6")
+                                ui.button(icon="tune", on_click=lambda _, value=item: open_count_settings(value)).props(
+                                    "flat round dense aria-label='数量管理を設定'").tooltip("数量管理を設定")
+                                ui.button(icon="delete_outline", on_click=lambda _, value=item: open_delete(value)).props(
+                                    "flat round dense color=negative aria-label='商品を削除'").tooltip("商品を削除")
                 templates = store_ops.handover_templates()
                 if templates:
                     ui.separator().classes("q-my-md")
