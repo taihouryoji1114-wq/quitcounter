@@ -66,6 +66,43 @@ def store_operations_page():
             delete_name.set_text(item["name"])
             delete_dialog.open()
 
+        count_settings_target = {"id": None}
+        with ui.dialog() as count_settings_dialog, ui.card().classes("store-dialog q-pa-lg"):
+            ui.label("数量管理の設定").classes("text-lg font-black")
+            count_settings_name = ui.label().classes("text-sm text-grey-7")
+            count_unit = ui.select(list(store_ops.INVENTORY_UNITS), value="個", label="管理単位").props(
+                "outlined dense use-input new-value-mode=add-unique").classes("w-full q-mt-sm")
+            count_required = ui.number("必要在庫数").props(
+                "outlined dense inputmode=decimal").classes("w-full")
+            count_reorder = ui.number("発注ライン").props(
+                "outlined dense inputmode=decimal").classes("w-full")
+            count_current = ui.number("現在庫数").props(
+                "outlined dense inputmode=decimal").classes("w-full")
+
+            def save_count_settings():
+                try:
+                    store_ops.update_count_settings(
+                        count_settings_target["id"], count_unit.value, count_required.value,
+                        count_reorder.value, count_current.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                count_settings_dialog.close()
+                reload("数量管理の設定を保存しました")
+
+            with ui.row().classes("w-full gap-2 q-mt-sm"):
+                ui.button("キャンセル", on_click=count_settings_dialog.close).props("flat").classes("grow")
+                ui.button("保存する", icon="save", on_click=save_count_settings).classes("grow")
+
+        def open_count_settings(item):
+            count_settings_target["id"] = item["id"]
+            count_settings_name.set_text(item["name"])
+            count_unit.value = item.get("unit") or "個"
+            count_required.value = item.get("required_stock") if item.get("tracking_mode") == "count" else None
+            count_reorder.value = item.get("reorder_point")
+            count_current.value = item.get("current_stock")
+            count_settings_dialog.open()
+
         prep_delete_target = {"id": None, "name": ""}
         with ui.dialog() as prep_delete_dialog, ui.card().classes("store-dialog q-pa-lg"):
             ui.label("この仕込み項目を削除しますか？").classes("text-lg font-black")
@@ -124,19 +161,24 @@ def store_operations_page():
             name = ui.input("商品・備品名").props("outlined dense").classes("w-full")
             category = ui.select(["食材", "飲料", "調味料", "備品", "清掃用品", "その他"],
                                  value="食材", label="分類").props("outlined dense").classes("w-full q-mt-xs")
-            unit = ui.input("単位", value="個").props("outlined dense").classes("w-full q-mt-xs")
+            unit = ui.select(
+                list(store_ops.INVENTORY_UNITS), value="個", label="管理単位",
+            ).props("outlined dense use-input new-value-mode=add-unique").classes("w-full q-mt-xs")
             supplier = ui.input("いつもの仕入先（任意）").props("outlined dense").classes("w-full q-mt-xs")
             tracking_mode = ui.select(
-                {"simple": "かんたん管理", "count": "個数で正確に管理"},
-                value="simple", label="管理方法",
+                {"count": "数量で管理（おすすめ）", "simple": "3段階でかんたん管理"},
+                value="count", label="管理方法",
             ).props("outlined dense emit-value map-options").classes("w-full q-mt-xs")
-            required_stock = ui.number("必要在庫数（個数管理用）").props(
+            ui.label("例：ゴミ袋は「袋」、飲料は「ケース」のように単位を選びます").classes(
+                "text-[9px] text-grey-6")
+            required_stock = ui.number("必要在庫数（この数まで補充）").props(
                 "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
             reorder_point = ui.number("発注ライン（この数以下で発注）").props(
                 "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
             current_stock = ui.number("現在庫数（任意）").props(
                 "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
-            ui.label("かんたん管理では数字欄の入力は不要です").classes("text-[9px] text-grey-6")
+            ui.label("在庫が発注ライン以下になると、自動で発注リストに入ります").classes(
+                "text-[9px] text-grey-6")
 
             def add_item():
                 try:
@@ -222,9 +264,12 @@ def store_operations_page():
                         with ui.row().classes("w-full items-center justify-between no-wrap"):
                             with ui.column().classes("gap-0 min-w-0"):
                                 ui.label(item["name"]).classes("text-sm font-black")
+                                quantity = item.get("suggested_order_quantity")
+                                unit_text = item.get("unit", "個")
                                 detail = "・".join(value for value in (
                                     item["supplier"],
-                                    (f"必要在庫 {item.get('required_stock') or item.get('order_quantity')}"
+                                    (f"発注目安 {quantity}{unit_text}" if quantity not in (None, 0) else ""),
+                                    (f"必要在庫 {item.get('required_stock') or item.get('order_quantity')}{unit_text}"
                                      if item.get("required_stock") or item.get("order_quantity") else ""),
                                 ) if value)
                                 ui.label(detail or "仕入先・発注量は未設定").classes(
@@ -267,8 +312,16 @@ def store_operations_page():
                                 if item["supplier"]:
                                     ui.label(item["supplier"]).classes("text-[8px] text-grey-6")
                             if item.get("tracking_mode") == "count":
+                                unit_text = item.get("unit", "個")
+                                target_parts = []
+                                if item.get("required_stock") is not None:
+                                    target_parts.append(f"必要 {item.get('required_stock')}{unit_text}")
+                                if item.get("reorder_point") is not None:
+                                    target_parts.append(f"発注ライン {item.get('reorder_point')}{unit_text}")
+                                target_text = " ・ ".join(target_parts) or "必要在庫は未設定"
+                                ui.label(target_text).classes("text-[8px] text-grey-6")
                                 count_input = ui.number(value=item.get("current_stock"), suffix=item.get("unit", "個"),
-                                                        step=1).props("outlined dense inputmode=decimal").classes(
+                                                        step=.1).props("outlined dense inputmode=decimal").classes(
                                                             "count-input")
                                 ui.button(icon="save", on_click=lambda _, item_id=item["id"], field=count_input: (
                                     store_ops.set_count(item_id, field.value), reload("在庫数を更新しました")
@@ -282,6 +335,8 @@ def store_operations_page():
                                     )).props("unelevated dense no-caps").classes(
                                         f"stock-button {'active-' + status if active else ''}")
                             if has_permission("store_manage"):
+                                ui.button(icon="tune", on_click=lambda _, value=item: open_count_settings(value)).props(
+                                    "flat round dense aria-label='数量管理を設定'").tooltip("数量管理を設定")
                                 ui.button(icon="delete_outline", on_click=lambda _, value=item: open_delete(value)).props(
                                     "flat round dense color=negative aria-label='商品を削除'").tooltip("商品を削除")
 

@@ -10,6 +10,7 @@ from core.data import data
 
 class StoreOperationsManager:
     STATUSES = {"enough", "low", "out"}
+    INVENTORY_UNITS = ("個", "本", "袋", "パック", "ケース", "箱", "缶", "瓶", "枚", "束", "kg", "L")
     PREP_STATUSES = {"incomplete", "done"}
     TEMPERATURE_LOCATIONS = (
         "デシャップ冷蔵庫1", "デシャップ冷蔵庫2", "デシャップ冷蔵庫3",
@@ -39,6 +40,10 @@ class StoreOperationsManager:
         required_number = self._optional_number(required_stock, "必要在庫数") if tracking_mode == "count" else None
         reorder_number = self._optional_number(reorder_point, "発注ライン") if tracking_mode == "count" else None
         current_number = self._optional_number(current_stock, "現在庫数") if tracking_mode == "count" else None
+        if tracking_mode == "count" and required_number is None:
+            raise ValueError("必要在庫数を入力してください。")
+        if tracking_mode == "count" and reorder_number is None:
+            raise ValueError("発注ラインを入力してください。")
         if tracking_mode == "count" and required_number is not None and reorder_number is not None:
             if reorder_number > required_number:
                 raise ValueError("発注ラインは必要在庫数以下にしてください。")
@@ -72,6 +77,28 @@ class StoreOperationsManager:
         self._data_manager.save()
         return dict(item)
 
+    def update_count_settings(self, item_id, unit, required_stock, reorder_point, current_stock):
+        """既存商品を数量管理へ変更し、基準数を更新する。"""
+        item = self._find(item_id)
+        required_number = self._optional_number(required_stock, "必要在庫数")
+        reorder_number = self._optional_number(reorder_point, "発注ライン")
+        current_number = self._optional_number(current_stock, "現在庫数")
+        if required_number is None or reorder_number is None:
+            raise ValueError("必要在庫数と発注ラインを入力してください。")
+        if reorder_number > required_number:
+            raise ValueError("発注ラインは必要在庫数以下にしてください。")
+        item.update({
+            "unit": str(unit or "個").strip(), "required_stock": required_number,
+            "reorder_point": reorder_number, "current_stock": current_number,
+            "tracking_mode": "count",
+            "status": self._status_for_count(current_number, reorder_number)
+            if current_number is not None else item.get("status", "enough"),
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        self._event("count_settings", item)
+        self._data_manager.save()
+        return dict(item)
+
     def delete_item(self, item_id):
         item = self._find(item_id)
         item["active"] = False
@@ -99,8 +126,17 @@ class StoreOperationsManager:
             order = active_orders.get(item["id"], {}) if isinstance(active_orders, dict) else {}
             if item["status"] not in {"low", "out"} and not order:
                 continue
+            shortage = None
+            if item.get("tracking_mode") == "count":
+                required = item.get("required_stock")
+                current = item.get("current_stock")
+                if required is not None and current is not None:
+                    shortage = max(0, round(float(required) - float(current), 2))
+                    if float(shortage).is_integer():
+                        shortage = int(shortage)
             result.append({**item, "order_state": order.get("state", "needed"),
-                           "ordered_at": order.get("ordered_at", "")})
+                           "ordered_at": order.get("ordered_at", ""),
+                           "suggested_order_quantity": shortage})
         return sorted(result, key=lambda value: (
             0 if value["status"] == "out" else 1,
             0 if value["order_state"] == "needed" else 1,
@@ -120,6 +156,8 @@ class StoreOperationsManager:
 
     def receive(self, item_id):
         item = self._find(item_id)
+        if item.get("tracking_mode") == "count" and item.get("required_stock") is not None:
+            item["current_stock"] = item["required_stock"]
         item["status"] = "enough"
         item["updated_at"] = datetime.now().isoformat(timespec="seconds")
         self._data_manager.data.setdefault("store_active_orders", {}).pop(item_id, None)

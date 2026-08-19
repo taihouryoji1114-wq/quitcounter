@@ -38,6 +38,23 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(updated["status"], "low")
         self.assertEqual(self.manager.order_list()[0]["name"], "ガスボンベ")
 
+    def test_counted_stock_calculates_order_quantity_and_receive_refills_target(self):
+        item = self.manager.add_item("ゴミ袋", "備品", "袋", "", 8, "count", 3, 2)
+        order = self.manager.order_list()[0]
+        self.assertEqual(order["suggested_order_quantity"], 6)
+        self.manager.mark_ordered(item["id"])
+        self.manager.receive(item["id"])
+        received = self.manager.items()[0]
+        self.assertEqual(received["current_stock"], 8)
+        self.assertEqual(received["status"], "enough")
+
+    def test_existing_simple_item_can_change_to_count_tracking(self):
+        item = self.manager.add_item("ラップ", "備品")
+        updated = self.manager.update_count_settings(item["id"], "本", 5, 2, 1)
+        self.assertEqual(updated["tracking_mode"], "count")
+        self.assertEqual(updated["unit"], "本")
+        self.assertEqual(updated["status"], "low")
+
     def test_duplicate_item_name_is_rejected(self):
         self.manager.add_item("醤油")
         with self.assertRaises(ValueError):
