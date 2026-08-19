@@ -2,7 +2,7 @@ from datetime import datetime
 
 from nicegui import ui
 
-from core.auth import require_login, selected_user_id
+from core.auth import require_app_access, selected_user_id
 from core.clock import today_jst_string
 from core.data import data
 from core.reading import reading
@@ -20,7 +20,7 @@ def format_duration(seconds):
 
 @ui.page("/habitory/reading")
 def reading_page():
-    if not require_login():
+    if not require_app_access("habitory"):
         return
     Theme.page("読書")
     page_user_id = selected_user_id()

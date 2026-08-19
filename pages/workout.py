@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from nicegui import ui
 
-from core.auth import require_login, selected_user_id
+from core.auth import require_app_access, selected_user_id
 from core.calories import calculate_period_expenditure, nutrition_settings
 from core.clock import now_jst, today_jst
 from core.data import BODY_PARTS, data
@@ -15,7 +15,7 @@ PART_COLORS = {"胸": "#CF6C6C", "背中": "#668BC9", "脚": "#5F9A73", "肩": "
 
 @ui.page("/habitory/workout")
 def workout():
-    if not require_login():
+    if not require_app_access("habitory"):
         return
     Theme.page("筋トレ")
     page_user_id = selected_user_id()

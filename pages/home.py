@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import log_out, require_login, select_user_for_browser, selected_user_id
+from core.auth import current_role, log_out, require_app_access, select_user_for_browser, selected_user_id
 from core.clock import today_jst_string
 from core.data import data
 from core.hydration import hydration
@@ -21,14 +21,15 @@ HABITS = (
 
 @ui.page("/habitory")
 def home():
-    if not require_login():
+    if not require_app_access("habitory"):
         return
     Theme.page("Habitory")
 
     def settings_action():
         with ui.row().classes("items-center gap-1"):
             ui.button(icon="settings", on_click=lambda: ui.navigate.to("/habitory/settings")).props("flat round").classes("text-grey-8")
-            ui.button(icon="logout", on_click=log_out).props("flat round").classes("text-grey-8")
+            ui.button(icon="logout", on_click=lambda: log_out("/habitory/login")).props(
+                "flat round").classes("text-grey-8")
 
     content = Theme.shell("Habitory", "育てる、毎日の習慣", action=settings_action)
     page_user_id = selected_user_id()
@@ -41,15 +42,16 @@ def home():
     reading_goal = reading.get_goal_minutes(page_user_id)
     with content:
         ui.label(f"こんにちは、{profile['name']}さん").classes("section-kicker q-mb-sm")
-        with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
-            ui.label("ユーザーを選択").classes("section-kicker q-mb-sm")
-            with ui.row().classes("w-full gap-2"):
-                for user_id, user in data.users.get_users().items():
-                    selected = user_id == page_user_id
-                    ui.button(
-                        user["profile"]["name"],
-                        on_click=lambda _, value=user_id: switch_user(value),
-                    ).props("unelevated" if selected else "outline").classes("flex-1")
+        if current_role() == "owner":
+            with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
+                ui.label("ユーザーを選択").classes("section-kicker q-mb-sm")
+                with ui.row().classes("w-full gap-2"):
+                    for user_id, user in data.users.get_users().items():
+                        selected = user_id == page_user_id
+                        ui.button(
+                            user["profile"]["name"],
+                            on_click=lambda _, value=user_id: switch_user(value),
+                        ).props("unelevated" if selected else "outline").classes("flex-1")
         for habit in HABITS:
             subtitle = (
                 f"{summary['days']}日続いています" if habit["title"] == "禁煙"

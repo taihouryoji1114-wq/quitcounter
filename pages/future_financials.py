@@ -4,7 +4,7 @@ from datetime import datetime
 
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import log_out, require_app_access
 from core.clock import today_jst
 from core.financials import financials
 from core.purchases import purchases
@@ -27,7 +27,7 @@ def _shift_month(month, amount):
 
 
 def _render_future_financials_home(selected_month=None):
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("未来決算", app_name="mirai-kessan")
     def header_actions():
@@ -50,6 +50,8 @@ def _render_future_financials_home(selected_month=None):
             ui.button(icon="menu", on_click=menu_dialog.open).props(
                 "flat round aria-label='メニューを開く'"
             ).classes("text-grey-8")
+            ui.button(icon="logout", on_click=lambda: log_out("/mirai-kessan/login")).props(
+                "flat round aria-label='ログアウト'").classes("text-grey-8")
 
     content = Theme.shell(
         "経営ダッシュボード",
@@ -514,7 +516,7 @@ def future_financials_home():
 
 @ui.page("/mirai-kessan")
 def future_financials_opening():
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("未来決算", app_name="mirai-kessan")
     with ui.element("div").classes("future-opening").on(
@@ -537,7 +539,7 @@ def future_financials_month(selected_month: str):
 
 @ui.page("/mirai-kessan/block-map")
 def future_financials():
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("未来決算", app_name="mirai-kessan")
     content = Theme.shell(

@@ -3,7 +3,7 @@ from datetime import date
 
 from nicegui import ui
 
-from core.auth import require_login, selected_user_id
+from core.auth import require_app_access, selected_user_id
 from core.clock import today_jst
 from core.data import data
 from core.hydration import hydration
@@ -73,7 +73,7 @@ def show_day(record_date, user_id):
 
 @ui.page("/habitory/calendar")
 def calendar_page():
-    if not require_login():
+    if not require_app_access("habitory"):
         return
     Theme.page("カレンダー")
     user_id = selected_user_id()

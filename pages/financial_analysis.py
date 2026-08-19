@@ -1,7 +1,7 @@
 from nicegui import ui
 
 from core.annual_reports import annual_reports
-from core.auth import require_login
+from core.auth import require_app_access
 from core.clock import today_jst
 from core.theme import Theme
 
@@ -75,7 +75,7 @@ def _ratio(value):
 
 
 def _render_analysis(period=None):
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("決算分析", app_name="mirai-kessan")
     content = Theme.shell(
@@ -421,7 +421,7 @@ def financial_analysis_period_page(period: str):
 
 @ui.page("/mirai-kessan/financial-analysis/{period}/report")
 def financial_analysis_report_page(period: str):
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("決算報告", app_name="mirai-kessan")
     report = annual_reports.get_report(period)

@@ -1,0 +1,11 @@
+{
+  "name": "My Schedule",
+  "short_name": "Schedule",
+  "description": "自分だけの予定と行動管理",
+  "start_url": "/schedule",
+  "scope": "/schedule",
+  "display": "standalone",
+  "background_color": "#F6F4EF",
+  "theme_color": "#172F4B",
+  "icons": [{"src": "/static/schedule_icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+}

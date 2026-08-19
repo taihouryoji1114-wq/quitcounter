@@ -1,12 +1,18 @@
 from nicegui import ui
 
-from core.auth import log_out, require_login
+from core.auth import current_role, is_authenticated, log_out, require_app_access
 from core.theme import Theme
 
 
 @ui.page("/")
 def portal():
-    if not require_login():
+    if is_authenticated() and current_role() in {"manager", "staff"}:
+        ui.navigate.to("/store-ops")
+        return
+    if is_authenticated() and current_role() == "partner":
+        ui.navigate.to("/habitory")
+        return
+    if not require_app_access("portal"):
         return
     Theme.page("R-BASE")
 
@@ -62,6 +68,21 @@ def portal():
                 with ui.column().classes("gap-0"):
                     ui.label("未来決算").classes("text-xl font-bold")
                     ui.label("利益目標から、必要な売上を逆算").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/schedule")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.image("/static/schedule_icon.svg").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("My Schedule").classes("text-xl font-bold")
+                    ui.label("自分だけの予定と行動管理").classes(
                         "text-grey-7 q-mt-xs"
                     )
                 ui.space()

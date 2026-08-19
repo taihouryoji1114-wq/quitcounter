@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_login, selected_user_id
+from core.auth import require_app_access, selected_user_id
 from core.calories import ACTIVITY_FACTORS, nutrition_settings
 from core.data import data
 from core.hydration import hydration
@@ -9,7 +9,7 @@ from core.theme import Theme
 
 @ui.page("/habitory/settings")
 def settings():
-    if not require_login():
+    if not require_app_access("habitory"):
         return
     Theme.page("設定")
     page_user_id = selected_user_id()

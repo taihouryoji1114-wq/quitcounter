@@ -7,6 +7,20 @@ import unicodedata
 from nicegui import app, ui
 
 
+ROLE_PERMISSIONS = {
+    "owner": {"portal", "habitory", "store_ops", "future_financials", "schedule"},
+    "partner": {"habitory"},
+    "manager": {"store_ops"},
+    "staff": {"store_ops"},
+}
+
+APP_LOGIN_PATHS = {
+    "portal": "/login", "habitory": "/habitory/login",
+    "store_ops": "/store-ops/login", "future_financials": "/mirai-kessan/login",
+    "schedule": "/schedule/login",
+}
+
+
 def is_authenticated():
     return bool(app.storage.user.get("authenticated"))
 
@@ -18,11 +32,46 @@ def require_login():
     return False
 
 
-def verify_pin(value):
-    configured = _normalize_pin(os.environ.get("HABITORY_PIN", ""))
-    if not configured:
+def current_role():
+    return str(app.storage.user.get("role", "owner" if is_authenticated() else ""))
+
+
+def can_access(app_id):
+    return app_id in ROLE_PERMISSIONS.get(current_role(), set())
+
+
+def require_app_access(app_id):
+    if not is_authenticated():
+        ui.navigate.to(APP_LOGIN_PATHS.get(app_id, "/login"))
         return False
-    return hmac.compare_digest(_normalize_pin(value), configured)
+    if can_access(app_id):
+        return True
+    ui.notify("このアプリを開く権限がありません", type="negative")
+    ui.navigate.to(APP_LOGIN_PATHS.get(app_id, "/login"))
+    return False
+
+
+def verify_pin(value):
+    return authenticate_pin(value) is not None
+
+
+def authenticate_pin(value, app_id=None):
+    """Return the matching account without exposing which configured PIN matched."""
+    entered = _normalize_pin(value)
+    accounts = (
+        ("owner", "user1", os.environ.get("RBASE_OWNER_PIN") or os.environ.get("HABITORY_PIN", "")),
+        ("partner", "user2", os.environ.get("RBASE_PARTNER_PIN", "")),
+        ("manager", "", os.environ.get("RBASE_MANAGER_PIN", "")),
+        ("staff", "", os.environ.get("RBASE_STAFF_PIN", "")),
+    )
+    for role, user_id, configured_value in accounts:
+        configured = _normalize_pin(configured_value)
+        if configured and hmac.compare_digest(entered, configured):
+            account = {"role": role, "user_id": user_id}
+            if app_id and app_id not in ROLE_PERMISSIONS.get(role, set()):
+                continue
+            return account
+    return None
 
 
 def _normalize_pin(value):
@@ -30,13 +79,18 @@ def _normalize_pin(value):
     return unicodedata.normalize("NFKC", str(value or "")).strip()
 
 
-def log_in():
+def log_in(account=None):
     app.storage.user["authenticated"] = True
+    account = account or {"role": "owner", "user_id": "user1"}
+    app.storage.user["role"] = account.get("role", "owner")
+    if account.get("user_id"):
+        app.storage.user["account_user_id"] = account["user_id"]
+        app.storage.user["selected_user_id"] = account["user_id"]
 
 
-def log_out():
+def log_out(target="/login"):
     app.storage.user.clear()
-    ui.navigate.to("/login")
+    ui.navigate.to(target)
 
 
 def selected_user_id():
@@ -44,6 +98,9 @@ def selected_user_id():
     from core.data import data
 
     users = data.users.get_users()
+    account_user_id = app.storage.user.get("account_user_id")
+    if account_user_id in users:
+        return account_user_id
     stored = app.storage.user.get("selected_user_id")
     if stored in users:
         return stored

@@ -14,6 +14,10 @@ class Theme:
             manifest = "/static/store-ops-manifest.json"
             icon = "/static/store_ops_chanko_icon_v2.png"
             theme_color = "#164A38"
+        elif app_name == "schedule":
+            manifest = "/static/schedule-manifest.json"
+            icon = "/static/schedule_icon.svg"
+            theme_color = "#172F4B"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

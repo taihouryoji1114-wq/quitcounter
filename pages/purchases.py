@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_app_access
 from core.clock import today_jst
 from core.purchases import purchases
 from core.theme import Theme
@@ -8,7 +8,7 @@ from core.theme import Theme
 
 @ui.page("/mirai-kessan/shiire")
 def purchase_page():
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("仕入れノート", app_name="mirai-kessan")
     today = today_jst()

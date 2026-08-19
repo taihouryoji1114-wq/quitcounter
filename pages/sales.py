@@ -3,7 +3,7 @@ from datetime import date
 
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_app_access
 from core.clock import today_jst
 from core.financials import financials
 from core.theme import Theme
@@ -11,7 +11,7 @@ from core.theme import Theme
 
 @ui.page("/mirai-kessan/sales")
 def sales_page():
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("売上入力｜未来決算", app_name="mirai-kessan")
     today = today_jst()

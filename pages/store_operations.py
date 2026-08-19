@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import log_out, require_app_access
 from core.clock import today_jst
 from core.store_ops import store_ops
 from core.theme import Theme
@@ -8,12 +8,16 @@ from core.theme import Theme
 
 @ui.page("/store-ops")
 def store_operations_page():
-    if not require_login():
+    if not require_app_access("store_ops"):
         return
     Theme.page("店舗運営｜R-BASE", app_name="store-ops")
+    def logout_action():
+        ui.button(icon="logout", on_click=lambda: log_out("/store-ops/login")).props(
+            "flat round").classes("text-grey-8")
+
     content = Theme.shell(
         "店舗運営", "不足に気づき、そのまま発注へ",
-        back_to="/", brand="R-BASE",
+        action=logout_action, brand="店舗運営",
     )
     items = store_ops.items()
     orders = store_ops.order_list()

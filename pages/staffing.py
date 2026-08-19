@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from nicegui import ui
 
-from core.auth import require_login
+from core.auth import require_app_access
 from core.clock import today_jst
 from core.staffing import staffing
 from core.theme import Theme
@@ -10,7 +10,7 @@ from core.theme import Theme
 
 @ui.page("/mirai-kessan/staffing")
 def staffing_page():
-    if not require_login():
+    if not require_app_access("future_financials"):
         return
     Theme.page("人件費管理｜未来決算", app_name="mirai-kessan")
     content = Theme.shell("人件費管理", "スタッフ名を保存せず、時給と勤務時間から自動計算",

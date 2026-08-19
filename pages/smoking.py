@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_login, selected_user_id
+from core.auth import require_app_access, selected_user_id
 from core.data import data
 from core.theme import Theme
 from core.utils import smoking_summary
@@ -8,7 +8,7 @@ from core.utils import smoking_summary
 
 @ui.page("/habitory/smoking")
 def smoking():
-    if not require_login():
+    if not require_app_access("habitory"):
         return
     Theme.page("禁煙")
     page_user_id = selected_user_id()
