@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from nicegui import ui
 
-from core.auth import log_out, require_app_access, selected_user_id
+from core.auth import current_role, log_out, require_app_access, selected_user_id
 from core.clock import today_jst
 from core.schedule import schedule
 from core.theme import Theme
@@ -24,8 +24,12 @@ def schedule_page():
         ui.navigate.to("/schedule")
 
     def logout_action():
-        ui.button(icon="logout", on_click=lambda: log_out("/schedule/login")).props(
-            "flat round").classes("text-grey-8")
+        with ui.row().classes("gap-0"):
+            if current_role() == "owner":
+                ui.button(icon="apps", on_click=lambda: ui.navigate.to("/")).props(
+                    "flat round aria-label='R-BASEへ戻る'").classes("text-grey-8")
+            ui.button(icon="logout", on_click=lambda: log_out("/schedule/login")).props(
+                "flat round").classes("text-grey-8")
 
     content = Theme.shell("My Schedule", "予定を並べるだけで、今日が決まる",
                           action=logout_action, brand="My Schedule")

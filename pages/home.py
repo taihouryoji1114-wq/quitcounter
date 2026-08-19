@@ -27,6 +27,9 @@ def home():
 
     def settings_action():
         with ui.row().classes("items-center gap-1"):
+            if current_role() == "owner":
+                ui.button(icon="apps", on_click=lambda: ui.navigate.to("/")).props(
+                    "flat round aria-label='R-BASEへ戻る'").classes("text-grey-8")
             ui.button(icon="settings", on_click=lambda: ui.navigate.to("/habitory/settings")).props("flat round").classes("text-grey-8")
             ui.button(icon="logout", on_click=lambda: log_out("/habitory/login")).props(
                 "flat round").classes("text-grey-8")

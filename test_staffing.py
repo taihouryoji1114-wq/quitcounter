@@ -183,6 +183,14 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(summary["attendance"]["副社長"], 0)
         self.assertEqual(summary["forecast_gross_wages"], 310_000)
 
+    def test_attendance_progress_shows_checked_and_missing_dates(self):
+        self.staffing.save_day("2026-08-01", {"店長": {"attended": True}})
+        self.staffing.save_day("2026-08-03", {"店長": {"attended": False}})
+        progress = self.staffing.attendance_progress("2026-08", "2026-08-04")
+        self.assertEqual(progress["店長"]["checked_days"], [1, 3])
+        self.assertEqual(progress["店長"]["missing_days"], [2, 4])
+        self.assertEqual(progress["店長"]["latest_date"], "2026-08-03")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,7 @@ import pages.consulting
 import pages.staffing
 import pages.store_operations
 import pages.schedule
+import pages.attendance
 import pages.smoking
 import pages.settings
 import pages.workout

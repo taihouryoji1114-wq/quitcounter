@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from nicegui import ui
 
-from core.auth import require_app_access
+from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.staffing import staffing
 from core.theme import Theme
@@ -12,6 +12,8 @@ from core.theme import Theme
 def staffing_page():
     if not require_app_access("future_financials"):
         return
+    if not require_permission("future_dashboard", "/mirai-kessan/input"):
+        return
     Theme.page("人件費管理｜未来決算", app_name="mirai-kessan")
     content = Theme.shell("人件費管理", "スタッフ名を保存せず、時給と勤務時間から自動計算",
                           back_to="/mirai-kessan/dashboard", brand="未来決算")
@@ -20,6 +22,7 @@ def staffing_page():
         salaries = staffing.monthly_salaries()
         current_month = today_jst().strftime("%Y-%m")
         current_summary = staffing.month_cost_summary(current_month, today_jst())
+        attendance_progress = staffing.attendance_progress(current_month, today_jst().isoformat())
         with ui.card().classes("staff-total-card w-full q-pa-lg q-mb-sm text-white"):
             ui.label("現時点の会社総負担").classes("text-[10px] opacity-70")
             ui.label(f"¥{current_summary['company_cost']:,}").classes(
@@ -42,6 +45,25 @@ def staffing_page():
                         ui.label(title).classes("text-[9px] opacity-70")
                         ui.label(f"¥{group['company_cost']:,}").classes("text-base font-black")
                         ui.label(f"給与 {group['gross_wages']:,}・交通 {group['transportation']:,}・保険 {group['employer_insurance']:,}").classes("text-[7px] opacity-70")
+        with ui.card().classes("attendance-progress-card w-full q-pa-md q-mb-sm"):
+            ui.label("副社長・店長・社員の出勤チェック状況").classes("text-sm font-black")
+            for name in staffing.SALARIED_STAFF:
+                progress = attendance_progress[name]
+                with ui.row().classes("w-full items-center justify-between q-mt-sm"):
+                    with ui.column().classes("gap-0"):
+                        ui.label(name).classes("text-xs font-black")
+                        latest = progress["latest_date"][5:].replace("-", "/") if progress["latest_date"] else "未入力"
+                        ui.label(f"最後の確認 {latest}").classes("text-[8px] text-grey-6")
+                    ui.label(f"{progress['checked_count']} / {progress['target_count']}日").classes(
+                        "text-sm font-black text-primary")
+                with ui.element("div").classes("attendance-days w-full"):
+                    for day_number in range(1, progress["target_count"] + 1):
+                        checked = day_number in progress["checked_days"]
+                        ui.label(str(day_number)).classes(
+                            "attendance-day checked" if checked else "attendance-day missing")
+            if any(value["missing_days"] for value in attendance_progress.values()):
+                ui.label("赤い日は出勤確認がまだ保存されていません").classes(
+                    "text-[9px] font-bold text-negative q-mt-sm")
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
             ui.label("副社長は暦日按分、店長・社員は月10日休み・1出勤10時間を基準に配分します").classes(
@@ -254,4 +276,4 @@ def staffing_page():
                         "text-sm font-black q-mt-xs")
         date_input.on("change", lambda: render_day(date_input.value))
         render_day(selected)
-        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
+        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.attendance-days{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin-top:5px}.attendance-day{height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900}.attendance-day.checked{background:#DDF1E5;color:#28704A}.attendance-day.missing{background:#FBE4E4;color:#A43D45}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")

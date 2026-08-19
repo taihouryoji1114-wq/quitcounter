@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from core.auth import ROLE_PERMISSIONS, authenticate_pin, verify_pin
+from core.auth import ROLE_ACTIONS, ROLE_PERMISSIONS, authenticate_pin, verify_pin
 
 
 class AuthConfigurationTest(unittest.TestCase):
@@ -30,6 +30,18 @@ class AuthConfigurationTest(unittest.TestCase):
         self.assertIn("schedule", ROLE_PERMISSIONS["owner"])
         self.assertNotIn("schedule", ROLE_PERMISSIONS["partner"])
         self.assertNotIn("portal", ROLE_PERMISSIONS["staff"])
+
+    def test_future_financials_roles_have_separate_actions(self):
+        self.assertIn("future_dashboard", ROLE_ACTIONS["executive"])
+        self.assertNotIn("future_dashboard", ROLE_ACTIONS["manager"])
+        self.assertIn("future_input", ROLE_ACTIONS["manager"])
+        self.assertIn("future_input", ROLE_ACTIONS["employee"])
+        self.assertNotIn("future_input", ROLE_ACTIONS["staff"])
+
+    def test_manager_pin_opens_future_financials_but_not_portal(self):
+        with patch.dict("os.environ", {"RBASE_MANAGER_PIN": "2468"}, clear=True):
+            self.assertEqual(authenticate_pin("2468", "future_financials")["role"], "manager")
+            self.assertIsNone(authenticate_pin("2468", "portal"))
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from nicegui import ui
 
-from core.auth import log_out, require_app_access
+from core.auth import current_role, log_out, require_app_access, require_permission
 from core.clock import today_jst
 from core.financials import financials
 from core.purchases import purchases
@@ -29,6 +29,8 @@ def _shift_month(month, amount):
 def _render_future_financials_home(selected_month=None):
     if not require_app_access("future_financials"):
         return
+    if not require_permission("future_dashboard", "/mirai-kessan/input"):
+        return
     Theme.page("未来決算", app_name="mirai-kessan")
     def header_actions():
         with ui.dialog() as menu_dialog, ui.card().classes("future-menu q-pa-lg"):
@@ -47,6 +49,9 @@ def _render_future_financials_home(selected_month=None):
                     title, icon=icon, on_click=lambda _, target=path: ui.navigate.to(target)
                 ).props("flat no-caps align=left").classes("future-menu-item w-full")
         with ui.row().classes("gap-0"):
+            if current_role() == "owner":
+                ui.button(icon="apps", on_click=lambda: ui.navigate.to("/")).props(
+                    "flat round aria-label='R-BASEへ戻る'").classes("text-grey-8")
             ui.button(icon="menu", on_click=menu_dialog.open).props(
                 "flat round aria-label='メニューを開く'"
             ).classes("text-grey-8")
@@ -509,6 +514,38 @@ def _render_future_financials_home(selected_month=None):
         """)
 
 
+@ui.page("/mirai-kessan/input")
+def future_financials_input_hub():
+    if not require_app_access("future_financials"):
+        return
+    if not require_permission("future_input", "/mirai-kessan/login"):
+        return
+    Theme.page("未来決算｜日常入力", app_name="mirai-kessan")
+
+    def actions():
+        with ui.row().classes("gap-0"):
+            if current_role() == "owner":
+                ui.button(icon="apps", on_click=lambda: ui.navigate.to("/")).props("flat round")
+            ui.button(icon="logout", on_click=lambda: log_out("/mirai-kessan/login")).props("flat round")
+
+    content = Theme.shell("未来決算 日常入力", "許可された入力だけを、迷わず記録",
+                          action=actions, brand="未来決算")
+    with content:
+        for title, subtitle, icon, path in (
+            ("売上入力", "ランチ・ディナーと決済別売上", "point_of_sale", "/mirai-kessan/sales"),
+            ("仕入れ入力", "原価・備品・その他経費", "inventory_2", "/mirai-kessan/shiire"),
+            ("勤務・出勤入力", "出勤状況と勤務時間", "groups", "/mirai-kessan/attendance"),
+        ):
+            with ui.card().classes("habit-card w-full q-pa-lg q-mb-sm cursor-pointer").on(
+                "click", lambda _, target=path: ui.navigate.to(target)):
+                with ui.row().classes("w-full items-center no-wrap"):
+                    ui.icon(icon).classes("text-3xl text-primary q-mr-md")
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label(title).classes("text-lg font-black")
+                        ui.label(subtitle).classes("text-xs text-grey-6")
+                    ui.icon("chevron_right").classes("text-grey-6")
+
+
 @ui.page("/mirai-kessan/dashboard")
 def future_financials_home():
     _render_future_financials_home()
@@ -517,6 +554,9 @@ def future_financials_home():
 @ui.page("/mirai-kessan")
 def future_financials_opening():
     if not require_app_access("future_financials"):
+        return
+    if current_role() not in {"owner", "executive"}:
+        ui.navigate.to("/mirai-kessan/input")
         return
     Theme.page("未来決算", app_name="mirai-kessan")
     with ui.element("div").classes("future-opening").on(
@@ -540,6 +580,8 @@ def future_financials_month(selected_month: str):
 @ui.page("/mirai-kessan/block-map")
 def future_financials():
     if not require_app_access("future_financials"):
+        return
+    if not require_permission("future_dashboard", "/mirai-kessan/input"):
         return
     Theme.page("未来決算", app_name="mirai-kessan")
     content = Theme.shell(

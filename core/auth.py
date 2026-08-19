@@ -10,8 +10,19 @@ from nicegui import app, ui
 ROLE_PERMISSIONS = {
     "owner": {"portal", "habitory", "store_ops", "future_financials", "schedule"},
     "partner": {"habitory"},
-    "manager": {"store_ops"},
+    "executive": {"store_ops", "future_financials"},
+    "manager": {"store_ops", "future_financials"},
+    "employee": {"store_ops", "future_financials"},
     "staff": {"store_ops"},
+}
+
+ROLE_ACTIONS = {
+    "owner": {"store_input", "store_manage", "future_input", "future_dashboard"},
+    "executive": {"store_input", "store_manage", "future_input", "future_dashboard"},
+    "manager": {"store_input", "store_manage", "future_input"},
+    "employee": {"store_input", "future_input"},
+    "staff": {"store_input"},
+    "partner": set(),
 }
 
 APP_LOGIN_PATHS = {
@@ -40,6 +51,18 @@ def can_access(app_id):
     return app_id in ROLE_PERMISSIONS.get(current_role(), set())
 
 
+def has_permission(action):
+    return action in ROLE_ACTIONS.get(current_role(), set())
+
+
+def require_permission(action, fallback):
+    if has_permission(action):
+        return True
+    ui.notify("この画面を開く権限がありません", type="negative")
+    ui.navigate.to(fallback)
+    return False
+
+
 def require_app_access(app_id):
     if not is_authenticated():
         ui.navigate.to(APP_LOGIN_PATHS.get(app_id, "/login"))
@@ -61,7 +84,9 @@ def authenticate_pin(value, app_id=None):
     accounts = (
         ("owner", "user1", os.environ.get("RBASE_OWNER_PIN") or os.environ.get("HABITORY_PIN", "")),
         ("partner", "user2", os.environ.get("RBASE_PARTNER_PIN", "")),
+        ("executive", "", os.environ.get("RBASE_EXECUTIVE_PIN", "")),
         ("manager", "", os.environ.get("RBASE_MANAGER_PIN", "")),
+        ("employee", "", os.environ.get("RBASE_EMPLOYEE_PIN", "")),
         ("staff", "", os.environ.get("RBASE_STAFF_PIN", "")),
     )
     for role, user_id, configured_value in accounts:

@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import require_app_access
+from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.consulting import consulting
 from core.theme import Theme
@@ -9,6 +9,8 @@ from core.theme import Theme
 @ui.page("/mirai-kessan/consulting")
 def consulting_page():
     if not require_app_access("future_financials"):
+        return
+    if not require_permission("future_dashboard", "/mirai-kessan/input"):
         return
     Theme.page("経営コンサル｜未来決算", app_name="mirai-kessan")
     month = today_jst().strftime("%Y-%m")

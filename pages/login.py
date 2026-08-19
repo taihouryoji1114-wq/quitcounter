@@ -5,9 +5,15 @@ from core.theme import Theme
 
 
 def login_screen(app_id, name, destination, subtitle, app_name="habitory"):
+    def target_for_role(role):
+        if app_id == "future_financials" and role not in {"owner", "executive"}:
+            return "/mirai-kessan/input"
+        return destination
+
     Theme.page(f"{name} ログイン", app_name=app_name)
     if is_authenticated() and can_access(app_id):
-        ui.navigate.to(destination)
+        from core.auth import current_role
+        ui.navigate.to(target_for_role(current_role()))
         return
 
     with ui.column().classes(
@@ -29,7 +35,7 @@ def login_screen(app_id, name, destination, subtitle, app_name="habitory"):
                     ui.notify("PINが違います", type="negative")
                     return
                 log_in(account)
-                ui.navigate.to(destination)
+                ui.navigate.to(target_for_role(account["role"]))
 
             pin.on("keydown.enter", lambda _: submit())
             ui.button(

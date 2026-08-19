@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import log_out, require_app_access
+from core.auth import current_role, has_permission, log_out, require_app_access
 from core.clock import today_jst
 from core.store_ops import store_ops
 from core.theme import Theme
@@ -12,8 +12,12 @@ def store_operations_page():
         return
     Theme.page("店舗運営｜R-BASE", app_name="store-ops")
     def logout_action():
-        ui.button(icon="logout", on_click=lambda: log_out("/store-ops/login")).props(
-            "flat round").classes("text-grey-8")
+        with ui.row().classes("gap-0"):
+            if current_role() == "owner":
+                ui.button(icon="apps", on_click=lambda: ui.navigate.to("/")).props(
+                    "flat round aria-label='R-BASEへ戻る'").classes("text-grey-8")
+            ui.button(icon="logout", on_click=lambda: log_out("/store-ops/login")).props(
+                "flat round").classes("text-grey-8")
 
     content = Theme.shell(
         "店舗運営", "不足に気づき、そのまま発注へ",
@@ -277,8 +281,9 @@ def store_operations_page():
                                         store_ops.set_status(item_id, value), reload()
                                     )).props("unelevated dense no-caps").classes(
                                         f"stock-button {'active-' + status if active else ''}")
-                            ui.button(icon="delete_outline", on_click=lambda _, value=item: open_delete(value)).props(
-                                "flat round dense color=negative aria-label='商品を削除'").tooltip("商品を削除")
+                            if has_permission("store_manage"):
+                                ui.button(icon="delete_outline", on_click=lambda _, value=item: open_delete(value)).props(
+                                    "flat round dense color=negative aria-label='商品を削除'").tooltip("商品を削除")
 
         with ui.expansion("今日の温度・衛生チェック", icon="health_and_safety",
                           value=False).classes(
@@ -340,7 +345,7 @@ def store_operations_page():
                             store_ops.set_prep_status(today, item_id, value), reload()
                         )).props("unelevated dense no-caps").classes(
                             f"prep-button {'active-prep-' + status if active else ''}")
-                    if item.get("source") == "prep":
+                    if item.get("source") == "prep" and has_permission("store_manage"):
                         ui.button(icon="delete_outline",
                                   on_click=lambda _, value=item: open_prep_delete(value)).props(
                                       "flat round dense color=negative aria-label='仕込み項目を削除'").tooltip(
@@ -414,32 +419,33 @@ def store_operations_page():
                     reload("引き継ぎを追加しました")
                 ui.button("引き継ぎを追加", icon="add", on_click=add_handover).classes("w-full")
 
-        with ui.expansion("店舗運営の設定", icon="settings", value=False).classes(
-            "store-panel settings-panel w-full q-mt-sm"):
-            ui.label("普段は使わない登録機能をまとめています").classes(
-                "text-[10px] text-grey-6 q-mb-sm")
-            with ui.column().classes("w-full gap-2"):
-                ui.button("商品・備品を登録", icon="inventory_2", on_click=add_dialog.open).props(
-                    "outline no-caps").classes("w-full")
-                ui.button("仕込み項目を登録", icon="soup_kitchen",
-                          on_click=prep_add_dialog.open).props("outline no-caps").classes("w-full")
-                ui.button("引き継ぎ項目を登録", icon="campaign",
-                          on_click=handover_add_dialog.open).props("outline no-caps").classes("w-full")
-            templates = store_ops.handover_templates()
-            if templates:
-                ui.separator().classes("q-my-md")
-                ui.label(f"登録済みの引き継ぎ項目　{len(templates)}件").classes(
-                    "text-xs font-black q-mb-xs")
-                for item in templates:
-                    category_text = f"・{item.get('category', 'その他')}" if item["area"] == "厨房" else ""
-                    with ui.row().classes("settings-item w-full items-center no-wrap"):
-                        with ui.column().classes("gap-0 grow"):
-                            ui.label(item["name"]).classes("text-xs font-bold")
-                            ui.label(f"{item['area']}{category_text}").classes("text-[9px] text-grey-6")
-                        ui.button(icon="delete_outline",
-                                  on_click=lambda _, value=item: open_handover_delete(value)).props(
-                                      "flat round dense color=negative aria-label='引き継ぎ項目を削除'").tooltip(
-                                          "引き継ぎ項目を削除")
+        if has_permission("store_manage"):
+            with ui.expansion("店舗運営の設定", icon="settings", value=False).classes(
+                "store-panel settings-panel w-full q-mt-sm"):
+                ui.label("普段は使わない登録機能をまとめています").classes(
+                    "text-[10px] text-grey-6 q-mb-sm")
+                with ui.column().classes("w-full gap-2"):
+                    ui.button("商品・備品を登録", icon="inventory_2", on_click=add_dialog.open).props(
+                        "outline no-caps").classes("w-full")
+                    ui.button("仕込み項目を登録", icon="soup_kitchen",
+                              on_click=prep_add_dialog.open).props("outline no-caps").classes("w-full")
+                    ui.button("引き継ぎ項目を登録", icon="campaign",
+                              on_click=handover_add_dialog.open).props("outline no-caps").classes("w-full")
+                templates = store_ops.handover_templates()
+                if templates:
+                    ui.separator().classes("q-my-md")
+                    ui.label(f"登録済みの引き継ぎ項目　{len(templates)}件").classes(
+                        "text-xs font-black q-mb-xs")
+                    for item in templates:
+                        category_text = f"・{item.get('category', 'その他')}" if item["area"] == "厨房" else ""
+                        with ui.row().classes("settings-item w-full items-center no-wrap"):
+                            with ui.column().classes("gap-0 grow"):
+                                ui.label(item["name"]).classes("text-xs font-bold")
+                                ui.label(f"{item['area']}{category_text}").classes("text-[9px] text-grey-6")
+                            ui.button(icon="delete_outline",
+                                      on_click=lambda _, value=item: open_handover_delete(value)).props(
+                                          "flat round dense color=negative aria-label='引き継ぎ項目を削除'").tooltip(
+                                              "引き継ぎ項目を削除")
 
         with ui.card().classes("future-card future-panel w-full q-pa-md q-mt-sm"):
             ui.label("次の開発").classes("text-[9px] font-black text-primary")

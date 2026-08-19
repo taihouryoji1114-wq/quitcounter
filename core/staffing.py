@@ -144,6 +144,37 @@ class StaffingManager:
                 result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0, "attended": False, "break_minutes": 0}
         return result
 
+    def attendance_progress(self, month, through_date=None):
+        """Show which calendar days have been checked for salaried staff."""
+        try:
+            month_date = datetime.strptime(str(month), "%Y-%m")
+        except ValueError as error:
+            raise ValueError("対象月が正しくありません。") from error
+        days_in_month = monthrange(month_date.year, month_date.month)[1]
+        if through_date is None:
+            through_day = days_in_month
+        else:
+            parsed = self._date(through_date).date()
+            through_day = parsed.day if parsed.strftime("%Y-%m") == month else days_in_month
+        through_day = max(0, min(days_in_month, through_day))
+        records = self._data_manager.data.get("business_staff_hours", {})
+        result = {}
+        for name in self.SALARIED_STAFF:
+            checked = []
+            for day_number in range(1, through_day + 1):
+                record_date = f"{month}-{day_number:02d}"
+                record = records.get(record_date, {})
+                if isinstance(record, dict) and isinstance(record.get(name), dict):
+                    checked.append(day_number)
+            missing = [value for value in range(1, through_day + 1) if value not in checked]
+            result[name] = {
+                "checked_days": checked, "missing_days": missing,
+                "checked_count": len(checked), "target_count": through_day,
+                "latest_date": f"{month}-{checked[-1]:02d}" if checked else "",
+                "completion_rate": round(len(checked) / through_day * 100, 1) if through_day else 0,
+            }
+        return result
+
     def save_day(self, record_date, values):
         self._date(record_date)
         cleaned = {}
