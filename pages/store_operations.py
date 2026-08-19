@@ -72,18 +72,13 @@ def store_operations_page():
             count_settings_name = ui.label().classes("text-sm text-grey-7")
             count_unit = ui.select(list(store_ops.INVENTORY_UNITS), value="個", label="管理単位").props(
                 "outlined dense use-input new-value-mode=add-unique").classes("w-full q-mt-sm")
-            count_required = ui.number("必要在庫数").props(
-                "outlined dense inputmode=decimal").classes("w-full")
-            count_reorder = ui.number("発注ライン").props(
-                "outlined dense inputmode=decimal").classes("w-full")
-            count_current = ui.number("現在庫数").props(
-                "outlined dense inputmode=decimal").classes("w-full")
+            ui.label("在庫数は「在庫を確認」画面で入力します").classes(
+                "text-[9px] text-grey-6")
 
             def save_count_settings():
                 try:
                     store_ops.update_count_settings(
-                        count_settings_target["id"], count_unit.value, count_required.value,
-                        count_reorder.value, count_current.value)
+                        count_settings_target["id"], count_unit.value)
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -98,9 +93,6 @@ def store_operations_page():
             count_settings_target["id"] = item["id"]
             count_settings_name.set_text(item["name"])
             count_unit.value = item.get("unit") or "個"
-            count_required.value = item.get("required_stock") if item.get("tracking_mode") == "count" else None
-            count_reorder.value = item.get("reorder_point")
-            count_current.value = item.get("current_stock")
             count_settings_dialog.open()
 
         prep_delete_target = {"id": None, "name": ""}
@@ -171,20 +163,13 @@ def store_operations_page():
             ).props("outlined dense emit-value map-options").classes("w-full q-mt-xs")
             ui.label("例：ゴミ袋は「袋」、飲料は「ケース」のように単位を選びます").classes(
                 "text-[9px] text-grey-6")
-            required_stock = ui.number("必要在庫数（この数まで補充）").props(
-                "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
-            reorder_point = ui.number("発注ライン（この数以下で発注）").props(
-                "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
-            current_stock = ui.number("現在庫数（任意）").props(
-                "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
-            ui.label("在庫が発注ライン以下になると、自動で発注リストに入ります").classes(
+            ui.label("現在の数は商品登録後、在庫確認画面で入力します").classes(
                 "text-[9px] text-grey-6")
 
             def add_item():
                 try:
                     store_ops.add_item(name.value, category.value, unit.value,
-                                       supplier.value, required_stock.value,
-                                       tracking_mode.value, reorder_point.value, current_stock.value)
+                                       supplier.value, "", tracking_mode.value, "", "")
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -474,7 +459,7 @@ def store_operations_page():
                     ui.separator().classes("q-my-md")
                     with ui.expansion(f"登録済みの商品・備品　{len(items)}件", icon="inventory_2",
                                       value=False).classes("w-full"):
-                        ui.label("単位・必要在庫・発注ラインの変更と削除").classes(
+                        ui.label("管理単位の変更と削除").classes(
                             "text-[9px] text-grey-6 q-mb-xs")
                         for item in items:
                             with ui.row().classes("settings-item w-full items-center no-wrap"):
@@ -482,10 +467,7 @@ def store_operations_page():
                                     ui.label(item["name"]).classes("text-xs font-bold")
                                     if item.get("tracking_mode") == "count":
                                         unit_text = item.get("unit", "個")
-                                        ui.label(
-                                            f"必要 {item.get('required_stock')}{unit_text}・"
-                                            f"発注 {item.get('reorder_point')}{unit_text}"
-                                        ).classes("text-[9px] text-grey-6")
+                                        ui.label(f"数量管理・単位 {unit_text}").classes("text-[9px] text-grey-6")
                                     else:
                                         ui.label("3段階のかんたん管理").classes("text-[9px] text-grey-6")
                                 ui.button(icon="tune", on_click=lambda _, value=item: open_count_settings(value)).props(

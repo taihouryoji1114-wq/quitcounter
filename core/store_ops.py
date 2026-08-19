@@ -40,10 +40,6 @@ class StoreOperationsManager:
         required_number = self._optional_number(required_stock, "必要在庫数") if tracking_mode == "count" else None
         reorder_number = self._optional_number(reorder_point, "発注ライン") if tracking_mode == "count" else None
         current_number = self._optional_number(current_stock, "現在庫数") if tracking_mode == "count" else None
-        if tracking_mode == "count" and required_number is None:
-            raise ValueError("必要在庫数を入力してください。")
-        if tracking_mode == "count" and reorder_number is None:
-            raise ValueError("発注ラインを入力してください。")
         if tracking_mode == "count" and required_number is not None and reorder_number is not None:
             if reorder_number > required_number:
                 raise ValueError("発注ラインは必要在庫数以下にしてください。")
@@ -77,15 +73,21 @@ class StoreOperationsManager:
         self._data_manager.save()
         return dict(item)
 
-    def update_count_settings(self, item_id, unit, required_stock, reorder_point, current_stock):
-        """既存商品を数量管理へ変更し、基準数を更新する。"""
+    def update_count_settings(self, item_id, unit, required_stock=None,
+                              reorder_point=None, current_stock=None):
+        """既存商品を数量管理へ変更する。"""
         item = self._find(item_id)
         required_number = self._optional_number(required_stock, "必要在庫数")
         reorder_number = self._optional_number(reorder_point, "発注ライン")
         current_number = self._optional_number(current_stock, "現在庫数")
-        if required_number is None or reorder_number is None:
-            raise ValueError("必要在庫数と発注ラインを入力してください。")
-        if reorder_number > required_number:
+        if required_stock in (None, ""):
+            required_number = item.get("required_stock")
+        if reorder_point in (None, ""):
+            reorder_number = item.get("reorder_point")
+        if current_stock in (None, ""):
+            current_number = item.get("current_stock")
+        if (required_number is not None and reorder_number is not None
+                and reorder_number > required_number):
             raise ValueError("発注ラインは必要在庫数以下にしてください。")
         item.update({
             "unit": str(unit or "個").strip(), "required_stock": required_number,
