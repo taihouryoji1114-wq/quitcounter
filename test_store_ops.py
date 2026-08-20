@@ -60,6 +60,10 @@ class StoreOperationsManagerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.add_item("醤油")
 
+    def test_new_items_default_to_vegetable_purchasing_category(self):
+        item = self.manager.add_item("長ねぎ")
+        self.assertEqual(item["category"], "野菜仕入れ")
+
     def test_hygiene_is_complete_only_with_all_temperatures_and_checks(self):
         checks = {"receiving": True, "equipment": True, "toilet": True, "handwash": True}
         self.manager.save_hygiene("2026-08-14", {

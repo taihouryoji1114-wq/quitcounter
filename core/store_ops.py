@@ -28,7 +28,7 @@ class StoreOperationsManager:
             items = [value for value in items if value.get("active", True)]
         return sorted(items, key=lambda value: (value.get("category", ""), value.get("name", "")))
 
-    def add_item(self, name, category="食材", unit="個", supplier="", required_stock="",
+    def add_item(self, name, category="野菜仕入れ", unit="個", supplier="", required_stock="",
                  tracking_mode="simple", reorder_point="", current_stock=""):
         name = str(name or "").strip()
         if not name:
