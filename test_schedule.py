@@ -27,7 +27,8 @@ class ScheduleManagerTest(unittest.TestCase):
         self.assertEqual([value["title"] for value in values], ["朝"])
 
     def test_complete_and_delete_event(self):
-        item = self.manager.add_event("user1", "予定", "2026-08-20")
+        item = self.manager.add_event(
+            "user1", "予定", "2026-08-20", requires_check=True)
         self.manager.set_completed("user1", item["id"], True)
         self.assertTrue(self.manager.events("user1")[0]["completed"])
         self.manager.delete_event("user1", item["id"])
@@ -39,6 +40,35 @@ class ScheduleManagerTest(unittest.TestCase):
         self.assertEqual(updated["title"], "経営会議")
         self.assertEqual(updated["note"], "資料を持参")
         self.assertEqual(self.manager.events("user1")[0]["note"], "資料を持参")
+
+    def test_normal_event_does_not_accept_completion(self):
+        item = self.manager.add_event("user1", "食事会", "2026-08-20")
+        self.assertFalse(item["requires_check"])
+        with self.assertRaises(ValueError):
+            self.manager.set_completed("user1", item["id"], True)
+
+    def test_unfinished_check_event_rolls_over_to_target_day(self):
+        item = self.manager.add_event(
+            "user1", "振込", "2026-08-20", requires_check=True)
+        changed = self.manager.roll_over_unfinished("user1", "2026-08-21")
+        carried = self.manager.events("user1")[0]
+        self.assertEqual(changed, 1)
+        self.assertEqual(carried["date"], "2026-08-21")
+        self.assertEqual(carried["end_date"], "2026-08-21")
+        self.assertEqual(carried["carried_from"], "2026-08-20")
+
+    def test_completed_check_event_is_not_rolled_over(self):
+        item = self.manager.add_event(
+            "user1", "提出", "2026-08-20", requires_check=True)
+        self.manager.set_completed("user1", item["id"], True)
+        self.assertEqual(self.manager.roll_over_unfinished("user1", "2026-08-21"), 0)
+        self.assertEqual(self.manager.events("user1")[0]["date"], "2026-08-20")
+
+    def test_event_can_be_changed_to_check_required_after_creation(self):
+        item = self.manager.add_event("user1", "買い物", "2026-08-20")
+        updated = self.manager.update_event(
+            "user1", item["id"], "買い物", "牛乳", requires_check=True)
+        self.assertTrue(updated["requires_check"])
 
     def test_invalid_time_range_is_rejected(self):
         with self.assertRaises(ValueError):

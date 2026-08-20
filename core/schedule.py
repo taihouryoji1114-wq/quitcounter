@@ -25,7 +25,7 @@ class ScheduleManager:
                                                   value.get("created_at", "")))
 
     def add_event(self, user_id, title, event_date, start_time="", end_time="",
-                  category="個人", note="", event_end_date=""):
+                  category="個人", note="", event_end_date="", requires_check=False):
         title = str(title or "").strip()
         if not title:
             raise ValueError("予定を入力してください。")
@@ -43,7 +43,8 @@ class ScheduleManager:
             "end_date": event_end_date,
             "start_time": start_time, "end_time": end_time,
             "category": str(category or "個人")[:20], "note": str(note or "").strip()[:500],
-            "completed": False, "created_at": datetime.now().isoformat(timespec="minutes"),
+            "requires_check": bool(requires_check), "completed": False,
+            "created_at": datetime.now().isoformat(timespec="minutes"),
         }
         self._data_manager.data.setdefault("personal_schedules", {}).setdefault(user_id, []).append(item)
         self._data_manager.save()
@@ -51,19 +52,52 @@ class ScheduleManager:
 
     def set_completed(self, user_id, event_id, completed):
         item = self._find(user_id, event_id)
+        if not item.get("requires_check", False):
+            raise ValueError("この予定には完了チェックが設定されていません。")
         item["completed"] = bool(completed)
+        item["completed_at"] = (datetime.now().isoformat(timespec="minutes")
+                                if completed else "")
         self._data_manager.save()
 
-    def update_event(self, user_id, event_id, title, note=""):
+    def update_event(self, user_id, event_id, title, note="", requires_check=None):
         title = str(title or "").strip()
         if not title:
             raise ValueError("予定名を入力してください。")
         item = self._find(user_id, event_id)
         item["title"] = title[:100]
         item["note"] = str(note or "").strip()[:500]
+        if requires_check is not None:
+            item["requires_check"] = bool(requires_check)
+            if not item["requires_check"]:
+                item["completed"] = False
+                item["completed_at"] = ""
         item["updated_at"] = datetime.now().isoformat(timespec="minutes")
         self._data_manager.save()
         return dict(item)
+
+    def roll_over_unfinished(self, user_id, target_date):
+        """未完了のチェック予定を対象日へ移し、完了まで翌日へ持ち越す。"""
+        self._date(target_date)
+        changed = 0
+        values = self._data_manager.data.setdefault("personal_schedules", {}).setdefault(
+            user_id, [])
+        for item in values:
+            if not isinstance(item, dict) or not item.get("requires_check", False):
+                continue
+            if item.get("completed", False):
+                continue
+            end_date = str(item.get("end_date") or item.get("date") or "")
+            if not end_date or end_date >= target_date:
+                continue
+            if not item.get("carried_from"):
+                item["carried_from"] = item.get("date", end_date)
+            item["date"] = target_date
+            item["end_date"] = target_date
+            item["carried_at"] = datetime.now().isoformat(timespec="minutes")
+            changed += 1
+        if changed:
+            self._data_manager.save()
+        return changed
 
     def delete_event(self, user_id, event_id):
         values = self._data_manager.data.setdefault("personal_schedules", {}).setdefault(user_id, [])
