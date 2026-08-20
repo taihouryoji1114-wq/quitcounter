@@ -305,7 +305,7 @@ class StoreOperationsManager:
         return result
 
     def previous_day_board(self, record_date):
-        """前日から今日へ引き継がれた作業と未確認メモを返す。"""
+        """前日のやり残し・引き継ぎ・発注済みの情報を返す。"""
         day = self._date(record_date)
         previous_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
         items = []
@@ -320,6 +320,13 @@ class StoreOperationsManager:
                 items.append({
                     "id": note.get("id"), "kind": "note", "name": note.get("message", "引き継ぎ"),
                     "area": note.get("area", "厨房"), "from_date": previous_date,
+                })
+        for destination, ordered in self.daily_order_checks(previous_date).items():
+            if ordered:
+                items.append({
+                    "id": f"order:{previous_date}:{destination}", "kind": "order",
+                    "name": f"{destination}へ発注済み", "area": "発注",
+                    "from_date": previous_date,
                 })
         return {"previous_date": previous_date, "items": items}
 

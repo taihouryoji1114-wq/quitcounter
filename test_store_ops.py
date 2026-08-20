@@ -161,6 +161,12 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual({item["name"] for item in board["items"]},
                          {"唐揚げ", "ポン酢を補充"})
 
+    def test_previous_day_board_contains_only_ordered_destinations(self):
+        self.manager.set_daily_order_check("2026-08-19", "ミクリード", True)
+        board = self.manager.previous_day_board("2026-08-20")
+        ordered = [item for item in board["items"] if item["kind"] == "order"]
+        self.assertEqual([item["name"] for item in ordered], ["ミクリードへ発注済み"])
+
     def test_inventory_item_exposes_last_counted_date(self):
         item = self.manager.add_item("ラップ", "備品", "本", "", "", "count")
         self.manager.set_count(item["id"], 3)
