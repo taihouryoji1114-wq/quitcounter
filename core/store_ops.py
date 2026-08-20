@@ -17,6 +17,7 @@ class StoreOperationsManager:
         "厨房冷蔵庫1", "厨房冷蔵庫2", "厨房冷蔵庫3", "厨房冷蔵庫4", "厨房冷蔵庫5",
         "デシャップ冷凍庫", "厨房冷凍庫", "外冷凍庫",
     )
+    DAILY_ORDER_DESTINATIONS = ("鶏肉", "ミクリード", "豊洲", "酒屋")
 
     def __init__(self, data_manager=None):
         self._data_manager = data_manager or data
@@ -177,6 +178,21 @@ class StoreOperationsManager:
         item["updated_at"] = datetime.now().isoformat(timespec="seconds")
         self._data_manager.data.setdefault("store_active_orders", {}).pop(item_id, None)
         self._event("received", item)
+        self._data_manager.save()
+
+    def daily_order_checks(self, record_date):
+        self._date(record_date)
+        stored = self._data_manager.data.get("store_daily_order_checks", {}).get(record_date, {})
+        if not isinstance(stored, dict):
+            stored = {}
+        return {name: bool(stored.get(name, False)) for name in self.DAILY_ORDER_DESTINATIONS}
+
+    def set_daily_order_check(self, record_date, destination, checked):
+        self._date(record_date)
+        if destination not in self.DAILY_ORDER_DESTINATIONS:
+            raise ValueError("発注先が正しくありません。")
+        self._data_manager.data.setdefault("store_daily_order_checks", {}).setdefault(
+            record_date, {})[destination] = bool(checked)
         self._data_manager.save()
 
     def hygiene_record(self, record_date):

@@ -25,8 +25,8 @@ def store_operations_page():
         action=logout_action, brand="店舗運営",
     )
     items = store_ops.items()
-    orders = store_ops.order_list()
     today = today_jst().isoformat()
+    daily_order_checks = store_ops.daily_order_checks(today)
     hygiene = store_ops.hygiene_record(today)
     prep_items = store_ops.prep_items(today)
     previous_board = store_ops.previous_day_board(today)
@@ -34,7 +34,7 @@ def store_operations_page():
     handover_checks = store_ops.handover_checks(today)
     incomplete_work = sum(value["status"] != "done" for value in prep_items)
     incomplete_handover = sum(not value["checked"] for value in handover_checks)
-    incomplete_orders = sum(value["order_state"] == "needed" for value in orders)
+    incomplete_orders = sum(not value for value in daily_order_checks.values())
     hygiene_missing = not store_ops.hygiene_complete(today)
     alert_count = (int(not store_ops.hygiene_complete(today))
                    + incomplete_work + incomplete_handover + incomplete_orders)
@@ -257,42 +257,17 @@ def store_operations_page():
                     if incomplete_orders:
                         ui.label(f"発注 {incomplete_orders}件").classes("alert-chip")
 
-        with ui.expansion(f"今日の発注チェック　{len(orders)}品", icon="shopping_cart",
+        completed_orders = sum(daily_order_checks.values())
+        with ui.expansion(f"今日の発注チェック　{completed_orders}/4完了", icon="shopping_cart",
                           value=False).classes("store-panel order-panel w-full q-mt-sm"):
-            if not orders:
-                ui.label("現在、補充が必要なものはありません").classes(
-                    "text-sm text-positive font-bold q-pa-md")
-            else:
-                for item in orders:
-                    with ui.card().classes("order-card w-full q-pa-md q-mb-xs"):
-                        with ui.row().classes("w-full items-center justify-between no-wrap"):
-                            with ui.column().classes("gap-0 min-w-0"):
-                                ui.label(item["name"]).classes("text-sm font-black")
-                                quantity = item.get("suggested_order_quantity")
-                                unit_text = item.get("unit", "個")
-                                detail = "・".join(value for value in (
-                                    item["supplier"],
-                                    (f"発注目安 {quantity}{unit_text}" if quantity not in (None, 0) else ""),
-                                    (f"必要在庫 {item.get('required_stock') or item.get('order_quantity')}{unit_text}"
-                                     if item.get("required_stock") or item.get("order_quantity") else ""),
-                                ) if value)
-                                ui.label(detail or "仕入先・発注量は未設定").classes(
-                                    "text-[9px] text-grey-6 q-mt-xs")
-                            status_label = "在庫なし" if item["status"] == "out" else "残り少ない"
-                            ui.label(status_label).classes(
-                                "stock-pill stock-out" if item["status"] == "out" else "stock-pill stock-low")
-                        if item["order_state"] == "needed":
-                            ui.button("発注済みにする", icon="send",
-                                      on_click=lambda _, item_id=item["id"]: (
-                                          store_ops.mark_ordered(item_id), reload("発注済みにしました")
-                                      )).props("flat dense no-caps").classes("w-full q-mt-sm")
-                        else:
-                            with ui.row().classes("w-full items-center justify-between q-mt-sm"):
-                                ui.label("発注済み").classes("text-[10px] font-bold text-primary")
-                                ui.button("入荷した", icon="done",
-                                          on_click=lambda _, item_id=item["id"]: (
-                                              store_ops.receive(item_id), reload("入荷を反映しました")
-                                          )).props("flat dense no-caps")
+            ui.label("発注先へ連絡・注文が完了したらチェック").classes(
+                "text-[10px] text-grey-6 q-mb-sm")
+            for destination in store_ops.DAILY_ORDER_DESTINATIONS:
+                ui.checkbox(
+                    destination, value=daily_order_checks[destination],
+                    on_change=lambda event, name=destination: store_ops.set_daily_order_check(
+                        today, name, event.value),
+                ).classes("daily-order-check w-full")
 
         with ui.expansion("在庫を確認", icon="checklist", value=False).classes(
             "store-panel inventory-panel w-full q-mt-sm"):
@@ -545,6 +520,7 @@ def store_operations_page():
 
         ui.add_css("""
         .store-login-qr{width:210px;height:210px;border-radius:16px;background:#fff;padding:10px;border:1px solid #E1E9E4}
+        .daily-order-check{padding:10px 12px;border-radius:13px;background:#F5F7F5;margin-bottom:6px}.daily-order-check .q-checkbox__label{font-size:13px;font-weight:800}
         .handover-board-list{max-height:240px;overflow-y:auto}.handover-board-item{padding:9px 10px;border-radius:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}.handover-board-area{min-width:52px;padding:4px 6px;border-radius:8px;background:rgba(255,255,255,.18);font-size:8px;font-weight:900;text-align:center;margin-right:8px}.handover-board-confirm{min-height:30px!important;color:#fff!important;font-size:9px!important}.handover-board-empty{padding:12px;border-radius:13px;background:rgba(255,255,255,.12);font-size:11px;font-weight:800;text-align:center}
         .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.settings-item{padding:8px 4px;border-bottom:1px solid #EDF1EE}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){

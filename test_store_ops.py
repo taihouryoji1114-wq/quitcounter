@@ -31,6 +31,15 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.items()[0]["status"], "enough")
         self.assertEqual(self.manager.order_list(), [])
 
+    def test_daily_order_destinations_are_saved_per_day(self):
+        self.manager.set_daily_order_check("2026-08-20", "豊洲", True)
+        today = self.manager.daily_order_checks("2026-08-20")
+        tomorrow = self.manager.daily_order_checks("2026-08-21")
+        self.assertTrue(today["豊洲"])
+        self.assertFalse(today["鶏肉"])
+        self.assertFalse(tomorrow["豊洲"])
+        self.assertEqual(set(today), {"鶏肉", "ミクリード", "豊洲", "酒屋"})
+
     def test_counted_stock_enters_order_list_at_reorder_point(self):
         item = self.manager.add_item("ガスボンベ", "消耗品", "本", "", 6, "count", 2, 5)
         self.assertEqual(item["status"], "enough")
