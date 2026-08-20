@@ -1,0 +1,9 @@
+{
+  "name": "GRID EMPIRE",
+  "short_name": "GRID EMPIRE",
+  "start_url": "/grid-empire",
+  "display": "standalone",
+  "background_color": "#081525",
+  "theme_color": "#081525",
+  "icons": [{"src": "/static/grid_empire_icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+}
