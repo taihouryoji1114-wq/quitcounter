@@ -2,6 +2,7 @@ from nicegui import ui
 
 from core.auth import current_role, has_permission, log_out, require_app_access
 from core.clock import today_jst
+from core.qr import data_url as qr_data_url
 from core.store_ops import store_ops
 from core.theme import Theme
 
@@ -455,6 +456,20 @@ def store_operations_page():
                               on_click=prep_add_dialog.open).props("outline no-caps").classes("w-full")
                     ui.button("引き継ぎ項目を登録", icon="campaign",
                               on_click=handover_add_dialog.open).props("outline no-caps").classes("w-full")
+                with ui.expansion("スタッフのスマホに追加", icon="qr_code_2",
+                                  value=False).classes("w-full q-mt-sm"):
+                    login_url = "https://quitcounter.onrender.com/store-ops/login"
+                    ui.label("このQRコードをスタッフのスマホで読み取ります").classes(
+                        "text-[10px] text-grey-6 text-center w-full")
+                    ui.image(qr_data_url(login_url)).classes(
+                        "store-login-qr q-mx-auto q-my-sm")
+                    ui.label("読み取り後、店舗用PINを初回だけ入力します").classes(
+                        "text-[9px] text-grey-6 text-center w-full")
+                    def copy_store_login_url():
+                        ui.run_javascript(f"navigator.clipboard.writeText('{login_url}')")
+                        ui.notify("URLをコピーしました", type="positive")
+                    ui.button("ログインURLをコピー", icon="content_copy",
+                              on_click=copy_store_login_url).props("outline no-caps").classes("w-full")
                 if items:
                     ui.separator().classes("q-my-md")
                     with ui.expansion(f"登録済みの商品・備品　{len(items)}件", icon="inventory_2",
@@ -497,6 +512,7 @@ def store_operations_page():
                 "text-[9px] text-grey-6 q-mt-xs")
 
         ui.add_css("""
+        .store-login-qr{width:210px;height:210px;border-radius:16px;background:#fff;padding:10px;border:1px solid #E1E9E4}
         .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.settings-item{padding:8px 4px;border-bottom:1px solid #EDF1EE}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){
           .app-shell{width:min(100%,1180px)!important;padding:38px 36px 68px!important}
