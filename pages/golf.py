@@ -26,7 +26,9 @@ def golf_page():
             <div><small>CLUB</small><strong id="g-club">IRON</strong></div>
             <div><small>WIND</small><strong id="g-wind">→ 2.1m</strong></div>
           </div>
-          <canvas id="r-golf-canvas"></canvas>
+          <div class="golf-course-scroll" id="golf-course-scroll">
+            <canvas id="r-golf-canvas"></canvas>
+          </div>
           <div class="golf-guide" id="g-guide">角度を選んで、ゲージのタイミングでショット！</div>
           <div class="golf-controls" id="g-controls">
             <div class="angle-control"><button id="g-angle-down">−</button><span>角度 <strong id="g-angle">45°</strong></span><button id="g-angle-up">＋</button></div>
@@ -40,6 +42,10 @@ def golf_page():
         """, sanitize=False)
         ui.add_css("""
         body{background:linear-gradient(180deg,#EAF3F2,#F8F4E9)!important}.golf-stage{position:relative;width:100%;overflow:hidden;border-radius:24px;background:#A9D7DC;box-shadow:0 18px 45px rgba(19,55,62,.18)}.golf-hud{position:absolute;z-index:4;left:8px;right:8px;top:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.golf-hud div{display:flex;flex-direction:column;align-items:center;padding:6px 2px;border:1px solid rgba(255,255,255,.45);border-radius:10px;background:rgba(14,45,48,.72);color:#fff;backdrop-filter:blur(8px)}.golf-hud small{font-size:6px;letter-spacing:1px;opacity:.65}.golf-hud strong{font-size:10px;margin-top:1px}#r-golf-canvas{display:block;width:100%;height:calc(100dvh - 150px);min-height:610px;touch-action:none}.golf-guide{position:absolute;left:50%;bottom:170px;transform:translateX(-50%);width:max-content;max-width:90%;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.9);color:#29413D;font-size:9px;font-weight:800;text-align:center;box-shadow:0 5px 16px rgba(0,0,0,.12)}.golf-controls{position:absolute;z-index:5;left:10px;right:10px;bottom:51px;padding:8px;border-radius:17px;background:rgba(12,39,40,.86);backdrop-filter:blur(10px)}.angle-control{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:5px;color:#fff;text-align:center;font-size:10px}.angle-control button,.shot-button{border:0;border-radius:11px;background:#fff;color:#21443F;font-weight:900}.angle-control button{height:32px;font-size:20px}.power-meter{position:relative;height:13px;margin:7px 2px;border-radius:999px;overflow:hidden;background:linear-gradient(90deg,#65A8D1,#F3CE56 65%,#E76F50)}.power-meter .nice-zone{position:absolute;left:72%;width:14%;height:100%;background:rgba(255,255,255,.72);border-left:2px solid #fff;border-right:2px solid #fff}.power-meter b{position:absolute;top:-3px;left:0;width:6px;height:19px;border-radius:4px;background:#fff;box-shadow:0 0 7px rgba(0,0,0,.4)}.shot-button{width:100%;height:35px;background:#ECA746;color:#fff;font-size:12px}.golf-actions{position:absolute;z-index:6;left:10px;right:10px;bottom:9px;display:flex;gap:8px}.golf-actions button{flex:1;padding:8px;border:0;border-radius:12px;background:rgba(18,55,51,.9);color:#fff;font-size:10px;font-weight:900}.golf-actions #g-next{background:#D38A38}@media(max-width:699px){.app-shell{width:100%!important;padding:6px 5px 12px!important}.app-shell>.q-card:first-child{margin-bottom:5px!important}.golf-stage{border-radius:18px}}@media(min-width:700px){.app-shell{width:min(100%,1200px)!important}.golf-hud{left:20px;right:auto;width:540px}.golf-hud strong{font-size:13px}.golf-guide{font-size:11px}.golf-controls{left:50%;right:auto;transform:translateX(-50%);width:480px}}
+        .golf-course-scroll{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-color:#51766f #dce7df}
+        #r-golf-canvas{width:1700px!important;height:700px!important;min-height:0!important;touch-action:pan-x!important}
+        .golf-stage{height:700px}.golf-course-scroll:after{content:'← 横にスクロールしてコース全体を確認 →';position:sticky;left:50%;display:block;width:max-content;transform:translateX(-50%);margin-top:-178px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.84);font-size:8px;font-weight:800;color:#45625d;pointer-events:none}
+        @media(max-width:699px){#r-golf-canvas{width:1500px!important;height:650px!important}.golf-stage{height:650px}}
         """)
         ui.add_body_html("""
         <script>

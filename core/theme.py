@@ -18,6 +18,14 @@ class Theme:
             manifest = "/static/schedule-manifest.json"
             icon = "/static/schedule_icon.svg"
             theme_color = "#172F4B"
+        elif app_name == "golf":
+            manifest = "/static/golf-manifest.json"
+            icon = "/static/golf_icon.svg"
+            theme_color = "#245D55"
+        elif app_name == "stick-blade":
+            manifest = "/static/stick-blade-manifest.json"
+            icon = "/static/stick_blade_icon.svg"
+            theme_color = "#201C2B"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"
@@ -25,7 +33,7 @@ class Theme:
         app_head = f"""
         <link rel="manifest" href="{manifest}">
         <link rel="apple-touch-icon" href="{icon}">
-        <link rel="icon" type="image/png" href="{icon}">
+        <link rel="icon" href="{icon}">
         <meta name="theme-color" content="{theme_color}">
         """
         shared_styles = """

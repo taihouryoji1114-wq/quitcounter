@@ -25,6 +25,7 @@ import pages.staffing
 import pages.store_operations
 import pages.schedule
 import pages.golf
+import pages.stick_blade
 import pages.attendance
 import pages.smoking
 import pages.settings

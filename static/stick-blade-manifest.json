@@ -1,0 +1,11 @@
+{
+  "name": "STICK BLADE",
+  "short_name": "BLADE",
+  "description": "剣で進む2D横スクロールアクション",
+  "start_url": "/stick-blade",
+  "scope": "/stick-blade",
+  "display": "standalone",
+  "background_color": "#171523",
+  "theme_color": "#201C2B",
+  "icons": [{"src": "/static/stick_blade_icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+}

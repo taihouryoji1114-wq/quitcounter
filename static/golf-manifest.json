@@ -1,0 +1,11 @@
+{
+  "name": "R-GOLF",
+  "short_name": "R-GOLF",
+  "description": "角度とタイミングで遊ぶ2Dゴルフ",
+  "start_url": "/golf",
+  "scope": "/golf",
+  "display": "standalone",
+  "background_color": "#EAF3F2",
+  "theme_color": "#245D55",
+  "icons": [{"src": "/static/golf_icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+}
