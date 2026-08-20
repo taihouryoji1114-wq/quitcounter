@@ -37,6 +37,17 @@ class ScheduleManagerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.add_event("user1", "予定", "2026-08-20", "18:00", "10:00")
 
+    def test_multi_day_event_appears_on_each_overlapping_month(self):
+        self.manager.add_event("user1", "旅行", "2026-08-30", category="個人",
+                               event_end_date="2026-09-02")
+        self.assertEqual(len(self.manager.events("user1", "2026-09-01", "2026-09-30")), 1)
+        self.assertEqual(self.manager.events("user1")[0]["end_date"], "2026-09-02")
+
+    def test_invalid_date_range_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.manager.add_event("user1", "旅行", "2026-08-20",
+                                   event_end_date="2026-08-19")
+
 
 if __name__ == "__main__":
     unittest.main()

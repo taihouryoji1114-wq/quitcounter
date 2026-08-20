@@ -17,7 +17,7 @@ class ScheduleManager:
         result = [dict(value) for value in values if isinstance(value, dict)]
         if start_date:
             self._date(start_date)
-            result = [value for value in result if value.get("date", "") >= start_date]
+            result = [value for value in result if value.get("end_date", value.get("date", "")) >= start_date]
         if end_date:
             self._date(end_date)
             result = [value for value in result if value.get("date", "") <= end_date]
@@ -25,17 +25,22 @@ class ScheduleManager:
                                                   value.get("created_at", "")))
 
     def add_event(self, user_id, title, event_date, start_time="", end_time="",
-                  category="個人", note=""):
+                  category="個人", note="", event_end_date=""):
         title = str(title or "").strip()
         if not title:
             raise ValueError("予定を入力してください。")
         self._date(event_date)
+        event_end_date = str(event_end_date or event_date)
+        self._date(event_end_date)
+        if event_end_date < event_date:
+            raise ValueError("終了日は開始日以降にしてください。")
         start_time = self._time(start_time)
         end_time = self._time(end_time)
         if start_time and end_time and end_time < start_time:
             raise ValueError("終了時刻は開始時刻より後にしてください。")
         item = {
             "id": uuid4().hex, "title": title[:100], "date": event_date,
+            "end_date": event_end_date,
             "start_time": start_time, "end_time": end_time,
             "category": str(category or "個人")[:20], "note": str(note or "").strip()[:500],
             "completed": False, "created_at": datetime.now().isoformat(timespec="minutes"),
