@@ -122,9 +122,9 @@ def schedule_page():
             month_events = schedule.events(user_id, start, end)
             by_date = {}
             for item in month_events:
-                first = max(datetime.strptime(item["date"], "%Y-%m-%d").date(), month.date())
+                first = max(datetime.strptime(item["date"], "%Y-%m-%d").date(), month)
                 last = min(datetime.strptime(item.get("end_date", item["date"]), "%Y-%m-%d").date(),
-                           (next_month - timedelta(days=1)).date())
+                           next_month - timedelta(days=1))
                 current = first
                 while current <= last:
                     by_date.setdefault(current.isoformat(), []).append(item)
