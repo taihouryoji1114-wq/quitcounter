@@ -195,6 +195,45 @@ class StoreOperationsManager:
             record_date, {})[destination] = bool(checked)
         self._data_manager.save()
 
+    def order_requests(self, open_only=False):
+        values = self._data_manager.data.get("store_order_requests", [])
+        result = [dict(value) for value in values if isinstance(value, dict)]
+        if open_only:
+            result = [value for value in result if not value.get("completed", False)]
+        return sorted(result, key=lambda value: (
+            bool(value.get("completed", False)), value.get("created_at", "")))
+
+    def add_order_request(self, message):
+        message = str(message or "").strip()
+        if not message:
+            raise ValueError("発注してほしいものを入力してください。")
+        item = {
+            "id": uuid4().hex, "message": message[:200], "completed": False,
+            "created_at": datetime.now().isoformat(timespec="minutes"),
+        }
+        self._data_manager.data.setdefault("store_order_requests", []).append(item)
+        self._data_manager.save()
+        return dict(item)
+
+    def set_order_request_completed(self, request_id, completed):
+        for item in self._data_manager.data.setdefault("store_order_requests", []):
+            if isinstance(item, dict) and item.get("id") == request_id:
+                item["completed"] = bool(completed)
+                item["completed_at"] = (datetime.now().isoformat(timespec="minutes")
+                                        if completed else "")
+                self._data_manager.save()
+                return
+        raise ValueError("発注依頼が見つかりません。")
+
+    def delete_order_request(self, request_id):
+        values = self._data_manager.data.setdefault("store_order_requests", [])
+        before = len(values)
+        values[:] = [value for value in values
+                     if not isinstance(value, dict) or value.get("id") != request_id]
+        if len(values) == before:
+            raise ValueError("発注依頼が見つかりません。")
+        self._data_manager.save()
+
     def hygiene_record(self, record_date):
         self._date(record_date)
         stored = self._data_manager.data.get("store_hygiene_records", {}).get(record_date, {})

@@ -40,6 +40,19 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertFalse(tomorrow["豊洲"])
         self.assertEqual(set(today), {"鶏肉", "ミクリード", "豊洲", "酒屋"})
 
+    def test_staff_can_add_and_complete_order_request(self):
+        item = self.manager.add_order_request("ラップを発注お願いします")
+        self.assertEqual(self.manager.order_requests(open_only=True)[0]["message"],
+                         "ラップを発注お願いします")
+        self.manager.set_order_request_completed(item["id"], True)
+        self.assertEqual(self.manager.order_requests(open_only=True), [])
+        self.assertTrue(self.manager.order_requests()[0]["completed"])
+
+    def test_order_request_can_be_deleted(self):
+        item = self.manager.add_order_request("誤入力")
+        self.manager.delete_order_request(item["id"])
+        self.assertEqual(self.manager.order_requests(), [])
+
     def test_counted_stock_enters_order_list_at_reorder_point(self):
         item = self.manager.add_item("ガスボンベ", "消耗品", "本", "", 6, "count", 2, 5)
         self.assertEqual(item["status"], "enough")

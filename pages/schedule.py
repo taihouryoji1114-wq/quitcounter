@@ -93,12 +93,31 @@ def schedule_page():
         selected_event = {"item": None}
         with ui.dialog() as detail_dialog, ui.card().classes("schedule-dialog q-pa-lg"):
             with ui.row().classes("w-full items-center justify-between no-wrap"):
-                detail_title = ui.label().classes("text-xl font-black ellipsis grow")
+                ui.label("予定の内容").classes("text-xl font-black grow")
                 ui.button(icon="close", on_click=detail_dialog.close).props("flat round")
+            detail_name = ui.input("予定名").props("outlined dense").classes("w-full q-mt-sm")
             detail_category = ui.label().classes("detail-category")
             detail_date = ui.label().classes("text-sm font-bold text-grey-8 q-mt-sm")
             detail_time = ui.label().classes("text-sm text-grey-7")
-            detail_note = ui.label().classes("detail-note text-sm text-grey-7")
+            detail_note = ui.textarea("メモ", placeholder="必要なことを自由に追加").props(
+                "outlined autogrow").classes("w-full q-mt-sm")
+
+            def save_event_detail():
+                item = selected_event["item"]
+                if not item:
+                    return
+                try:
+                    updated = schedule.update_event(
+                        user_id, item["id"], detail_name.value, detail_note.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                selected_event["item"] = updated
+                detail_dialog.close()
+                reload("予定を更新しました")
+
+            ui.button("変更を保存", icon="save", on_click=save_event_detail).props(
+                "unelevated no-caps").classes("w-full q-mt-md")
             ui.separator().classes("q-my-md")
 
             def delete_from_detail():
@@ -113,7 +132,7 @@ def schedule_page():
 
         def open_detail(item):
             selected_event["item"] = item
-            detail_title.set_text(item["title"])
+            detail_name.set_value(item["title"])
             detail_category.set_text(item.get("category", "個人"))
             date_text = item["date"].replace("-", "/")
             if item.get("end_date", item["date"]) != item["date"]:
@@ -123,7 +142,7 @@ def schedule_page():
             if item.get("end_time"):
                 time_text += f" ～ {item['end_time']}"
             detail_time.set_text(time_text or "時間指定なし")
-            detail_note.set_text(item.get("note") or "メモはありません")
+            detail_note.set_value(item.get("note") or "")
             detail_dialog.open()
 
         selected_day = {"date": today.isoformat()}

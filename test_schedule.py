@@ -33,6 +33,13 @@ class ScheduleManagerTest(unittest.TestCase):
         self.manager.delete_event("user1", item["id"])
         self.assertEqual(self.manager.events("user1"), [])
 
+    def test_event_title_and_note_can_be_updated(self):
+        item = self.manager.add_event("user1", "会議", "2026-08-20", note="")
+        updated = self.manager.update_event("user1", item["id"], "経営会議", "資料を持参")
+        self.assertEqual(updated["title"], "経営会議")
+        self.assertEqual(updated["note"], "資料を持参")
+        self.assertEqual(self.manager.events("user1")[0]["note"], "資料を持参")
+
     def test_invalid_time_range_is_rejected(self):
         with self.assertRaises(ValueError):
             self.manager.add_event("user1", "予定", "2026-08-20", "18:00", "10:00")

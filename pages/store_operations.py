@@ -27,6 +27,7 @@ def store_operations_page():
     items = store_ops.items()
     today = today_jst().isoformat()
     daily_order_checks = store_ops.daily_order_checks(today)
+    order_requests = store_ops.order_requests()
     hygiene = store_ops.hygiene_record(today)
     prep_items = store_ops.prep_items(today)
     previous_board = store_ops.previous_day_board(today)
@@ -271,6 +272,52 @@ def store_operations_page():
                     on_change=lambda event, name=destination: store_ops.set_daily_order_check(
                         today, name, event.value),
                 ).classes("daily-order-check w-full")
+
+        open_order_requests = [value for value in order_requests if not value.get("completed")]
+        with ui.expansion(f"発注依頼リスト　{len(open_order_requests)}件", icon="add_shopping_cart",
+                          value=False).classes("store-panel request-panel w-full q-mt-sm"):
+            ui.label("気づいたときに、発注してほしいものを自由に入力").classes(
+                "text-[10px] text-grey-6 q-mb-sm")
+            request_message = ui.textarea(
+                "発注してほしいもの", placeholder="例：ラップが残り少ないので発注お願いします"
+            ).props("outlined autogrow").classes("w-full")
+
+            def add_order_request():
+                try:
+                    store_ops.add_order_request(request_message.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                reload("発注依頼を追加しました")
+
+            ui.button("発注依頼を追加", icon="send", on_click=add_order_request).props(
+                "unelevated no-caps").classes("w-full q-mt-sm")
+            if order_requests:
+                ui.separator().classes("q-my-md")
+                for request in order_requests:
+                    with ui.row().classes(
+                            "order-request-row w-full items-start no-wrap "
+                            + ("completed" if request.get("completed") else "")):
+                        ui.checkbox(
+                            value=request.get("completed", False),
+                            on_change=lambda event, request_id=request["id"]: (
+                                store_ops.set_order_request_completed(
+                                    request_id, event.value), reload("発注依頼を更新しました")),
+                        ).props("dense")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(request["message"]).classes("text-xs font-bold")
+                            created = str(request.get("created_at", ""))
+                            created_label = created[5:16].replace("T", " ").replace("-", "/")
+                            ui.label(f"依頼 {created_label}").classes("text-[8px] text-grey-6")
+                        ui.button(
+                            icon="delete_outline",
+                            on_click=lambda _, request_id=request["id"]: (
+                                store_ops.delete_order_request(request_id),
+                                reload("発注依頼を削除しました")),
+                        ).props("flat round dense color=grey-5 aria-label='発注依頼を削除'")
+            else:
+                ui.label("発注依頼はありません").classes(
+                    "w-full text-center text-xs text-grey-6 q-py-md")
 
         with ui.expansion("在庫を確認", icon="checklist", value=False).classes(
             "store-panel inventory-panel w-full q-mt-sm"):
@@ -523,7 +570,7 @@ def store_operations_page():
 
         ui.add_css("""
         .store-login-qr{width:210px;height:210px;border-radius:16px;background:#fff;padding:10px;border:1px solid #E1E9E4}
-        .daily-order-check{padding:10px 12px;border-radius:13px;background:#F5F7F5;margin-bottom:6px}.daily-order-check .q-checkbox__label{font-size:13px;font-weight:800}
+        .daily-order-check{padding:10px 12px;border-radius:13px;background:#F5F7F5;margin-bottom:6px}.daily-order-check .q-checkbox__label{font-size:13px;font-weight:800}.order-request-row{padding:10px 6px;border-bottom:1px solid #EDF1EE}.order-request-row.completed{opacity:.5}.order-request-row.completed .text-xs{text-decoration:line-through}
         .handover-board-list{max-height:240px;overflow-y:auto}.handover-board-item{padding:9px 10px;border-radius:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}.handover-board-item.ordered{background:rgba(244,202,100,.2);border-color:rgba(255,225,145,.25)}.handover-board-area{min-width:52px;padding:4px 6px;border-radius:8px;background:rgba(255,255,255,.18);font-size:8px;font-weight:900;text-align:center;margin-right:8px}.handover-board-confirm{min-height:30px!important;color:#fff!important;font-size:9px!important}.handover-board-empty{padding:12px;border-radius:13px;background:rgba(255,255,255,.12);font-size:11px;font-weight:800;text-align:center}
         .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.settings-item{padding:8px 4px;border-bottom:1px solid #EDF1EE}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){
@@ -531,11 +578,12 @@ def store_operations_page():
           .app-shell>div:last-child{display:grid!important;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);column-gap:18px;align-items:start}
           .store-hero{grid-column:1 / -1;padding:28px 32px!important}
           .order-panel{grid-column:1;grid-row:2}
-          .inventory-panel{grid-column:1;grid-row:3}
-          .hygiene-panel{grid-column:2;grid-row:2 / span 2;position:sticky;top:18px}
-          .prep-panel{grid-column:1;grid-row:4}.handover-panel{grid-column:2;grid-row:4}
-          .settings-panel{grid-column:1 / -1;grid-row:5}
-          .future-panel{grid-column:1 / -1;grid-row:6}
+          .request-panel{grid-column:1;grid-row:3}
+          .inventory-panel{grid-column:1;grid-row:4}
+          .hygiene-panel{grid-column:2;grid-row:2 / span 3;position:sticky;top:18px}
+          .prep-panel{grid-column:1;grid-row:5}.handover-panel{grid-column:2;grid-row:5}
+          .settings-panel{grid-column:1 / -1;grid-row:6}
+          .future-panel{grid-column:1 / -1;grid-row:7}
           .store-panel{margin-top:14px!important}
           .store-panel .q-item{min-height:64px!important;padding:0 20px!important;font-size:16px}
           .inventory-row{gap:10px;padding:12px 8px}.inventory-name{min-width:150px}

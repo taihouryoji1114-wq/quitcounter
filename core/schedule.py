@@ -54,6 +54,17 @@ class ScheduleManager:
         item["completed"] = bool(completed)
         self._data_manager.save()
 
+    def update_event(self, user_id, event_id, title, note=""):
+        title = str(title or "").strip()
+        if not title:
+            raise ValueError("予定名を入力してください。")
+        item = self._find(user_id, event_id)
+        item["title"] = title[:100]
+        item["note"] = str(note or "").strip()[:500]
+        item["updated_at"] = datetime.now().isoformat(timespec="minutes")
+        self._data_manager.save()
+        return dict(item)
+
     def delete_event(self, user_id, event_id):
         values = self._data_manager.data.setdefault("personal_schedules", {}).setdefault(user_id, [])
         before = len(values)
