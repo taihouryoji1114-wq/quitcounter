@@ -45,7 +45,7 @@ def staffing_page():
                         ui.label(title).classes("text-[9px] opacity-70")
                         ui.label(f"¥{group['company_cost']:,}").classes("text-base font-black")
                         ui.label(f"給与 {group['gross_wages']:,}・交通 {group['transportation']:,}・保険 {group['employer_insurance']:,}").classes("text-[7px] opacity-70")
-        with ui.expansion("出勤チェック状況　確認済みの日を見る", icon="fact_check",
+        with ui.expansion("出勤チェック状況　出勤日を見る", icon="fact_check",
                           value=False).classes("attendance-progress-card staff-panel w-full q-mb-sm"):
             for name in staffing.SALARIED_STAFF:
                 progress = attendance_progress[name]
@@ -54,16 +54,14 @@ def staffing_page():
                         ui.label(name).classes("text-xs font-black")
                         latest = (f"{int(progress['latest_date'][5:7])}月"
                                   f"{int(progress['latest_date'][8:10])}日" if progress["latest_date"] else "まだなし")
-                        ui.label(f"最終確認：{latest}").classes("text-[9px] text-grey-6")
-                    ui.label(f"確認済み {progress['checked_count']}日").classes(
+                        ui.label(f"最後の出勤：{latest}").classes("text-[9px] text-grey-6")
+                    ui.label(f"出勤 {progress['checked_count']}日").classes(
                         "text-xs font-black text-primary")
-                if progress["checked_days"]:
-                    with ui.element("div").classes("checked-date-list w-full q-mb-sm"):
-                        for day_number in progress["checked_days"]:
-                            ui.label(f"{day_number}日").classes("checked-date-chip")
-                else:
-                    ui.label("確認済みの日はありません").classes(
-                        "text-[9px] text-negative q-mb-sm")
+                with ui.element("div").classes("checked-date-list w-full q-mb-sm"):
+                    for day_number in range(1, progress["target_count"] + 1):
+                        attended = day_number in progress["checked_days"]
+                        ui.label(f"{day_number}日").classes(
+                            "checked-date-chip attended" if attended else "checked-date-chip unchecked")
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
             ui.label("副社長は暦日按分、店長・社員は月10日休み・1出勤10時間を基準に配分します").classes(
@@ -276,4 +274,4 @@ def staffing_page():
                         "text-sm font-black q-mt-xs")
         date_input.on("change", lambda: render_day(date_input.value))
         render_day(selected)
-        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.checked-date-chip{padding:5px 8px;border-radius:9px;background:#DDF1E5;color:#28704A;font-size:9px;font-weight:900}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
+        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}.checked-date-chip{padding:6px 2px;border-radius:9px;font-size:9px;font-weight:900;text-align:center}.checked-date-chip.attended{background:#DDF1E5;color:#28704A;border:1px solid #B9DEC8}.checked-date-chip.unchecked{background:#F1F3F2;color:#9AA39E;border:1px solid #E4E8E5}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")

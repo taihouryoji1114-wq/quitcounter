@@ -164,7 +164,8 @@ class StaffingManager:
             for day_number in range(1, through_day + 1):
                 record_date = f"{month}-{day_number:02d}"
                 record = records.get(record_date, {})
-                if isinstance(record, dict) and isinstance(record.get(name), dict):
+                if (isinstance(record, dict) and isinstance(record.get(name), dict)
+                        and bool(record[name].get("attended", False))):
                     checked.append(day_number)
             missing = [value for value in range(1, through_day + 1) if value not in checked]
             result[name] = {

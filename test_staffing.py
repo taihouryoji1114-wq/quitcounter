@@ -187,9 +187,9 @@ class StaffingManagerTest(unittest.TestCase):
         self.staffing.save_day("2026-08-01", {"店長": {"attended": True}})
         self.staffing.save_day("2026-08-03", {"店長": {"attended": False}})
         progress = self.staffing.attendance_progress("2026-08", "2026-08-04")
-        self.assertEqual(progress["店長"]["checked_days"], [1, 3])
-        self.assertEqual(progress["店長"]["missing_days"], [2, 4])
-        self.assertEqual(progress["店長"]["latest_date"], "2026-08-03")
+        self.assertEqual(progress["店長"]["checked_days"], [1])
+        self.assertEqual(progress["店長"]["missing_days"], [2, 3, 4])
+        self.assertEqual(progress["店長"]["latest_date"], "2026-08-01")
 
 
 if __name__ == "__main__":
