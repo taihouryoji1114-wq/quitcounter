@@ -96,6 +96,14 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(
             self.data.data["store_prep_records"]["2026-08-14"][item["id"]], "done")
 
+    def test_prep_templates_can_be_reordered(self):
+        first = self.manager.add_prep_template("唐揚げ", "厨房")
+        second = self.manager.add_prep_template("つくね", "厨房")
+        self.assertTrue(self.manager.move_prep_template(second["id"], -1))
+        self.assertEqual([item["id"] for item in self.manager.prep_templates()],
+                         [second["id"], first["id"]])
+        self.assertFalse(self.manager.move_prep_template(second["id"], -1))
+
     def test_handover_can_be_confirmed(self):
         item = self.manager.add_handover("2026-08-14", "ガスボンベ残り1本", "厨房")
         self.manager.confirm_handover("2026-08-14", item["id"])

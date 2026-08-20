@@ -231,6 +231,27 @@ class StoreOperationsManager:
                 return
         raise ValueError("仕込み項目が見つかりません。")
 
+    def move_prep_template(self, item_id, direction):
+        """登録済みの仕込み項目を1つ上または下へ移動する。"""
+        if direction not in {-1, 1}:
+            raise ValueError("移動先が正しくありません。")
+        values = self._data_manager.data.setdefault("store_prep_templates", [])
+        active_indexes = [index for index, value in enumerate(values)
+                          if isinstance(value, dict) and value.get("active", True)]
+        current_position = next(
+            (position for position, index in enumerate(active_indexes)
+             if values[index].get("id") == item_id), None)
+        if current_position is None:
+            raise ValueError("仕込み項目が見つかりません。")
+        target_position = current_position + direction
+        if target_position < 0 or target_position >= len(active_indexes):
+            return False
+        current_index = active_indexes[current_position]
+        target_index = active_indexes[target_position]
+        values[current_index], values[target_index] = values[target_index], values[current_index]
+        self._data_manager.save()
+        return True
+
     def prep_items(self, record_date):
         day = self._date(record_date)
         states = self._data_manager.data.get("store_prep_records", {}).get(record_date, {})

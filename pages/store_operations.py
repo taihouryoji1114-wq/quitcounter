@@ -374,7 +374,15 @@ def store_operations_page():
                         ui.button(icon="delete_outline",
                                   on_click=lambda _, value=item: open_prep_delete(value)).props(
                                       "flat round dense color=negative aria-label='仕込み項目を削除'").tooltip(
-                                          "仕込み項目を削除")
+                                      "仕込み項目を削除")
+                    if item.get("source") == "prep":
+                        with ui.context_menu():
+                            ui.menu_item("上へ移動", lambda _, item_id=item["id"]: (
+                                store_ops.move_prep_template(item_id, -1), reload("上へ移動しました")
+                            ))
+                            ui.menu_item("下へ移動", lambda _, item_id=item["id"]: (
+                                store_ops.move_prep_template(item_id, 1), reload("下へ移動しました")
+                            ))
 
         with ui.expansion(f"今日の引き継ぎ　{sum(not value['confirmed'] for value in handovers)}件未確認",
                           icon="campaign", value=False).classes(
