@@ -26,7 +26,7 @@ GAME_HTML = r'''
     <div class="ge-board-wrap"><div id="ge-board" class="ge-board"></div></div>
     <div class="ge-legend"><span><i class="blue"></i>自軍</span><span><i class="red"></i>赤軍</span><span><i class="yellow"></i>黄軍</span><span><i class="purple"></i>紫軍</span><span><i class="neutral"></i>未占領</span><span>★ 首都</span></div>
     <div class="ge-terrain-note"><span>◆ 都心：兵力成長＋1</span><span>▰ 大区：防御＋25%</span><span>⚠ 補給切れ：成長停止</span><span>★ 本陣を奪えば勢力滅亡</span></div>
-    <div class="ge-help"><b>葛飾から統一</b><span>隣接する区へ進軍。補給線・挟撃・手薄な本陣への奇襲を使えば、兵力差を覆せます。</span></div>
+    <div class="ge-help"><b>葛飾から統一</b><span>敵地へは隣接区から進軍。自軍領土同士なら、離れた区にも兵力を直接移動できます。</span></div>
     <div class="ge-map-credit">地図：国土交通省 国土数値情報（2025年版、CC BY 4.0）を加工</div>
   </section>
   <div id="ge-modal" class="ge-modal"><div><b id="ge-result"></b><span id="ge-result-sub"></span><button id="ge-again">もう一度</button><button id="ge-stage-select" class="sub">ステージ選択</button></div></div>
@@ -156,4 +156,4 @@ def grid_empire_page():
     Theme.page('GRID EMPIRE', app_name='grid-empire')
     ui.add_head_html(GAME_CSS)
     ui.html(GAME_HTML, sanitize=False)
-    ui.add_body_html('<script src="/static/japan_unification.js?v=2"></script>')
+    ui.add_body_html('<script src="/static/japan_unification.js?v=3"></script>')
