@@ -402,6 +402,14 @@ class StoreOperationsManager:
                     "name": f"{destination}へ発注済み", "area": "発注",
                     "from_date": previous_date,
                 })
+        for request in self.order_requests(open_only=True):
+            created_date = str(request.get("created_at", ""))[:10]
+            if created_date and created_date <= previous_date:
+                items.append({
+                    "id": request.get("id"), "kind": "request",
+                    "name": f"発注依頼：{request.get('message', '')}", "area": "発注依頼",
+                    "from_date": created_date,
+                })
         return {"previous_date": previous_date, "items": items}
 
     def set_prep_status(self, record_date, item_id, status):
@@ -425,8 +433,7 @@ class StoreOperationsManager:
         if any(value.get("name") == name and value.get("area") == area
                for value in self.handover_templates()):
             raise ValueError("同じチェック項目が登録されています。")
-        category = self._handover_category(area, category)
-        item = {"id": uuid4().hex, "name": name, "area": area, "category": category,
+        item = {"id": uuid4().hex, "name": name, "area": area, "category": "",
                 "active": True,
                 "created_date": datetime.now().date().isoformat()}
         self._data_manager.data.setdefault("store_handover_templates", []).append(item)
@@ -482,7 +489,7 @@ class StoreOperationsManager:
             raise ValueError("引き継ぎ内容を入力してください。")
         area = self._handover_area(area)
         item = {"id": uuid4().hex, "message": message[:500],
-                "area": area, "category": self._handover_category(area, category), "confirmed": False,
+                "area": area, "category": "", "confirmed": False,
                 "created_at": datetime.now().isoformat(timespec="minutes")}
         self._data_manager.data.setdefault("store_handovers", {}).setdefault(record_date, []).append(item)
         self._data_manager.save()
@@ -517,12 +524,8 @@ class StoreOperationsManager:
 
     @staticmethod
     def _handover_category(area, value):
-        if area != "厨房":
-            return ""
-        value = str(value or "その他").strip()
-        if value not in {"ちゃんこ", "深川", "魚", "米", "その他"}:
-            return "その他"
-        return value
+        # 旧データとの互換性のため引数は残すが、分類は場所の3区分だけに統一する。
+        return ""
 
     @staticmethod
     def _optional_number(value, label):

@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from core.data import DataManager
@@ -205,9 +206,20 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(values["ラップ"]["status"], "low")
         self.assertEqual(values["醤油"]["status"], "out")
 
-    def test_kitchen_handover_category_is_saved(self):
+    def test_handover_uses_only_area_without_subcategory(self):
         item = self.manager.add_handover_template("出汁を確認", "厨房", "ちゃんこ")
-        self.assertEqual(item["category"], "ちゃんこ")
+        self.assertEqual(item["category"], "")
+
+    def test_open_order_request_is_carried_to_next_day_board(self):
+        request = self.manager.add_order_request("ラップを発注")
+        request_date = request["created_at"][:10]
+        next_date = (datetime.fromisoformat(request_date) + timedelta(days=1)).date().isoformat()
+        board = self.manager.previous_day_board(next_date)
+        carried = [item for item in board["items"] if item["kind"] == "request"]
+        self.assertEqual([item["name"] for item in carried], ["発注依頼：ラップを発注"])
+        self.manager.set_order_request_completed(request["id"], True)
+        self.assertFalse(any(item["kind"] == "request"
+                             for item in self.manager.previous_day_board(next_date)["items"]))
 
 
 if __name__ == "__main__":
