@@ -24,7 +24,7 @@ GAME_HTML = r'''
     <div class="ge-force"><span>出撃兵力</span><button data-ratio=".3">30%</button><button class="active" data-ratio=".5">50%</button><button data-ratio=".7">70%</button><button data-ratio="1">全軍</button></div>
     <div class="ge-board-wrap"><div id="ge-board" class="ge-board"></div></div>
     <div class="ge-legend"><span><i class="blue"></i>自軍</span><span><i class="red"></i>赤軍</span><span><i class="yellow"></i>黄軍</span><span><i class="purple"></i>紫軍</span><span><i class="neutral"></i>未占領</span><span>★ 首都</span></div>
-    <div class="ge-help"><b>遊び方</b><span>青い領地を選び、隣の陸地をタップして侵攻。数字は兵力。敵の★首都を奪えば勝利。</span></div>
+    <div class="ge-help"><b>遊び方</b><span>青い地域を選び、道路でつながる地域へ進軍。数字は兵力。敵の★首都をすべて奪えば勝利。</span></div>
   </section>
   <div id="ge-modal" class="ge-modal"><div><b id="ge-result"></b><span id="ge-result-sub"></span><button id="ge-again">もう一度</button><button id="ge-stage-select" class="sub">ステージ選択</button></div></div>
 </div>
@@ -46,13 +46,14 @@ body{margin:0;background:#081525!important;color:#fff;overscroll-behavior:none}.
 .ge-help{max-width:720px;margin:12px auto 0;background:#10233a;border:1px solid #263d56;border-radius:14px;padding:11px 14px;display:flex;gap:12px;align-items:center}.ge-help b{white-space:nowrap;font-size:12px;color:#f2c650}.ge-help span{font-size:11px;line-height:1.5;color:#9cb0c2}
 .ge-modal{display:none;position:fixed;inset:0;background:#020711dd;z-index:99;align-items:center;justify-content:center;padding:24px}.ge-modal.show{display:flex}.ge-modal>div{text-align:center;background:#10233a;border:1px solid #3c5875;border-radius:24px;padding:34px;width:min(340px,90vw);box-shadow:0 30px 80px #000}.ge-modal b{display:block;font-size:30px}.ge-modal span{display:block;color:#9eb0c2;margin:8px 0 24px}.ge-modal button{border:0;border-radius:14px;background:#2b98e7;color:white;font-weight:800;padding:13px 28px}.ge-modal button.sub{display:block;margin:9px auto 0;background:transparent;border:1px solid #3c5875;color:#9eb0c2}
 @media(max-width:520px){.ge-app{padding-left:7px;padding-right:7px}.ge-board-wrap{padding:4px}.ge-board{gap:1px}.ge-score{grid-template-columns:1fr 1.25fr 1fr}.ge-help{align-items:flex-start}.ge-power{min-width:20px;height:20px;font-size:11px}}
+.ge-board{display:block;position:relative;aspect-ratio:800/520;padding:0;background:radial-gradient(ellipse at 45% 40%,#1b5b79,#082b46 58%,#061b2e 100%);overflow:hidden}.ge-map{display:block;width:100%;height:100%}.ge-region{cursor:pointer;touch-action:manipulation}.ge-region polygon{stroke:#d8ebd744;stroke-width:3;transition:filter .12s,stroke .12s}.ge-region.neutral polygon{fill:#567559}.ge-region.blue polygon{fill:#237fbd}.ge-region.red polygon{fill:#bc424d}.ge-region.yellow polygon{fill:#b89025}.ge-region.purple polygon{fill:#7946a1}.ge-region.selected polygon{stroke:#fff;stroke-width:8;filter:brightness(1.28)}.ge-region.target polygon{stroke:#ffe16b;stroke-width:7;filter:brightness(1.22)}.ge-region:active polygon{filter:brightness(1.55)}.ge-road{stroke:#d7c49788;stroke-width:5;stroke-linecap:round;stroke-dasharray:8 7;pointer-events:none}.ge-region-label{fill:#fff;font-weight:900;font-size:18px;text-anchor:middle;dominant-baseline:middle;pointer-events:none;text-shadow:0 2px 3px #000}.ge-place{fill:#e8f0e8cc;font-size:12px;font-weight:700;text-anchor:middle;pointer-events:none}.ge-terrain{font-size:16px;text-anchor:middle;pointer-events:none}.ge-capital{fill:#ffe57b;font-size:20px;text-anchor:middle;pointer-events:none}.ge-move-line{stroke:#ffe16b;stroke-width:8;stroke-linecap:round;stroke-dasharray:10 9;animation:gemarch .45s linear infinite;pointer-events:none}.ge-move-badge{fill:#ffe16b}.ge-move-text{fill:#101722;font-size:12px;font-weight:900;text-anchor:middle;dominant-baseline:middle;pointer-events:none}@keyframes gemarch{to{stroke-dashoffset:-19}}
 </style>
 '''
 
 
 GAME_JS = r'''
 <script>
-setTimeout(()=>{
+if(false)setTimeout(()=>{
  const W=8,H=7,N=W*H,ARMIES=['b','r','y','p'],STAGES=[
   {name:'STAGE 01 · はじまりの島',map:['00111100','01111110','11111110','11111111','01111111','00111110','00011100'],starts:[[42,34,43],[14,13,22],[16,17,24],[39,38,31]],power:16,speed:1200},
   {name:'STAGE 02 · 分断海峡',map:['00111100','01101110','11111111','11011111','11111011','01111110','00111100'],starts:[[42,34,43],[14,13,22],[16,17,24],[39,38,31]],power:19,speed:950},
@@ -80,6 +81,53 @@ setTimeout(()=>{
 '''
 
 
+MAP_GAME_JS = r'''
+<script>
+setTimeout(()=>{
+ const ARMIES=['b','r','y','p'],COLORS={b:'blue',r:'red',y:'yellow',p:'purple'},NAMES={r:'赤軍',y:'黄軍',p:'紫軍'};
+ const REGIONS=[
+  {p:'25,55 120,30 145,110 70,145 20,110',c:[78,86],t:'forest',n:'北西林'},
+  {p:'120,30 240,25 250,105 145,110',c:[187,68],t:'plain',n:'北原'},
+  {p:'240,25 365,45 350,125 250,105',c:[303,76],t:'mountain',n:'白峰'},
+  {p:'365,45 490,25 515,105 430,145 350,125',c:[430,82],t:'city',n:'王都道'},
+  {p:'490,25 610,40 625,125 515,105',c:[559,72],t:'plain',n:'東原'},
+  {p:'610,40 765,60 755,145 625,125',c:[689,88],t:'port',n:'北港'},
+  {p:'20,110 70,145 60,250 15,270',c:[42,190],t:'port',n:'西岬'},
+  {p:'70,145 145,110 250,105 235,220 145,245 60,250',c:[151,179],t:'forest',n:'深緑森'},
+  {p:'250,105 350,125 345,235 235,220',c:[295,172],t:'plain',n:'中央野'},
+  {p:'350,125 430,145 515,105 530,215 435,250 345,235',c:[438,181],t:'city',n:'中央都'},
+  {p:'515,105 625,125 620,240 530,215',c:[575,170],t:'mountain',n:'東山地'},
+  {p:'625,125 755,145 780,260 620,240',c:[698,193],t:'port',n:'東海岸'},
+  {p:'15,270 60,250 145,245 160,375 70,410 20,365',c:[82,320],t:'plain',n:'西平野'},
+  {p:'145,245 235,220 345,235 335,360 240,395 160,375',c:[245,306],t:'city',n:'交易都'},
+  {p:'345,235 435,250 530,215 525,350 430,390 335,360',c:[433,306],t:'forest',n:'南森林'},
+  {p:'530,215 620,240 780,260 760,375 635,405 525,350',c:[651,310],t:'plain',n:'東平野'},
+  {p:'70,410 160,375 240,395 275,485 125,495',c:[175,445],t:'port',n:'南西港'},
+  {p:'240,395 335,360 430,390 525,350 635,405 575,490 410,480 275,485',c:[430,432],t:'mountain',n:'南大地'}
+ ];
+ const LINKS=[[0,1],[0,6],[0,7],[1,2],[1,7],[2,3],[2,7],[2,8],[3,4],[3,8],[3,9],[4,5],[4,9],[4,10],[5,10],[5,11],[6,7],[6,12],[7,8],[7,12],[7,13],[8,9],[8,13],[8,14],[9,10],[9,14],[10,11],[10,14],[10,15],[11,15],[12,13],[12,16],[13,14],[13,16],[13,17],[14,15],[14,17],[15,17],[16,17]];
+ const ADJ=REGIONS.map(()=>[]);LINKS.forEach(([a,b])=>{ADJ[a].push(b);ADJ[b].push(a)});
+ const STAGES=[{name:'STAGE 01 · はじまりの島',power:16,speed:2200},{name:'STAGE 02 · 分断海峡',power:20,speed:1900},{name:'STAGE 03 · 決戦大陸',power:25,speed:1650}],STARTS=[[16,12,13],[5,4,11],[0,1,6],[15,10,17]];
+ let cells=[],selected=-1,timer=null,aiTimer=null,marchTimer=null,ended=true,stageIndex=0,playerCount=2,ratio=.5,movements=[],cooldowns={},token=0,aiTurn=0,defeated=new Set();
+ const board=document.getElementById('ge-board'),state=document.getElementById('ge-state'),hint=document.getElementById('ge-hint'),home=document.getElementById('ge-home'),game=document.getElementById('ge-game');
+ const icon=t=>({forest:'♣',mountain:'▲',city:'◆',port:'⚓',plain:'•'}[t]);
+ function stop(){token++;clearInterval(timer);clearInterval(aiTimer);clearInterval(marchTimer);movements=[]}
+ function showHome(){stop();ended=true;document.getElementById('ge-modal').classList.remove('show');game.style.display='none';home.style.display='block'}
+ function startStage(i){stageIndex=Number(i);home.style.display='none';game.style.display='block';init()}
+ function init(){stop();const s=STAGES[stageIndex];ended=false;selected=-1;cooldowns={};defeated=new Set();aiTurn=0;cells=REGIONS.map((r,i)=>({o:'n',p:2+(i*3%5),c:false,co:'',t:r.t}));ARMIES.slice(0,playerCount).forEach((o,k)=>{const z=STARTS[k];Object.assign(cells[z[0]],{o,p:k?s.power:16,c:true,co:o});Object.assign(cells[z[1]],{o,p:k?8:7});Object.assign(cells[z[2]],{o,p:k?8:7})});document.getElementById('ge-stage-name').textContent=s.name;state.textContent='戦闘開始';hint.textContent='青い地域を選択';render();timer=setInterval(grow,1300);aiTimer=setInterval(ai,s.speed);marchTimer=setInterval(()=>movements.length&&render(),250)}
+ function render(){const counts={b:0,r:0,y:0,p:0},roads=LINKS.map(([a,b])=>`<line class="ge-road" x1="${REGIONS[a].c[0]}" y1="${REGIONS[a].c[1]}" x2="${REGIONS[b].c[0]}" y2="${REGIONS[b].c[1]}"/>`).join('');let areas='';cells.forEach((c,i)=>{if(counts[c.o]!==undefined)counts[c.o]++;const r=REGIONS[i],target=selected>=0&&ADJ[selected].includes(i),cls=COLORS[c.o]||'neutral';areas+=`<g class="ge-region ${cls}${i===selected?' selected':''}${target?' target':''}" data-region="${i}"><polygon points="${r.p}"/><text class="ge-terrain" x="${r.c[0]-24}" y="${r.c[1]-19}">${icon(c.t)}</text><text class="ge-place" x="${r.c[0]}" y="${r.c[1]+27}">${r.n}</text><circle cx="${r.c[0]}" cy="${r.c[1]}" r="22" fill="#07111dcc"/><text class="ge-region-label" x="${r.c[0]}" y="${r.c[1]}">${c.p}</text>${c.c?`<text class="ge-capital" x="${r.c[0]+26}" y="${r.c[1]-20}">★</text>`:''}</g>`});const moves=movements.map(m=>{const a=REGIONS[m.from].c,b=REGIONS[m.to].c,x=(a[0]+b[0])/2,y=(a[1]+b[1])/2,left=Math.max(1,Math.ceil((m.arrive-Date.now())/1000));return `<g><line class="ge-move-line" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><rect class="ge-move-badge" x="${x-30}" y="${y-12}" width="60" height="24" rx="12"/><text class="ge-move-text" x="${x}" y="${y}">${m.force} · ${left}秒</text></g>`}).join('');board.innerHTML=`<svg class="ge-map" viewBox="0 0 800 520">${areas}${roads}${moves}</svg>`;board.querySelectorAll('[data-region]').forEach(g=>g.onpointerdown=e=>{e.preventDefault();tap(Number(g.dataset.region))});document.getElementById('ge-blue').textContent=counts.b;document.getElementById('ge-red').textContent=ARMIES.slice(1,playerCount).filter(o=>!defeated.has(o)).length;document.getElementById('ge-factions').innerHTML=ARMIES.slice(1,playerCount).map(o=>`<span class="${o}">${NAMES[o]} ${counts[o]}</span>`).join('')}
+ function tap(i){if(ended)return;const c=cells[i];if(selected===i){selected=-1;render();return}if(selected>=0&&ADJ[selected].includes(i)){const from=selected;selected=-1;if(!attack(from,i,'b')){state.textContent='出撃準備中';hint.textContent='この地域からはまだ出撃できません';render()}return}if(c.o==='b'){selected=i;state.textContent=REGIONS[i].n+' · 兵力 '+c.p;hint.textContent='道路でつながる地域へ進軍';render()}}
+ function attack(from,to,owner){const a=cells[from];if(a.o!==owner||a.p<2||Date.now()<(cooldowns[from]||0)||movements.some(m=>m.from===from))return false;const force=Math.max(1,Math.floor(a.p*(owner==='b'?ratio:.55))),travel=3400,myToken=token;a.p-=force;cooldowns[from]=Date.now()+travel+1800;const m={from,to,owner,force,arrive:Date.now()+travel};movements.push(m);if(owner==='b'){state.textContent='道路を進軍中';hint.textContent=force+'人 · 約3秒で到着'}render();setTimeout(()=>{if(myToken!==token||ended)return;movements=movements.filter(x=>x!==m);resolve(m);render()},travel);return true}
+ function resolve(m){const d=cells[m.to];if(d.o===m.owner){d.p=Math.min(999,d.p+m.force);return}if(m.force>d.p){const old=d.c?d.co:'';d.o=m.owner;d.p=m.force-d.p;if(old){defeated.add(old);d.c=false;d.co='';cells.forEach(c=>{if(c.o===old)c.o=m.owner});movements=movements.filter(x=>x.owner!==old);if(old==='b'){finish(m.owner);return}if(m.owner==='b'&&ARMIES.slice(1,playerCount).every(o=>defeated.has(o)))finish('b')}}else d.p-=m.force}
+ function grow(){if(ended)return;cells.forEach(c=>{if(ARMIES.includes(c.o)&&c.p<99)c.p+=c.c||c.t==='city'?2:1});render()}
+ function ai(){if(ended)return;const active=ARMIES.slice(1,playerCount).filter(o=>!defeated.has(o));if(!active.length)return;const owner=active[aiTurn++%active.length],front=[];cells.forEach((c,i)=>{if(c.o===owner&&c.p>3&&!movements.some(m=>m.from===i)){const opts=ADJ[i].filter(n=>cells[n].o!==owner);if(opts.length)front.push([i,opts])}});if(!front.length)return;front.sort((a,b)=>cells[b[0]].p-cells[a[0]].p);const pick=front[Math.floor(Math.random()*Math.min(3,front.length))],targets=pick[1].sort((a,b)=>(cells[a].p+(cells[a].o==='b'?-3:0))-(cells[b].p+(cells[b].o==='b'?-3:0)));attack(pick[0],targets[0],owner)}
+ function finish(w){ended=true;clearInterval(timer);clearInterval(aiTimer);clearInterval(marchTimer);document.getElementById('ge-result').textContent=w==='b'?'勝利！':'敗北…';document.getElementById('ge-result-sub').textContent=w==='b'?'すべての敵首都を制圧しました':'自軍の首都が奪われました';document.getElementById('ge-modal').classList.add('show')}
+ document.querySelectorAll('[data-players]').forEach(b=>b.onpointerdown=e=>{e.preventDefault();playerCount=Number(b.dataset.players);document.querySelectorAll('[data-players]').forEach(x=>x.classList.toggle('active',x===b))});document.querySelectorAll('[data-ratio]').forEach(b=>b.onpointerdown=e=>{e.preventDefault();ratio=Number(b.dataset.ratio);document.querySelectorAll('[data-ratio]').forEach(x=>x.classList.toggle('active',x===b))});document.querySelectorAll('[data-stage]').forEach(b=>b.onpointerdown=e=>{e.preventDefault();startStage(b.dataset.stage)});document.getElementById('ge-home-button').onclick=showHome;document.getElementById('ge-restart').onclick=init;document.getElementById('ge-again').onclick=()=>{document.getElementById('ge-modal').classList.remove('show');init()};document.getElementById('ge-stage-select').onclick=showHome;showHome();
+},150);
+</script>
+'''
+
+
 @ui.page('/grid-empire')
 def grid_empire_page():
     if not require_app_access('grid_empire'):
@@ -87,4 +135,4 @@ def grid_empire_page():
     Theme.page('GRID EMPIRE', app_name='grid-empire')
     ui.add_head_html(GAME_CSS)
     ui.html(GAME_HTML, sanitize=False)
-    ui.add_body_html(GAME_JS)
+    ui.add_body_html(MAP_GAME_JS)
