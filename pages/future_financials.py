@@ -329,6 +329,10 @@ def _render_future_financials_home(selected_month=None):
         .actual-box-map{width:calc(100% + 12px)!important;margin-left:-6px;margin-right:-6px;height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}.actual-money-box{min-height:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}.actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}.actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}.actual-cost-block>.actual-money-box,.actual-gross-block>.actual-money-box{width:100%}.actual-gross-block{grid-column:2;grid-row:2;min-height:0;display:flex}.actual-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}.actual-block-title{font-size:9px;font-weight:800;line-height:1.1}.actual-block-value{font-size:10px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap}.actual-block-note{font-size:7px;line-height:1.1;margin-top:2px;opacity:.9;white-space:nowrap}
         .snapshot-ratio-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.snapshot-ratio-card{min-width:0;padding:8px 5px;border-radius:12px;background:rgba(255,255,255,.14);text-align:center}.snapshot-ratio-label{font-size:8px;opacity:.72;white-space:nowrap}.snapshot-ratio-value{font-size:15px;font-weight:900;white-space:nowrap;margin-top:2px}
         """)
+        ui.add_css("""
+        .surface-card,.surface-card *,.rounded-xl,.rounded-xl *{min-width:0;box-sizing:border-box}.metric-value{max-width:100%;font-size:clamp(20px,9vw,36px)!important;letter-spacing:-.045em;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:clip}.actual-block-value{max-width:100%;font-size:clamp(7px,2.5vw,10px);letter-spacing:-.04em;text-overflow:clip}.snapshot-ratio-value{max-width:100%;font-size:clamp(11px,4vw,15px);overflow:hidden;text-overflow:clip}
+        @media(max-width:520px){.surface-card{padding-left:14px!important;padding-right:14px!important}.actual-money-box{padding:2px 1px}.actual-block-title{max-width:100%;font-size:8px;overflow-wrap:anywhere}.actual-block-note{max-width:100%;white-space:normal;line-height:1.05}}
+        """)
         return
 
         with ui.card().classes("surface-card w-full q-pa-md q-mb-md"):
@@ -458,6 +462,10 @@ def _render_future_financials_home(selected_month=None):
         .actual-block-value{font-size:12px;font-weight:800;line-height:1.2;margin-top:2px;white-space:nowrap}
         .actual-block-note{font-size:8px;line-height:1.15;margin-top:2px;opacity:.9;white-space:nowrap}
         @media(max-width:520px){.actual-box-map{width:calc(100% + 12px)!important;margin-left:-6px;margin-right:-6px;height:390px}.actual-block-title{font-size:9px}.actual-block-value{font-size:10px}.actual-block-note{font-size:7px}}
+        """)
+        ui.add_css("""
+        .surface-card,.surface-card *{min-width:0;box-sizing:border-box}.actual-block-value{max-width:100%;font-size:clamp(7px,2.7vw,12px);letter-spacing:-.04em;overflow:hidden;text-overflow:clip}.actual-block-title,.actual-block-note{max-width:100%;overflow:hidden}
+        @media(max-width:520px){.surface-card{padding-left:14px!important;padding-right:14px!important}.actual-box-map{width:calc(100% + 8px)!important;margin-left:-4px;margin-right:-4px}.actual-money-box{padding:2px 1px}.actual-block-title{font-size:8px;overflow-wrap:anywhere}.actual-block-value{font-size:clamp(7px,2.4vw,9px)}.actual-block-note{font-size:6px;white-space:normal;line-height:1.05}}
         """)
 
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-lg"):
