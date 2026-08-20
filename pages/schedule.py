@@ -297,16 +297,23 @@ def schedule_page():
               if (!calendar || calendar.dataset.swipeReady) return;
               calendar.dataset.swipeReady = '1';
               let startX = 0;
+              let locked = false;
+              const moveMonth = id => {
+                if (locked) return;
+                locked = true;
+                document.getElementById(id)?.click();
+                setTimeout(() => locked = false, 650);
+              };
               calendar.addEventListener('touchstart', e => startX = e.touches[0].clientX, {passive:true});
               calendar.addEventListener('touchend', e => {
                 const distance = e.changedTouches[0].clientX - startX;
-                if (Math.abs(distance) > 55)
-                  document.getElementById(distance < 0 ? 'next-month-btn' : 'previous-month-btn')?.click();
+                if (Math.abs(distance) > 105)
+                  moveMonth(distance < 0 ? 'next-month-btn' : 'previous-month-btn');
               }, {passive:true});
               calendar.addEventListener('wheel', e => {
-                if (Math.abs(e.deltaX) < 25) return;
+                if (Math.abs(e.deltaX) < 85) return;
                 e.preventDefault();
-                document.getElementById(e.deltaX > 0 ? 'next-month-btn' : 'previous-month-btn')?.click();
+                moveMonth(e.deltaX > 0 ? 'next-month-btn' : 'previous-month-btn');
               }, {passive:false});
             }, 150);
             """)
