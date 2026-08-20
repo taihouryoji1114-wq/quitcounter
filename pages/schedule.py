@@ -63,12 +63,17 @@ def schedule_page():
                 "color=positive").classes("w-full q-mt-xs")
             ui.label("未完了なら翌日に自動で引き継ぎます").classes(
                 "text-[10px] text-grey-6 q-mt-n2")
+            repeat_monthly = ui.switch("毎月同じ日に繰り返す", value=False).props(
+                "color=primary").classes("w-full q-mt-xs")
+            ui.label("31日がない月は、その月の月末日に表示します").classes(
+                "text-[10px] text-grey-6 q-mt-n2")
 
             def add_event():
                 try:
                     schedule.add_event(user_id, title.value, event_date.value, start_time.value,
                                        end_time.value, category.value, note.value,
-                                       event_end_date.value, requires_check.value)
+                                       event_end_date.value, requires_check.value,
+                                       repeat_monthly.value)
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -110,6 +115,8 @@ def schedule_page():
                 "color=positive").classes("w-full q-mt-sm")
             ui.label("チェックしなければ翌日へ自動で引き継ぎます").classes(
                 "text-[10px] text-grey-6 q-mt-n2")
+            detail_repeat_monthly = ui.switch("毎月同じ日に繰り返す", value=False).props(
+                "color=primary").classes("w-full q-mt-xs")
 
             def save_event_detail():
                 item = selected_event["item"]
@@ -118,7 +125,7 @@ def schedule_page():
                 try:
                     updated = schedule.update_event(
                         user_id, item["id"], detail_name.value, detail_note.value,
-                        detail_requires_check.value)
+                        detail_requires_check.value, detail_repeat_monthly.value)
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -154,6 +161,7 @@ def schedule_page():
             detail_time.set_text(time_text or "時間指定なし")
             detail_note.set_value(item.get("note") or "")
             detail_requires_check.set_value(item.get("requires_check", False))
+            detail_repeat_monthly.set_value(item.get("repeat_monthly", False))
             detail_dialog.open()
 
         selected_day = {"date": today.isoformat()}
@@ -193,6 +201,9 @@ def schedule_page():
                             if item.get("carried_from"):
                                 ui.label("前日からの持ち越し").classes(
                                     "text-[9px] text-warning font-bold q-mt-xs")
+                            if item.get("repeat_monthly"):
+                                ui.label("↻ 毎月繰り返し").classes(
+                                    "text-[9px] text-primary font-bold q-mt-xs")
                         if item.get("requires_check", False):
                             ui.checkbox(
                                 value=item.get("completed", False),
@@ -319,6 +330,9 @@ def schedule_page():
                                 time_text += f"–{item['end_time']}"
                             ui.label(f"{date_text}  {time_text}  {item.get('category', '個人')}").classes(
                                 "text-[9px] text-grey-6")
+                            if item.get("repeat_monthly"):
+                                ui.label("↻ 毎月繰り返し").classes(
+                                    "text-[9px] text-primary font-bold")
                             if item.get("note"):
                                 ui.label(item["note"]).classes("schedule-card-note")
                         ui.button(icon="chevron_right", on_click=lambda _, value=item: open_detail(value)).props(

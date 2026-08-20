@@ -70,6 +70,33 @@ class ScheduleManagerTest(unittest.TestCase):
             "user1", item["id"], "買い物", "牛乳", requires_check=True)
         self.assertTrue(updated["requires_check"])
 
+    def test_monthly_event_is_created_on_same_day(self):
+        self.manager.add_event(
+            "user1", "家賃振込", "2026-08-10", requires_check=True,
+            repeat_monthly=True)
+        september = self.manager.events("user1", "2026-09-01", "2026-09-30")
+        self.assertEqual(len(september), 1)
+        self.assertEqual(september[0]["date"], "2026-09-10")
+        self.assertTrue(september[0]["repeat_monthly"])
+        self.assertFalse(september[0]["completed"])
+
+    def test_monthly_event_uses_month_end_when_day_does_not_exist(self):
+        self.manager.add_event(
+            "user1", "月末確認", "2026-01-31", requires_check=True,
+            repeat_monthly=True)
+        february = self.manager.events("user1", "2026-02-01", "2026-02-28")
+        self.assertEqual([item["date"] for item in february], ["2026-02-28"])
+
+    def test_monthly_occurrences_have_independent_completion(self):
+        august = self.manager.add_event(
+            "user1", "請求確認", "2026-08-15", requires_check=True,
+            repeat_monthly=True)
+        september = self.manager.events("user1", "2026-09-01", "2026-09-30")[0]
+        self.manager.set_completed("user1", august["id"], True)
+        values = {item["id"]: item for item in self.manager.events("user1")}
+        self.assertTrue(values[august["id"]]["completed"])
+        self.assertFalse(values[september["id"]]["completed"])
+
     def test_invalid_time_range_is_rejected(self):
         with self.assertRaises(ValueError):
             self.manager.add_event("user1", "予定", "2026-08-20", "18:00", "10:00")
