@@ -7,25 +7,27 @@ from core.theme import Theme
 GAME_HTML = r'''
 <div id="ge-app" class="ge-app">
   <section id="ge-home" class="ge-home">
-    <div class="ge-hero"><small>TACTICAL TERRITORY BATTLE</small><h1>GRID<br><em>EMPIRE</em></h1><p>島を奪い、敵の首都を制圧せよ。</p></div>
+    <div class="ge-hero"><small>JAPAN UNIFICATION CAMPAIGN</small><h1>日本<br><em>統一</em></h1><p>葛飾区から始まり、日本全国を統一せよ。</p></div>
     <div class="ge-player-select"><span>参加勢力</span><button class="active" data-players="2">2</button><button data-players="3">3</button><button data-players="4">4</button></div>
     <div class="ge-stage-title"><b>ステージを選択</b><span>STAGE SELECT</span></div>
     <div class="ge-stages">
-      <button data-stage="0"><i>01</i><div><b>はじまりの島</b><span>小さな島で基本を覚える</span></div><strong>かんたん</strong></button>
-      <button data-stage="1"><i>02</i><div><b>分断海峡</b><span>狭い道をどう突破するか</span></div><strong>ふつう</strong></button>
-      <button data-stage="2"><i>03</i><div><b>決戦大陸</b><span>強大な敵との全面戦争</span></div><strong>むずかしい</strong></button>
+      <button data-stage="0"><i>01</i><div><b>東京23区編</b><span>葛飾区を本陣に、23区を統一する</span></div><strong>開戦</strong></button>
+      <button class="locked"><i>02</i><div><b>東京都編</b><span>23区から多摩地域へ進出</span></div><strong>準備中</strong></button>
+      <button class="locked"><i>03</i><div><b>関東編</b><span>東京を足場に関東を制圧</span></div><strong>準備中</strong></button>
+      <button class="locked"><i>04</i><div><b>日本統一編</b><span>47都道府県を巡る全国戦</span></div><strong>準備中</strong></button>
     </div>
-    <div class="ge-level-soon"><span>COMMANDER LEVEL</span><b>レベル機能は今後追加予定</b></div>
+    <div class="ge-level-soon"><span>CAMPAIGN ROUTE</span><b>葛飾区 → 東京23区 → 東京都 → 関東 → 日本全国</b></div>
   </section>
   <section id="ge-game" class="ge-game">
-    <div class="ge-top"><button id="ge-home-button" class="ge-back">‹</button><div><b>GRID EMPIRE</b><small id="ge-stage-name">領土戦線</small></div><button id="ge-restart" class="ge-restart">↻</button></div>
+    <div class="ge-top"><button id="ge-home-button" class="ge-back">‹</button><div><b>日本統一</b><small id="ge-stage-name">東京23区編</small></div><button id="ge-restart" class="ge-restart">↻</button></div>
     <div class="ge-score"><div class="blue"><span>自軍</span><b id="ge-blue">0</b></div><div class="turn"><b id="ge-state">戦闘開始</b><small id="ge-hint">自分のマスを選択</small></div><div class="red"><span>敵勢力</span><b id="ge-red">0</b></div></div>
     <div id="ge-factions" class="ge-factions"></div>
     <div class="ge-force"><span>出撃兵力</span><button data-ratio=".3">30%</button><button class="active" data-ratio=".5">50%</button><button data-ratio=".7">70%</button><button data-ratio="1">全軍</button></div>
     <div class="ge-board-wrap"><div id="ge-board" class="ge-board"></div></div>
     <div class="ge-legend"><span><i class="blue"></i>自軍</span><span><i class="red"></i>赤軍</span><span><i class="yellow"></i>黄軍</span><span><i class="purple"></i>紫軍</span><span><i class="neutral"></i>未占領</span><span>★ 首都</span></div>
-    <div class="ge-terrain-note"><span>▲ 山：防御＋50%</span><span>◆ 都市：成長＋1</span><span>♣ 森：敵兵力を隠す</span><span>⚓ 港：海路で接続</span><span>⚠ 補給切れ：成長停止</span></div>
-    <div class="ge-help"><b>逆転の鍵</b><span>補給線を切る・2方向から挟撃する・山で守る・手薄な★首都を奇襲する。兵力差だけでは勝敗は決まりません。</span></div>
+    <div class="ge-terrain-note"><span>◆ 都心：兵力成長＋1</span><span>▰ 大区：防御＋25%</span><span>⚠ 補給切れ：成長停止</span><span>★ 本陣を奪えば勢力滅亡</span></div>
+    <div class="ge-help"><b>葛飾から統一</b><span>隣接する区へ進軍。補給線・挟撃・手薄な本陣への奇襲を使えば、兵力差を覆せます。</span></div>
+    <div class="ge-map-credit">地図：国土交通省 国土数値情報（2025年版、CC BY 4.0）を加工</div>
   </section>
   <div id="ge-modal" class="ge-modal"><div><b id="ge-result"></b><span id="ge-result-sub"></span><button id="ge-again">もう一度</button><button id="ge-stage-select" class="sub">ステージ選択</button></div></div>
   <div class="ge-rotate"><div><span>↻</span><b>端末を横向きにしてください</b><small>GRID EMPIREは横画面専用です</small></div></div>
@@ -52,6 +54,7 @@ body{margin:0;background:#081525!important;color:#fff;overscroll-behavior:none}.
 .ge-board-wrap{max-width:980px;overflow:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;background:linear-gradient(#061522,#0a2433);padding:10px}.ge-board{min-width:1120px;min-height:728px;box-shadow:inset 0 0 80px #00111f}.ge-region polygon{filter:drop-shadow(0 4px 3px #00101899)}.ge-region.neutral polygon{fill:url(#land-neutral)}.ge-region.blue polygon{fill:url(#land-blue)}.ge-region.red polygon{fill:url(#land-red)}.ge-region.yellow polygon{fill:url(#land-yellow)}.ge-region.purple polygon{fill:url(#land-purple)}.ge-region.unsupplied polygon{filter:saturate(.28) brightness(.68);stroke:#ff9a70;stroke-dasharray:8 6}.ge-supply{fill:#ffae7d;font-size:11px;font-weight:900;text-anchor:middle;pointer-events:none}.ge-sea-road{stroke:#8bdfffaa;stroke-width:4;stroke-linecap:round;stroke-dasharray:3 12;pointer-events:none}.ge-region.fog .ge-region-label{fill:#d6dde2}.ge-region.fog circle{fill:#17232ae8}.ge-road{stroke:#d8c89eaa;stroke-width:4;stroke-dasharray:none;filter:drop-shadow(0 1px 1px #000)}.ge-place{font-size:11px;fill:#f0eee1;text-shadow:0 2px 3px #000}.ge-map-bg{fill:url(#ocean-real)}.ge-soldier{pointer-events:none;filter:drop-shadow(0 2px 2px #000)}.ge-soldier-body{stroke:#20242a;stroke-width:3;stroke-linecap:round}.ge-soldier-head{fill:#d3b28a;stroke:#15191d}.ge-soldier-helmet{fill:#425341}.ge-soldier-weapon{stroke:#171b1f;stroke-width:2}.ge-unit-flag{stroke:#20242a;stroke-width:2}.ge-unit-flag.blue{fill:#39aef5}.ge-unit-flag.red{fill:#eb5d64}.ge-unit-flag.yellow{fill:#e6c23f}.ge-unit-flag.purple{fill:#a86cda}.ge-move-unit{animation:geunitbob .38s ease-in-out infinite alternate}.ge-terrain-note{max-width:940px;margin:8px auto 0;display:flex;gap:6px;overflow:auto;padding-bottom:2px}.ge-terrain-note span{white-space:nowrap;font-size:9px;color:#94a8ba;border:1px solid #29435f;background:#10233a;border-radius:8px;padding:5px 7px}@keyframes geunitbob{to{transform:translateY(-2px)}}
 .ge-board-wrap{display:block;width:calc(100vw - 24px);max-width:1180px;overflow-x:scroll!important;overflow-y:hidden!important;touch-action:pan-x!important;overscroll-behavior-x:contain;background:#061522;padding:10px}.ge-board{width:1500px!important;min-width:1500px!important;max-width:none!important;height:844px;min-height:844px;background:url('/static/grid_empire_real_map_v1.png') center/cover no-repeat}.ge-map{width:1500px!important;min-width:1500px!important;height:844px!important;touch-action:pan-x!important}.ge-map-bg{fill:transparent}.ge-region{touch-action:pan-x!important}.ge-region polygon{fill-opacity:.32;filter:drop-shadow(0 3px 2px #00101888)}.ge-region.selected polygon,.ge-region.target polygon{fill-opacity:.54}.ge-road{stroke:#f1dfac;stroke-width:2;stroke-dasharray:5 11;opacity:.12;filter:none}.ge-sea-road{opacity:.18}.ge-map>rect:nth-of-type(2){opacity:0}
 .ge-rotate{display:none;position:fixed;inset:0;z-index:120;background:radial-gradient(circle at 50% 25%,#173a5d,#06111f 70%);align-items:center;justify-content:center;text-align:center}.ge-rotate span,.ge-rotate b,.ge-rotate small{display:block}.ge-rotate span{font-size:64px;color:#54baff;animation:gerotate 1.5s ease-in-out infinite}.ge-rotate b{font-size:20px;margin-top:18px}.ge-rotate small{color:#8fa5b9;margin-top:7px}@keyframes gerotate{50%{transform:rotate(90deg)}}
+.ge-stages button.locked{opacity:.48;cursor:default}.ge-stages button.locked:active{transform:none;filter:none}.ge-map-credit{max-width:940px;margin:8px auto 0;text-align:center;color:#667d91;font-size:8px}.ge-japan-map{width:100%!important;min-width:1180px!important;height:auto!important;background:#09263b!important}.ge-japan-map .ge-region path{stroke:#d9eadb99;stroke-width:1.3;vector-effect:non-scaling-stroke;transition:filter .12s,stroke .12s}.ge-japan-map .ge-region.neutral path{fill:url(#land-neutral)}.ge-japan-map .ge-region.blue path{fill:url(#land-blue)}.ge-japan-map .ge-region.red path{fill:url(#land-red)}.ge-japan-map .ge-region.yellow path{fill:url(#land-yellow)}.ge-japan-map .ge-region.purple path{fill:url(#land-purple)}.ge-japan-map .ge-region.selected path{stroke:#fff;stroke-width:5;filter:brightness(1.35)}.ge-japan-map .ge-region.target path{stroke:#ffe16b;stroke-width:4;filter:brightness(1.28)}.ge-japan-map .ge-place{font-size:13px;paint-order:stroke;stroke:#07111d;stroke-width:3}.ge-japan-map .ge-region-label{font-size:16px}
 @media (orientation:portrait) and (max-width:900px){body.ge-playing .ge-rotate{display:flex}}
 @media (orientation:landscape) and (max-height:650px){.ge-app{padding-top:0}.ge-top{height:44px}.ge-top b{font-size:14px}.ge-score{position:absolute;z-index:8;top:48px;left:14px;width:310px;margin:0}.ge-score>div{padding:5px 8px}.ge-score b{font-size:14px}.ge-factions{position:absolute;z-index:8;top:102px;left:18px;margin:0}.ge-force{position:absolute;z-index:8;top:48px;right:18px;width:350px;margin:0;background:#081525dd;padding:5px;border-radius:12px}.ge-board-wrap{width:calc(100vw - 18px);max-width:none;height:calc(100dvh - 58px);box-sizing:border-box;margin:4px auto 0}.ge-board,.ge-map{height:calc(100dvh - 76px)!important;min-height:330px!important;width:calc((100dvh - 76px)*1.777)!important;min-width:1100px!important}.ge-legend,.ge-terrain-note,.ge-help{display:none}}
 </style>
@@ -153,4 +156,4 @@ def grid_empire_page():
     Theme.page('GRID EMPIRE', app_name='grid-empire')
     ui.add_head_html(GAME_CSS)
     ui.html(GAME_HTML, sanitize=False)
-    ui.add_body_html(MAP_GAME_JS)
+    ui.add_body_html('<script src="/static/japan_unification.js?v=2"></script>')
