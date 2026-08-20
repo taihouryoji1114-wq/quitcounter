@@ -29,7 +29,7 @@ APP_LOGIN_PATHS = {
     "portal": "/login", "habitory": "/habitory/login",
     "store_ops": "/store-ops/login", "future_financials": "/mirai-kessan/login",
     "schedule": "/schedule/login",
-    "grid_empire": "/login",
+    "grid_empire": "/grid-empire/login",
 }
 
 

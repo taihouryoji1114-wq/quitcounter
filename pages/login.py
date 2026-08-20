@@ -68,3 +68,9 @@ def future_financials_login():
 @ui.page("/schedule/login")
 def schedule_login():
     login_screen("schedule", "My Schedule", "/schedule", "自分だけの予定を開く")
+
+
+@ui.page("/grid-empire/login")
+def grid_empire_login():
+    login_screen("grid_empire", "GRID EMPIRE", "/grid-empire",
+                 "領土戦線へ出撃する", app_name="grid-empire")
