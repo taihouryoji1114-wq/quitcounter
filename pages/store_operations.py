@@ -29,6 +29,7 @@ def store_operations_page():
     today = today_jst().isoformat()
     hygiene = store_ops.hygiene_record(today)
     prep_items = store_ops.prep_items(today)
+    previous_board = store_ops.previous_day_board(today)
     handovers = store_ops.handovers(today)
     handover_checks = store_ops.handover_checks(today)
     incomplete_work = sum(value["status"] != "done" for value in prep_items)
@@ -221,11 +222,28 @@ def store_operations_page():
         with ui.card().classes("store-hero w-full q-pa-lg text-white"):
             with ui.row().classes("w-full items-start justify-between no-wrap"):
                 with ui.column().classes("gap-0"):
-                    ui.label("今、補充が必要").classes("text-[10px] opacity-75")
-                    ui.label(f"{len(orders)}品").classes("text-4xl font-black q-mt-xs")
-                    ui.label("気づいた人が在庫状態を押すだけ").classes(
-                        "text-[9px] opacity-75 q-mt-sm")
-                ui.icon("inventory_2").classes("text-4xl opacity-70")
+                    ui.label("前日から今日へ").classes("text-[10px] opacity-75")
+                    ui.label("引き継ぎボード").classes("text-2xl font-black q-mt-xs")
+                    previous_label = previous_board["previous_date"][5:].replace("-", "/")
+                    ui.label(f"{previous_label}の未完了・未確認").classes(
+                        "text-[9px] opacity-75 q-mt-xs")
+                ui.icon("assignment_late").classes("text-4xl opacity-70")
+            if previous_board["items"]:
+                with ui.column().classes("handover-board-list w-full gap-1 q-mt-md"):
+                    for board_item in previous_board["items"]:
+                        with ui.row().classes("handover-board-item w-full items-center no-wrap"):
+                            ui.label(board_item["area"]).classes("handover-board-area")
+                            ui.label(board_item["name"]).classes("text-xs font-bold grow")
+                            if board_item["kind"] == "note":
+                                ui.button("確認", on_click=lambda _, item_id=board_item["id"],
+                                          record_date=previous_board["previous_date"]: (
+                                              store_ops.confirm_handover(record_date, item_id),
+                                              reload("引き継ぎを確認済みにしました")
+                                          )).props("flat dense no-caps").classes(
+                                              "handover-board-confirm")
+            else:
+                ui.label("前日からのやり残しはありません").classes(
+                    "handover-board-empty q-mt-md")
             if alert_count:
                 ui.label(f"未完了・未入力が {alert_count}件あります").classes(
                     "store-alert q-mt-md")
@@ -293,7 +311,13 @@ def store_operations_page():
                                   value=False).classes("inventory-category w-full"):
                     for item in category_items:
                         with ui.row().classes("inventory-row w-full items-center no-wrap"):
-                            ui.label(item["name"]).classes("text-xs font-black inventory-name")
+                            with ui.column().classes("gap-0 inventory-name"):
+                                ui.label(item["name"]).classes("text-xs font-black")
+                                checked_at = str(item.get("last_inventory_check_at", ""))
+                                checked_label = (checked_at[:10][5:].replace("-", "/")
+                                                 if checked_at else "未確認")
+                                ui.label(f"最終確認 {checked_label}").classes(
+                                    "text-[8px] text-grey-6")
                             if item.get("tracking_mode") == "count":
                                 count_input = ui.number(value=item.get("current_stock"), suffix=item.get("unit", "個"),
                                                         step=.1).props("outlined dense inputmode=decimal").classes(
@@ -351,7 +375,7 @@ def store_operations_page():
             ui.button("今日の記録を保存", icon="save", on_click=save_hygiene).classes(
                 "w-full q-mt-md")
 
-        with ui.expansion("今日の作業・仕込み", icon="soup_kitchen", value=False).classes(
+        with ui.expansion("今日の仕込みチェック表", icon="soup_kitchen", value=False).classes(
             "store-panel prep-panel w-full q-mt-sm"):
             if not prep_items:
                 ui.label("設定から仕込み項目を登録できます").classes(
@@ -521,6 +545,7 @@ def store_operations_page():
 
         ui.add_css("""
         .store-login-qr{width:210px;height:210px;border-radius:16px;background:#fff;padding:10px;border:1px solid #E1E9E4}
+        .handover-board-list{max-height:240px;overflow-y:auto}.handover-board-item{padding:9px 10px;border-radius:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}.handover-board-area{min-width:52px;padding:4px 6px;border-radius:8px;background:rgba(255,255,255,.18);font-size:8px;font-weight:900;text-align:center;margin-right:8px}.handover-board-confirm{min-height:30px!important;color:#fff!important;font-size:9px!important}.handover-board-empty{padding:12px;border-radius:13px;background:rgba(255,255,255,.12);font-size:11px;font-weight:800;text-align:center}
         .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.settings-item{padding:8px 4px;border-bottom:1px solid #EDF1EE}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){
           .app-shell{width:min(100%,1180px)!important;padding:38px 36px 68px!important}

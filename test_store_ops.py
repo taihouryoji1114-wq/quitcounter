@@ -143,6 +143,20 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(len(carried), 1)
         self.assertTrue(carried[0]["carried_over"])
 
+    def test_previous_day_board_contains_unfinished_prep_and_unconfirmed_note(self):
+        prep = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.set_prep_status("2026-08-19", prep["id"], "incomplete")
+        self.manager.add_handover("2026-08-19", "ポン酢を補充", "ホール")
+        board = self.manager.previous_day_board("2026-08-20")
+        self.assertEqual(board["previous_date"], "2026-08-19")
+        self.assertEqual({item["name"] for item in board["items"]},
+                         {"唐揚げ", "ポン酢を補充"})
+
+    def test_inventory_item_exposes_last_counted_date(self):
+        item = self.manager.add_item("ラップ", "備品", "本", "", "", "count")
+        self.manager.set_count(item["id"], 3)
+        self.assertTrue(self.manager.items()[0]["last_inventory_check_at"])
+
     def test_kitchen_handover_category_is_saved(self):
         item = self.manager.add_handover_template("出汁を確認", "厨房", "ちゃんこ")
         self.assertEqual(item["category"], "ちゃんこ")

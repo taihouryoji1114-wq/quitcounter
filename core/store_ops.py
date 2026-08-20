@@ -24,6 +24,17 @@ class StoreOperationsManager:
     def items(self, active_only=True):
         values = self._data_manager.data.get("store_inventory_items", [])
         items = [dict(value) for value in values if isinstance(value, dict)]
+        last_checks = {}
+        for event in self._data_manager.data.get("store_inventory_events", []):
+            if not isinstance(event, dict) or event.get("type") not in {"count", "status"}:
+                continue
+            item_id = event.get("item_id")
+            checked_at = str(event.get("at", ""))
+            if item_id and checked_at > last_checks.get(item_id, ""):
+                last_checks[item_id] = checked_at
+        for item in items:
+            item["last_inventory_check_at"] = (
+                item.get("last_inventory_check_at") or last_checks.get(item.get("id"), ""))
         if active_only:
             items = [value for value in items if value.get("active", True)]
         return sorted(items, key=lambda value: (value.get("category", ""), value.get("name", "")))
@@ -65,6 +76,7 @@ class StoreOperationsManager:
         if number is None:
             raise ValueError("現在庫数を入力してください。")
         item["current_stock"] = number
+        item["last_inventory_check_at"] = datetime.now().isoformat(timespec="seconds")
         item["status"] = self._status_for_count(number, item.get("reorder_point"))
         item["updated_at"] = datetime.now().isoformat(timespec="seconds")
         if item["status"] == "enough":
@@ -114,6 +126,7 @@ class StoreOperationsManager:
             raise ValueError("在庫状態が正しくありません。")
         item = self._find(item_id)
         item["status"] = status
+        item["last_inventory_check_at"] = datetime.now().isoformat(timespec="seconds")
         item["updated_at"] = datetime.now().isoformat(timespec="seconds")
         if status == "enough":
             self._data_manager.data.setdefault("store_active_orders", {}).pop(item_id, None)
@@ -274,6 +287,25 @@ class StoreOperationsManager:
                               "status": states.get(carry_id, "incomplete"), "carried_over": True,
                               "source": "handover"})
         return result
+
+    def previous_day_board(self, record_date):
+        """前日から今日へ引き継がれた作業と未確認メモを返す。"""
+        day = self._date(record_date)
+        previous_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
+        items = []
+        for prep in self.prep_items(record_date):
+            if prep.get("carried_over"):
+                items.append({
+                    "id": prep.get("id"), "kind": "prep", "name": prep.get("name", "仕込み"),
+                    "area": prep.get("area", "厨房"), "from_date": previous_date,
+                })
+        for note in self.handovers(previous_date):
+            if not note.get("confirmed", False):
+                items.append({
+                    "id": note.get("id"), "kind": "note", "name": note.get("message", "引き継ぎ"),
+                    "area": note.get("area", "厨房"), "from_date": previous_date,
+                })
+        return {"previous_date": previous_date, "items": items}
 
     def set_prep_status(self, record_date, item_id, status):
         self._date(record_date)
