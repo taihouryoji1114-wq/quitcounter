@@ -23,6 +23,8 @@ import pages.financial_analysis
 import pages.consulting
 import pages.staffing
 import pages.store_operations
+import pages.shift_submission
+import pages.purchase_list
 import pages.schedule
 import pages.grid_empire
 import pages.attendance

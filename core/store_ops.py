@@ -215,6 +215,33 @@ class StoreOperationsManager:
         self._event("received", item)
         self._data_manager.save()
 
+    def purchase_quantities(self):
+        """Return the owner's current purchase plan by inventory item."""
+        stored = self._data_manager.data.get("store_purchase_quantities", {})
+        if not isinstance(stored, dict):
+            stored = {}
+        return {item["id"]: stored.get(item["id"]) for item in self.items()}
+
+    def save_purchase_quantities(self, quantities):
+        """Replace the purchase plan; zero/blank values remove an item from the list."""
+        cleaned = {}
+        for item_id, value in (quantities or {}).items():
+            item = self._find(item_id)
+            number = self._optional_number(value, f"{item['name']}の仕入れ数")
+            if number is None or number == 0:
+                continue
+            if number < 0:
+                raise ValueError("仕入れ数は0以上で入力してください。")
+            cleaned[item_id] = number
+        self._data_manager.data["store_purchase_quantities"] = cleaned
+        self._data_manager.save()
+        return len(cleaned)
+
+    def purchase_list(self):
+        quantities = self.purchase_quantities()
+        return [{**item, "purchase_quantity": quantities.get(item["id"])}
+                for item in self.items() if quantities.get(item["id"]) not in (None, 0)]
+
     def daily_order_checks(self, record_date):
         self._date(record_date)
         stored = self._data_manager.data.get("store_daily_order_checks", {}).get(record_date, {})
@@ -384,7 +411,7 @@ class StoreOperationsManager:
         previous_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
         items = []
         for prep in self.prep_items(record_date):
-            if prep.get("carried_over"):
+            if prep.get("carried_over") and prep.get("status") != "done":
                 items.append({
                     "id": prep.get("id"), "kind": "prep", "name": prep.get("name", "仕込み"),
                     "area": prep.get("area", "厨房"), "from_date": previous_date,
@@ -419,6 +446,15 @@ class StoreOperationsManager:
         if not any(value["id"] == item_id for value in self.prep_items(record_date)):
             raise ValueError("仕込み項目が見つかりません。")
         self._data_manager.data.setdefault("store_prep_records", {}).setdefault(record_date, {})[item_id] = status
+        self._data_manager.save()
+
+    def reset_prep_statuses(self, record_date):
+        """Reset every visible prep item for the day to incomplete."""
+        self._date(record_date)
+        records = self._data_manager.data.setdefault("store_prep_records", {}).setdefault(
+            record_date, {})
+        for item in self.prep_items(record_date):
+            records[item["id"]] = "incomplete"
         self._data_manager.save()
 
     def handover_templates(self):

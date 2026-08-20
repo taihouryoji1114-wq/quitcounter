@@ -175,6 +175,31 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual({item["name"] for item in board["items"]},
                          {"唐揚げ", "ポン酢を補充"})
 
+    def test_completed_carried_prep_disappears_from_board(self):
+        prep = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.set_prep_status("2026-08-19", prep["id"], "incomplete")
+        self.assertTrue(self.manager.previous_day_board("2026-08-20")["items"])
+        self.manager.set_prep_status("2026-08-20", prep["id"], "done")
+        self.assertFalse(self.manager.previous_day_board("2026-08-20")["items"])
+
+    def test_prep_statuses_can_be_reset_for_the_day(self):
+        first = self.manager.add_prep_template("唐揚げ", "厨房")
+        second = self.manager.add_prep_template("つくね", "厨房")
+        self.manager.set_prep_status("2026-08-20", first["id"], "done")
+        self.manager.set_prep_status("2026-08-20", second["id"], "done")
+        self.manager.reset_prep_statuses("2026-08-20")
+        self.assertEqual({item["status"] for item in self.manager.prep_items("2026-08-20")},
+                         {"incomplete"})
+
+    def test_purchase_plan_is_saved_and_blank_values_are_removed(self):
+        first = self.manager.add_item("白菜", "野菜仕入れ", "個")
+        second = self.manager.add_item("ラップ", "備品", "本")
+        self.assertEqual(self.manager.save_purchase_quantities(
+            {first["id"]: 3, second["id"]: ""}), 1)
+        purchase_list = self.manager.purchase_list()
+        self.assertEqual([(item["name"], item["purchase_quantity"])
+                          for item in purchase_list], [("白菜", 3.0)])
+
     def test_previous_day_board_contains_only_ordered_destinations(self):
         self.manager.set_daily_order_check("2026-08-19", "ミクリード", True)
         board = self.manager.previous_day_board("2026-08-20")
