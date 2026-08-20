@@ -86,6 +86,41 @@ class StoreOperationsManager:
         self._data_manager.save()
         return dict(item)
 
+    def save_inventory_check(self, updates):
+        """在庫確認画面の複数項目を、検証後に一度だけ保存する。"""
+        prepared = []
+        for update in updates or []:
+            item = self._find(update.get("item_id"))
+            if item.get("tracking_mode") == "count":
+                number = self._optional_number(update.get("count"), "現在庫数")
+                if number is None:
+                    raise ValueError(f"{item['name']}の在庫数を入力してください。")
+                prepared.append((item, "count", number))
+            else:
+                status = update.get("status")
+                if status not in self.STATUSES:
+                    raise ValueError(f"{item['name']}の在庫状態を選んでください。")
+                prepared.append((item, "status", status))
+
+        checked_at = datetime.now().isoformat(timespec="seconds")
+        for item, kind, value in prepared:
+            if kind == "count":
+                item["current_stock"] = value
+                item["status"] = self._status_for_count(value, item.get("reorder_point"))
+                extra = {"count": value, "status": item["status"]}
+            else:
+                item["status"] = value
+                extra = {"status": value}
+            item["last_inventory_check_at"] = checked_at
+            item["updated_at"] = checked_at
+            if item["status"] == "enough":
+                self._data_manager.data.setdefault("store_active_orders", {}).pop(
+                    item["id"], None)
+            self._event(kind, item, **extra)
+        if prepared:
+            self._data_manager.save()
+        return len(prepared)
+
     def update_count_settings(self, item_id, unit, required_stock=None,
                               reorder_point=None, current_stock=None):
         """既存商品を数量管理へ変更する。"""

@@ -185,6 +185,26 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.set_count(item["id"], 3)
         self.assertTrue(self.manager.items()[0]["last_inventory_check_at"])
 
+    def test_inventory_check_updates_multiple_items_with_one_save(self):
+        counted = self.manager.add_item("ラップ", "備品", "本", "", 8, "count", 3, 5)
+        simple = self.manager.add_item("醤油", "調味料")
+        save_calls = []
+        original_save = self.data.save
+        self.data.save = lambda: save_calls.append(True)
+        try:
+            saved = self.manager.save_inventory_check([
+                {"item_id": counted["id"], "count": 2},
+                {"item_id": simple["id"], "status": "out"},
+            ])
+        finally:
+            self.data.save = original_save
+        values = {item["name"]: item for item in self.manager.items()}
+        self.assertEqual(saved, 2)
+        self.assertEqual(len(save_calls), 1)
+        self.assertEqual(values["ラップ"]["current_stock"], 2)
+        self.assertEqual(values["ラップ"]["status"], "low")
+        self.assertEqual(values["醤油"]["status"], "out")
+
     def test_kitchen_handover_category_is_saved(self):
         item = self.manager.add_handover_template("出汁を確認", "厨房", "ちゃんこ")
         self.assertEqual(item["category"], "ちゃんこ")

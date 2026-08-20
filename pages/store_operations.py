@@ -321,6 +321,7 @@ def store_operations_page():
 
         with ui.expansion("在庫を確認", icon="checklist", value=False).classes(
             "store-panel inventory-panel w-full q-mt-sm"):
+            inventory_fields = []
             if not items:
                 ui.label("最初の商品を登録してください").classes("text-sm text-grey-6 q-pa-md")
             category_aliases = {"食材": "野菜仕入れ", "消耗品": "備品"}
@@ -347,17 +348,32 @@ def store_operations_page():
                                 count_input = ui.number(value=item.get("current_stock"), suffix=item.get("unit", "個"),
                                                         step=.1).props("outlined dense inputmode=decimal").classes(
                                                             "count-input")
-                                ui.button(icon="save", on_click=lambda _, item_id=item["id"], field=count_input: (
-                                    store_ops.set_count(item_id, field.value), reload("在庫数を更新しました")
-                                )).props("flat round dense")
+                                inventory_fields.append((item["id"], "count", count_input))
                             else:
-                                for status, label in (("enough", "十分"), ("low", "発注ライン"),
-                                                      ("out", "在庫切れ")):
-                                    active = item["status"] == status
-                                    ui.button(label, on_click=lambda _, item_id=item["id"], value=status: (
-                                        store_ops.set_status(item_id, value), reload()
-                                    )).props("unelevated dense no-caps").classes(
-                                        f"stock-button {'active-' + status if active else ''}")
+                                status_input = ui.toggle(
+                                    {"enough": "十分", "low": "発注ライン", "out": "在庫切れ"},
+                                    value=item.get("status", "enough"),
+                                ).props("unelevated dense no-caps").classes("inventory-status-toggle")
+                                inventory_fields.append((item["id"], "status", status_input))
+
+            if items:
+                def save_inventory():
+                    updates = []
+                    for item_id, kind, field in inventory_fields:
+                        if kind == "count":
+                            if field.value not in (None, ""):
+                                updates.append({"item_id": item_id, "count": field.value})
+                        else:
+                            updates.append({"item_id": item_id, "status": field.value})
+                    try:
+                        saved = store_ops.save_inventory_check(updates)
+                    except ValueError as error:
+                        ui.notify(str(error), type="negative")
+                        return
+                    reload(f"在庫確認をまとめて保存しました（{saved}品）")
+
+                ui.button("入力した在庫をまとめて保存", icon="save", on_click=save_inventory).classes(
+                    "inventory-save-all w-full q-mt-md")
 
         with ui.expansion("今日の温度・衛生チェック", icon="health_and_safety",
                           value=False).classes(
@@ -572,7 +588,7 @@ def store_operations_page():
         .store-login-qr{width:210px;height:210px;border-radius:16px;background:#fff;padding:10px;border:1px solid #E1E9E4}
         .daily-order-check{padding:10px 12px;border-radius:13px;background:#F5F7F5;margin-bottom:6px}.daily-order-check .q-checkbox__label{font-size:13px;font-weight:800}.order-request-row{padding:10px 6px;border-bottom:1px solid #EDF1EE}.order-request-row.completed{opacity:.5}.order-request-row.completed .text-xs{text-decoration:line-through}
         .handover-board-list{max-height:240px;overflow-y:auto}.handover-board-item{padding:9px 10px;border-radius:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}.handover-board-item.ordered{background:rgba(244,202,100,.2);border-color:rgba(255,225,145,.25)}.handover-board-area{min-width:52px;padding:4px 6px;border-radius:8px;background:rgba(255,255,255,.18);font-size:8px;font-weight:900;text-align:center;margin-right:8px}.handover-board-confirm{min-height:30px!important;color:#fff!important;font-size:9px!important}.handover-board-empty{padding:12px;border-radius:13px;background:rgba(255,255,255,.12);font-size:11px;font-weight:800;text-align:center}
-        .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.settings-item{padding:8px 4px;border-bottom:1px solid #EDF1EE}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
+        .store-dialog{width:min(92vw,440px)!important;border-radius:24px!important}.store-hero{border:0!important;border-radius:27px!important;background:linear-gradient(145deg,#173D30,#3D755D 65%,#C18A45 145%)!important;box-shadow:0 16px 38px rgba(26,65,48,.22)!important}.store-hero-button{background:rgba(255,255,255,.94)!important;color:#285941!important;border-radius:13px!important}.store-alert{font-size:11px;font-weight:900;color:#FFF3D5}.alert-chip{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.15);font-size:8px;font-weight:800}.store-panel{border-radius:19px!important;background:#fff!important;border:1px solid #E1E9E4!important}.store-panel .q-item{min-height:52px!important}.order-card,.handover-card{border-radius:16px!important;border:1px solid #E4EAE6!important;box-shadow:none!important}.stock-pill{padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;white-space:nowrap}.stock-out{background:#FBE4E4;color:#A43D45}.stock-low{background:#FFF0CE;color:#966117}.category-title{font-size:10px;font-weight:900;color:#527060;padding:13px 4px 5px}.inventory-category,.handover-category{border-bottom:1px solid #EDF1EE}.inventory-category .q-item,.handover-category .q-item{min-height:46px!important}.handover-check-row{gap:4px}.carry-button{font-size:9px!important;white-space:nowrap}.settings-item{padding:8px 4px;border-bottom:1px solid #EDF1EE}.inventory-row{gap:5px;padding:8px 2px;border-bottom:1px solid #EDF1EE}.inventory-name{flex:1;min-width:70px}.stock-button,.prep-button{min-width:45px!important;border-radius:11px!important;background:#F2F4F3!important;color:#66726C!important;font-size:9px!important}.active-enough,.active-prep-done{background:#DFF2E7!important;color:#267149!important}.active-low{background:#FFF0CE!important;color:#966117!important}.active-out{background:#FBE2E2!important;color:#A43D45!important}.active-prep-incomplete{background:#E9ECEA!important;color:#526059!important}.count-input{width:110px}.inventory-status-toggle{border-radius:11px!important;overflow:hidden;font-size:9px!important}.inventory-save-all{background:#2F7457!important;color:#fff!important;border-radius:13px!important;font-weight:900!important}.prep-area{width:105px}.temperature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.temperature-grid .q-field__label{font-size:9px!important}.temperature-group-label{font-size:9px;font-weight:800;color:#718078;margin:8px 0 4px}.hygiene-check{padding:4px 7px;border-radius:11px;background:#F5F7F5;margin-bottom:4px}.hygiene-check .q-checkbox__label{font-size:10px}.future-card{border-radius:18px!important;background:linear-gradient(145deg,#F0F6F2,#FFF8EA)!important;border:1px solid #E0E9E3!important;box-shadow:none!important}
         @media (min-width:700px){
           .app-shell{width:min(100%,1180px)!important;padding:38px 36px 68px!important}
           .app-shell>div:last-child{display:grid!important;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);column-gap:18px;align-items:start}
