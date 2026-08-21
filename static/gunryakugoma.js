@@ -30,7 +30,7 @@
     town: { name: '城下町', cost: 3800, hp: 1800, money: 1000, note:'毎ターン1,000両' },
     castle: { name: '城', cost: 3800, hp: 5000, money: 1000, food: 1600, buildable:false },
   };
-  let state,profile=loadProfile(),selectedProvince=null;
+  let state,profileNeedsUpload=false,profile=loadProfile(),selectedProvince=null;
   const $ = id => document.getElementById(id);
   const pos = (r, c) => r * COLS + c;
   const rc = p => [Math.floor(p / COLS), p % COLS];
@@ -42,8 +42,8 @@
   const buildingAt = p => state.buildings.find(b => b.pos === p);
   const terrainAt = p => state.terrain[p] || 'plain';
   function initialTerritory(){const territory={};for(let r=9;r<ROWS;r++)for(let c=0;c<5;c++)territory[pos(r,c)]='player';for(let r=0;r<3;r++)for(let c=13;c<COLS;c++)territory[pos(r,c)]='enemy';return territory;}
-  function loadProfile(){try{const saved={...{wins:0,territories:1,level:1,xp:0,command:'cavalry'},...JSON.parse(localStorage.getItem('gunryaku_empire')||'{}')};if(!Array.isArray(saved.conquered))saved.conquered=PROVINCES.slice(0,Math.max(1,Math.min(PROVINCES.length,saved.territories||1))).map(p=>p.id);saved.territories=saved.conquered.length;return saved;}catch{return {wins:0,territories:1,level:1,xp:0,command:'cavalry',conquered:['katsushika']};}}
-  function saveProfile(){localStorage.setItem('gunryaku_empire',JSON.stringify(profile));renderProfile();}
+  function loadProfile(){try{const local=JSON.parse(localStorage.getItem('gunryaku_empire')||'{}'),remote=window.GUNRYAKU_SERVER_PROFILE||{},hasRemote=Boolean(remote.updated_at);profileNeedsUpload=!hasRemote&&Object.keys(local).length>0;const saved={...{wins:0,territories:1,level:1,xp:0,command:'cavalry'},...local,...(hasRemote?remote:{})};if(!Array.isArray(saved.conquered))saved.conquered=PROVINCES.slice(0,Math.max(1,Math.min(PROVINCES.length,saved.territories||1))).map(p=>p.id);saved.territories=saved.conquered.length;return saved;}catch{return {wins:0,territories:1,level:1,xp:0,command:'cavalry',conquered:['katsushika']};}}
+  function saveProfile(){profile.command='cavalry';localStorage.setItem('gunryaku_empire',JSON.stringify(profile));if(typeof emitEvent==='function')emitEvent('gunryaku_profile_save',profile);renderProfile();}
   function renderProfile(){
     if(!$('sk-wins'))return;profile.command='cavalry';const next=profile.level*100;$('sk-wins').textContent=profile.wins;$('sk-territories').textContent=profile.territories;$('sk-commander-level').textContent=profile.level;$('sk-commander-xp').textContent=profile.xp;$('sk-commander-next').textContent=next;$('sk-command-bonus').textContent=Math.round((.16+Math.min(10,profile.level)*.02)*100);
     renderCampaignMap();
@@ -450,7 +450,7 @@
   function bind() {
     $('sk-enter').onclick=showStageSelect;$('sk-roster-btn').onclick=showRoster;$('sk-roster-back').onclick=showStageSelect;$('sk-resume').onclick=resumeGame;
     $('sk-start').onclick=startGame;
-    renderProfile();refreshResume();
+    renderProfile();refreshResume();if(profileNeedsUpload){profileNeedsUpload=false;saveProfile();}
     $('sk-home-btn').onclick=showStageSelect;
     $('sk-recruit').onclick=showRecruit;$('sk-build').onclick=showBuild;$('sk-cancel').onclick=cancelSelection;$('sk-end-turn').onclick=endTurn;
     $('sk-help').onclick=()=>showModal('遊び方','領土は1マスごとに軍資金25両と兵糧20俵を毎ターン生みます。敵の市場・金山・兵糧庫・町・兵舎は、領土化すると破壊せずそのまま奪えます。\n軍は城・砦・兵舎から招集できます。自軍の防柵があるマスは通行でき、敵の防柵は破壊が必要です。\n山と森は軍を隠し、山と川へ入るとそのターンの進軍が止まります。\n騎兵招集時に蒼牙を召喚すると、固有技能で軍の攻撃力が上昇します。\n戦場は行動のたびに自動保存されます。戦場選択へ戻ったりアプリを閉じても「戦を続ける」から再開できます。','策');

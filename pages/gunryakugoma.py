@@ -1,6 +1,10 @@
+import json
+from datetime import datetime
+
 from nicegui import ui
 
-from core.auth import require_app_access
+from core.auth import require_app_access, selected_user_id
+from core.data import data
 from core.theme import Theme
 
 
@@ -8,10 +12,37 @@ from core.theme import Theme
 def gunryakugoma_page():
     if not require_app_access("gunryakugoma"):
         return
+    user_id = selected_user_id()
+    profiles = data.data.setdefault("gunryakugoma", {}).setdefault("profiles", {})
+    server_profile = profiles.get(user_id, {})
+
+    def save_profile(event):
+        value = event.args if isinstance(event.args, dict) else {}
+        conquered = value.get("conquered", ["katsushika"])
+        if not isinstance(conquered, list):
+            conquered = ["katsushika"]
+        conquered = [str(item) for item in conquered[:16]]
+        if "katsushika" not in conquered:
+            conquered.insert(0, "katsushika")
+        safe_profile = {
+            "wins": max(0, int(value.get("wins", 0))),
+            "territories": len(conquered),
+            "level": max(1, int(value.get("level", 1))),
+            "xp": max(0, int(value.get("xp", 0))),
+            "command": "cavalry",
+            "conquered": conquered,
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        profiles[user_id] = safe_profile
+        data.save()
+
+    ui.on("gunryaku_profile_save", save_profile)
     Theme.page("軍略駒", app_name="gunryakugoma")
+    encoded_profile = json.dumps(server_profile, ensure_ascii=False).replace("<", "\\u003c")
     ui.add_head_html(
+        f'<script>window.GUNRYAKU_SERVER_PROFILE={encoded_profile};</script>'
         '<link rel="stylesheet" href="/static/gunryakugoma.css?v=12">'
-        '<script src="/static/gunryakugoma.js?v=12" defer></script>'
+        '<script src="/static/gunryakugoma.js?v=13" defer></script>'
     )
     ui.html(
         """
