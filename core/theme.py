@@ -18,10 +18,6 @@ class Theme:
             manifest = "/static/schedule-manifest.json"
             icon = "/static/schedule_icon.svg"
             theme_color = "#172F4B"
-        elif app_name == "grid-empire":
-            manifest = "/static/grid-empire-manifest.json"
-            icon = "/static/grid_empire_icon.svg"
-            theme_color = "#081525"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

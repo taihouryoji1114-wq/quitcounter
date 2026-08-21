@@ -87,18 +87,3 @@ def portal():
                     )
                 ui.space()
                 ui.icon("chevron_right").classes("text-2xl text-grey-7")
-
-        with ui.card().classes(
-            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/grid-empire")):
-            with ui.row().classes("w-full items-center no-wrap"):
-                ui.image("/static/grid_empire_icon.svg").classes(
-                    "w-14 h-14 rounded-xl q-mr-md"
-                )
-                with ui.column().classes("gap-0"):
-                    ui.label("GRID EMPIRE").classes("text-xl font-bold")
-                    ui.label("マスを奪い、領土を広げる戦術バトル").classes(
-                        "text-grey-7 q-mt-xs"
-                    )
-                ui.space()
-                ui.icon("chevron_right").classes("text-2xl text-grey-7")
