@@ -10,7 +10,7 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=4">'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=5">'
         '<script src="/static/gunryakugoma.js?v=4" defer></script>'
     )
     ui.html(

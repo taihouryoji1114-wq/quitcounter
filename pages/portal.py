@@ -102,3 +102,20 @@ def portal():
                     )
                 ui.space()
                 ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        ui.separator().classes("q-my-md")
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/system-status")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                with ui.element("div").classes(
+                    "w-14 h-14 rounded-xl q-mr-md bg-blue-grey-10 text-white flex items-center justify-center"
+                ):
+                    ui.icon("monitor_heart").classes("text-3xl")
+                with ui.column().classes("gap-0"):
+                    ui.label("システム状況").classes("text-xl font-bold")
+                    ui.label("容量・保存・バックアップを確認").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("chevron_right").classes("text-2xl text-grey-7")
