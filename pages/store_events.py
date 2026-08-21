@@ -27,7 +27,7 @@ def render_event_calendar(year, month):
     events = store_events.events(first.isoformat(), last.isoformat())
     with ui.column().classes("event-page-shell gap-0"):
         with ui.row().classes("event-topbar w-full items-center justify-between no-wrap"):
-            ui.button(icon="arrow_back", on_click=ui.navigate.back).props(
+            ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/store-ops")).props(
                 "flat round aria-label='1つ前へ戻る'").classes("text-grey-8")
             store_header_actions()
         content = ui.column().classes("w-full gap-0")
@@ -72,7 +72,8 @@ def render_event_calendar(year, month):
         previous_year = year - 1 if month == 1 else year
         next_month = 1 if month == 12 else month + 1
         next_year = year + 1 if month == 12 else year
-        with ui.card().classes("calendar-hero w-full q-pa-lg"):
+        with ui.card().classes("calendar-hero w-full q-pa-lg").props(
+                "id=event-calendar-swipe"):
             with ui.row().classes("w-full items-center justify-between no-wrap"):
                 ui.button(icon="chevron_left", on_click=lambda: ui.navigate.to(
                     f"/store-ops/events/{previous_year}/{previous_month}")).props("flat round")
@@ -96,8 +97,17 @@ def render_event_calendar(year, month):
                             "click", lambda _, value=day: open_add(value)):
                         ui.label(str(day)).classes("day-number")
                         for event in day_events[:3]:
-                            ui.element("div").classes(
-                                f"event-dot {CATEGORY_CLASS.get(event['category'], 'other')}")
+                            event_starts = selected_date == event["date"] or day == 1 or date(
+                                year, month, day).weekday() == 0
+                            event_ends = selected_date == event["end_date"] or day == last.day or date(
+                                year, month, day).weekday() == 6
+                            segment = " segment-start" if event_starts else " segment-middle"
+                            if event_ends:
+                                segment += " segment-end"
+                            with ui.element("div").classes(
+                                    f"event-span {CATEGORY_CLASS.get(event['category'], 'other')}{segment}"):
+                                if event_starts:
+                                    ui.label(event["title"]).classes("event-span-label")
 
         ui.label("今月の予定").classes("text-lg font-black q-mt-xl q-mb-sm")
         if not events:
@@ -130,7 +140,41 @@ def render_event_calendar(year, month):
         ui.fab(icon="add", color="primary", direction="up").on(
             "click", add_dialog.open).classes("event-fab")
         ui.add_css("""
-        body{background:radial-gradient(circle at 90% 0,#E8E1F8,transparent 27%),linear-gradient(180deg,#F8F7FB,#F4F2ED)!important}.event-page-shell{width:100%;max-width:1180px;margin:0 auto;padding:8px 10px 48px;box-sizing:border-box}.event-topbar{min-height:48px;margin-bottom:4px}.event-dialog{width:min(94vw,480px)!important;border-radius:25px!important}.calendar-hero{border:0!important;border-radius:24px!important;padding:18px!important;background:linear-gradient(145deg,#182A3B,#334B68 62%,#6B5B87)!important;color:white!important;box-shadow:0 20px 44px rgba(35,48,75,.25)!important}.event-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.weekday{text-align:center;font-size:10px;font-weight:900;opacity:.55}.event-day{position:relative;min-height:clamp(58px,9vh,92px);padding:8px;border-radius:14px;background:rgba(255,255,255,.10);cursor:pointer;transition:.18s}.event-day:hover{background:rgba(255,255,255,.18);transform:translateY(-2px)}.event-day.today{background:white;color:#203047;box-shadow:0 5px 15px rgba(11,23,40,.25)}.day-number{font-size:12px;font-weight:900}.event-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin:10px 2px 0 0}.event-dot.social{background:#FFBE63}.event-dot.store{background:#5CE0B3}.event-dot.meeting{background:#71B7FF}.event-dot.training{background:#CB9BFF}.event-dot.booking{background:#FF8297}.event-dot.other{background:#D4D8DD}.event-card{position:relative;overflow:hidden;border:0!important;border-radius:21px!important;box-shadow:0 10px 27px rgba(42,51,67,.08)!important}.event-card:before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px}.event-card.social:before{background:#E6A445}.event-card.store:before{background:#41AF89}.event-card.meeting:before{background:#568DCD}.event-card.training:before{background:#9871BE}.event-card.booking:before{background:#D96579}.event-card.other:before{background:#8D969F}.event-category{font-size:9px;font-weight:900;color:#69757E}.event-details{padding:10px 12px;border-radius:12px;background:#F5F6F7;font-size:11px;line-height:1.6;white-space:pre-wrap}.empty-events{padding:24px;border:1px dashed #CBD1D5;border-radius:18px;text-align:center;font-size:11px;color:#899198}.event-fab{position:fixed!important;right:22px;bottom:28px;z-index:20}@media(min-width:700px){.event-page-shell{padding:14px 24px 64px}.calendar-hero{padding:26px!important}.event-calendar{gap:10px}.event-day{padding:12px;border-radius:18px}.day-number{font-size:14px}}
+        body{background:radial-gradient(circle at 90% 0,#E8E1F8,transparent 27%),linear-gradient(180deg,#F8F7FB,#F4F2ED)!important}.event-page-shell{width:100%;max-width:1180px;margin:0 auto;padding:8px 10px 48px;box-sizing:border-box}.event-topbar{min-height:48px;margin-bottom:4px}.event-dialog{width:min(94vw,480px)!important;border-radius:25px!important}.calendar-hero{border:0!important;border-radius:24px!important;padding:18px!important;background:linear-gradient(145deg,#182A3B,#334B68 62%,#6B5B87)!important;color:white!important;box-shadow:0 20px 44px rgba(35,48,75,.25)!important;touch-action:pan-y}.event-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.weekday{text-align:center;font-size:10px;font-weight:900;opacity:.55}.event-day{position:relative;min-width:0;min-height:clamp(66px,9vh,96px);padding:8px;border-radius:14px;background:rgba(255,255,255,.10);cursor:pointer;transition:.18s}.event-day:hover{background:rgba(255,255,255,.18);transform:translateY(-2px)}.event-day.today{background:white;color:#203047;box-shadow:0 5px 15px rgba(11,23,40,.25)}.day-number{font-size:12px;font-weight:900}.event-span{height:15px;margin-top:4px;margin-left:-11.5px;margin-right:-11.5px;display:flex;align-items:center;min-width:0;color:#172536;box-shadow:0 2px 5px rgba(8,18,30,.13);position:relative;z-index:2}.event-span.segment-start{margin-left:0;border-radius:7px 0 0 7px;padding-left:5px}.event-span.segment-end{margin-right:0;border-radius:0 7px 7px 0}.event-span.segment-start.segment-end{border-radius:7px}.event-span.social{background:#FFBE63}.event-span.store{background:#5CE0B3}.event-span.meeting{background:#71B7FF}.event-span.training{background:#CB9BFF}.event-span.booking{background:#FF8297}.event-span.other{background:#D4D8DD}.event-span-label{font-size:7px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}.event-card{position:relative;overflow:hidden;border:0!important;border-radius:21px!important;box-shadow:0 10px 27px rgba(42,51,67,.08)!important}.event-card:before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px}.event-card.social:before{background:#E6A445}.event-card.store:before{background:#41AF89}.event-card.meeting:before{background:#568DCD}.event-card.training:before{background:#9871BE}.event-card.booking:before{background:#D96579}.event-card.other:before{background:#8D969F}.event-category{font-size:9px;font-weight:900;color:#69757E}.event-details{padding:10px 12px;border-radius:12px;background:#F5F6F7;font-size:11px;line-height:1.6;white-space:pre-wrap}.empty-events{padding:24px;border:1px dashed #CBD1D5;border-radius:18px;text-align:center;font-size:11px;color:#899198}.event-fab{position:fixed!important;right:22px;bottom:28px;z-index:20}@media(min-width:700px){.event-page-shell{padding:14px 24px 64px}.calendar-hero{padding:26px!important}.event-calendar{gap:10px}.event-day{padding:12px;border-radius:18px}.day-number{font-size:14px}.event-span{height:19px;margin-left:-17px;margin-right:-17px}.event-span.segment-start{margin-left:0;padding-left:7px}.event-span.segment-end{margin-right:0}.event-span-label{font-size:9px}}
+        """)
+        ui.run_javascript(f"""
+        (() => {{
+          const calendar = document.querySelector('#event-calendar-swipe');
+          if (!calendar || calendar.dataset.swipeReady) return;
+          calendar.dataset.swipeReady = '1';
+          let startX = 0, startY = 0, startedAt = 0, wheelX = 0, wheelTimer;
+          const move = direction => {{
+            window.location.href = direction === 'next'
+              ? '/store-ops/events/{next_year}/{next_month}'
+              : '/store-ops/events/{previous_year}/{previous_month}';
+          }};
+          calendar.addEventListener('touchstart', event => {{
+            const touch = event.changedTouches[0];
+            startX = touch.clientX; startY = touch.clientY; startedAt = Date.now();
+          }}, {{passive: true}});
+          calendar.addEventListener('touchend', event => {{
+            const touch = event.changedTouches[0];
+            const dx = touch.clientX - startX, dy = touch.clientY - startY;
+            if (Date.now() - startedAt < 900 && Math.abs(dx) > 110 && Math.abs(dx) > Math.abs(dy) * 1.35)
+              move(dx < 0 ? 'next' : 'previous');
+          }}, {{passive: true}});
+          calendar.addEventListener('wheel', event => {{
+            if (Math.abs(event.deltaX) < Math.abs(event.deltaY) * 1.2) return;
+            wheelX += event.deltaX;
+            clearTimeout(wheelTimer);
+            wheelTimer = setTimeout(() => wheelX = 0, 280);
+            if (Math.abs(wheelX) > 220) {{
+              const direction = wheelX > 0 ? 'next' : 'previous';
+              wheelX = 0;
+              move(direction);
+            }}
+          }}, {{passive: true}});
+        }})();
         """)
 
 
