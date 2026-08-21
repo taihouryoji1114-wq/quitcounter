@@ -7,7 +7,7 @@ from core.store_ops import store_ops
 from core.theme import Theme
 
 
-@ui.page("/store-ops")
+@ui.page("/store-ops/manage")
 def store_operations_page():
     if not require_app_access("store_ops"):
         return
@@ -45,7 +45,7 @@ def store_operations_page():
     def reload(message=None):
         if message:
             ui.notify(message, type="positive")
-        ui.navigate.to("/store-ops")
+        ui.navigate.to("/store-ops/manage")
 
     with content:
         delete_target = {"id": None, "name": ""}

@@ -206,6 +206,29 @@ class StoreOperationsManagerTest(unittest.TestCase):
         ordered = [item for item in board["items"] if item["kind"] == "order"]
         self.assertEqual([item["name"] for item in ordered], ["ミクリードへ発注済み"])
 
+    def test_unchecked_daily_items_move_to_board_after_operating_day(self):
+        self.manager.ensure_daily_checklist("2026-08-19")
+        self.manager.set_daily_order_attention("2026-08-19", "豊洲", True)
+        board = self.manager.previous_day_board("2026-08-20")
+        missed = [item for item in board["items"] if item["kind"] == "order_missed"]
+        attention = [item for item in board["items"] if item["kind"] == "order_attention"]
+        self.assertEqual(len(missed), 3)
+        self.assertEqual([item["name"] for item in attention], ["豊洲への発注未完了"])
+
+    def test_attention_prep_is_carried_without_overdue_style(self):
+        prep = self.manager.add_prep_template("魚をおろす", "厨房")
+        self.manager.set_prep_status("2026-08-19", prep["id"], "attention")
+        board = self.manager.previous_day_board("2026-08-20")
+        self.assertEqual(board["items"][0]["kind"], "attention")
+
+    def test_kitchen_handover_templates_move_to_prep_once(self):
+        self.manager.add_handover_template("出汁を取る", "厨房")
+        self.manager.add_handover_template("予約席確認", "ホール")
+        self.assertEqual(self.manager.move_kitchen_handovers_to_prep(), 1)
+        self.assertEqual(self.manager.move_kitchen_handovers_to_prep(), 0)
+        self.assertEqual([item["name"] for item in self.manager.prep_templates()], ["出汁を取る"])
+        self.assertEqual([item["name"] for item in self.manager.handover_templates()], ["予約席確認"])
+
     def test_inventory_item_exposes_last_counted_date(self):
         item = self.manager.add_item("ラップ", "備品", "本", "", "", "count")
         self.manager.set_count(item["id"], 3)

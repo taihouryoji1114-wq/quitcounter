@@ -3,6 +3,7 @@ from nicegui import ui
 from core.auth import current_role, require_app_access
 from core.store_ops import store_ops
 from core.theme import Theme
+from pages.store_common import store_header_actions
 
 
 @ui.page("/store-ops/purchase-list")
@@ -11,7 +12,8 @@ def purchase_list_page():
         return
     Theme.page("仕入れリスト｜店舗運営", app_name="store-ops")
     content = Theme.shell("仕入れリスト", "この画面を見ながら、書いてある数だけ仕入れる",
-                          back_to="/store-ops", brand="店舗運営")
+                          back_to="/store-ops", action=store_header_actions,
+                          brand="店舗運営")
     with content:
         if current_role() != "owner":
             with ui.card().classes("surface-card w-full q-pa-xl text-center"):

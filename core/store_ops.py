@@ -11,7 +11,7 @@ from core.data import data
 class StoreOperationsManager:
     STATUSES = {"enough", "low", "out"}
     INVENTORY_UNITS = ("個", "本", "袋", "パック", "ケース", "箱", "缶", "瓶", "枚", "束", "kg", "L")
-    PREP_STATUSES = {"incomplete", "done"}
+    PREP_STATUSES = {"incomplete", "attention", "done"}
     TEMPERATURE_LOCATIONS = (
         "デシャップ冷蔵庫1", "デシャップ冷蔵庫2", "デシャップ冷蔵庫3",
         "厨房冷蔵庫1", "厨房冷蔵庫2", "厨房冷蔵庫3", "厨房冷蔵庫4", "厨房冷蔵庫5",
@@ -249,6 +249,28 @@ class StoreOperationsManager:
             stored = {}
         return {name: bool(stored.get(name, False)) for name in self.DAILY_ORDER_DESTINATIONS}
 
+    def ensure_daily_checklist(self, record_date):
+        """Mark that this operating day's checklist has been opened."""
+        self._date(record_date)
+        days = self._data_manager.data.setdefault("store_checklist_days", {})
+        if record_date not in days:
+            days[record_date] = {"opened_at": datetime.now().isoformat(timespec="minutes")}
+            self._data_manager.save()
+
+    def daily_order_attention(self, record_date):
+        self._date(record_date)
+        stored = self._data_manager.data.get("store_daily_order_attention", {}).get(
+            record_date, {})
+        return {name: bool(stored.get(name, False)) for name in self.DAILY_ORDER_DESTINATIONS}
+
+    def set_daily_order_attention(self, record_date, destination, attention):
+        self._date(record_date)
+        if destination not in self.DAILY_ORDER_DESTINATIONS:
+            raise ValueError("発注先が正しくありません。")
+        self._data_manager.data.setdefault("store_daily_order_attention", {}).setdefault(
+            record_date, {})[destination] = bool(attention)
+        self._data_manager.save()
+
     def set_daily_order_check(self, record_date, destination, checked):
         self._date(record_date)
         if destination not in self.DAILY_ORDER_DESTINATIONS:
@@ -387,8 +409,14 @@ class StoreOperationsManager:
         states = self._data_manager.data.get("store_prep_records", {}).get(record_date, {})
         previous_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
         previous_states = self._data_manager.data.get("store_prep_records", {}).get(previous_date, {})
-        result = [{**item, "status": ("done" if states.get(item["id"]) == "done" else "incomplete"),
-                   "carried_over": previous_states.get(item["id"]) in {"incomplete", "pending", "missed"},
+        previous_started = previous_date in self._data_manager.data.get("store_checklist_days", {})
+        result = [{**item, "status": (states.get(item["id"])
+                                      if states.get(item["id"]) in self.PREP_STATUSES
+                                      else "incomplete"),
+                   "carried_over": ((previous_started or item["id"] in previous_states)
+                                    and previous_states.get(item["id"]) != "done"),
+                   "carry_priority": ("attention" if previous_states.get(item["id"]) == "attention"
+                                      else "overdue"),
                    "source": "prep"}
                   for item in self.prep_templates()]
         existing_ids = {value["id"] for value in result}
@@ -413,7 +441,9 @@ class StoreOperationsManager:
         for prep in self.prep_items(record_date):
             if prep.get("carried_over") and prep.get("status") != "done":
                 items.append({
-                    "id": prep.get("id"), "kind": "prep", "name": prep.get("name", "仕込み"),
+                    "id": prep.get("id"),
+                    "kind": ("attention" if prep.get("carry_priority") == "attention" else "prep"),
+                    "name": prep.get("name", "仕込み"),
                     "area": prep.get("area", "厨房"), "from_date": previous_date,
                 })
         for note in self.handovers(previous_date):
@@ -422,13 +452,25 @@ class StoreOperationsManager:
                     "id": note.get("id"), "kind": "note", "name": note.get("message", "引き継ぎ"),
                     "area": note.get("area", "厨房"), "from_date": previous_date,
                 })
-        for destination, ordered in self.daily_order_checks(previous_date).items():
-            if ordered:
-                items.append({
-                    "id": f"order:{previous_date}:{destination}", "kind": "order",
-                    "name": f"{destination}へ発注済み", "area": "発注",
-                    "from_date": previous_date,
-                })
+        order_days = self._data_manager.data.get("store_daily_order_checks", {})
+        if (previous_date in self._data_manager.data.get("store_checklist_days", {})
+                or previous_date in order_days):
+            previous_orders = self.daily_order_checks(previous_date)
+            previous_attention = self.daily_order_attention(previous_date)
+            for destination, ordered in previous_orders.items():
+                if ordered:
+                    items.append({
+                        "id": f"order:{previous_date}:{destination}", "kind": "order",
+                        "name": f"{destination}へ発注済み", "area": "発注",
+                        "from_date": previous_date,
+                    })
+                else:
+                    items.append({
+                        "id": f"order-missed:{previous_date}:{destination}",
+                        "kind": "order_attention" if previous_attention[destination] else "order_missed",
+                        "name": f"{destination}への発注未完了", "area": "発注",
+                        "from_date": previous_date,
+                    })
         for request in self.order_requests(open_only=True):
             created_date = str(request.get("created_at", ""))[:10]
             if created_date and created_date <= previous_date:
@@ -456,6 +498,28 @@ class StoreOperationsManager:
         for item in self.prep_items(record_date):
             records[item["id"]] = "incomplete"
         self._data_manager.save()
+
+    def move_kitchen_handovers_to_prep(self):
+        """Move legacy kitchen check templates into today's unified checklist once."""
+        existing = {(item.get("name"), item.get("area")) for item in self.prep_templates()}
+        moved = 0
+        for item in self._data_manager.data.setdefault("store_handover_templates", []):
+            if not isinstance(item, dict) or not item.get("active", True):
+                continue
+            if item.get("area") != "厨房":
+                continue
+            key = (item.get("name"), "厨房")
+            if key not in existing:
+                self._data_manager.data.setdefault("store_prep_templates", []).append({
+                    "id": uuid4().hex, "name": item.get("name", "厨房作業"),
+                    "area": "厨房", "active": True,
+                })
+                existing.add(key)
+            item["active"] = False
+            moved += 1
+        if moved:
+            self._data_manager.save()
+        return moved
 
     def handover_templates(self):
         values = self._data_manager.data.get("store_handover_templates", [])

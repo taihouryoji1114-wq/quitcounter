@@ -23,6 +23,9 @@ import pages.financial_analysis
 import pages.consulting
 import pages.staffing
 import pages.store_operations
+import pages.store_dashboard
+import pages.store_checklist
+import pages.store_sections
 import pages.shift_submission
 import pages.purchase_list
 import pages.schedule

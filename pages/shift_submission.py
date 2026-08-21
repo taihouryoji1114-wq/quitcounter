@@ -6,6 +6,7 @@ from core.auth import current_role, require_app_access
 from core.clock import today_jst
 from core.shift_submissions import shift_submissions
 from core.theme import Theme
+from pages.store_common import store_header_actions
 
 
 @ui.page("/store-ops/shift-submission")
@@ -26,7 +27,8 @@ def shift_submission_page():
         default_year = today.year + (1 if today.month == 12 else 0)
 
     content = Theme.shell("シフト提出", "半月ごとの希望をまとめて提出",
-                          back_to="/store-ops", brand="店舗運営")
+                          back_to="/store-ops", action=store_header_actions,
+                          brand="店舗運営")
     with content:
         with ui.card().classes("shift-guide w-full q-pa-lg q-mb-md"):
             ui.label("提出期限").classes("text-[10px] font-black opacity-70")
