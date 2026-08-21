@@ -10,8 +10,8 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=7">'
-        '<script src="/static/gunryakugoma.js?v=7" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=8">'
+        '<script src="/static/gunryakugoma.js?v=8" defer></script>'
     )
     ui.html(
         """
@@ -20,17 +20,20 @@ def gunryakugoma_page():
             <div class="sk-home-shade"></div>
             <button id="gun-home-exit" class="sk-exit" type="button" aria-label="R-BASEへ戻る">⌂</button>
             <div class="sk-home-copy">
-              <span class="sk-eyebrow">VERSION 0.2 · TURN-BASED STRATEGY</span>
+              <span class="sk-eyebrow">VERSION 0.3 · SIEGE & ECONOMY</span>
               <h1>軍略駒</h1>
-              <p>兵糧を読み、陣を築き、敵将を討て。</p>
-              <button id="sk-start" class="sk-primary" type="button">初陣を始める</button>
+              <p>戦場を選び、天下への一歩を刻め。</p>
+              <div class="sk-stage-list">
+                <button id="sk-start" class="sk-stage-card" type="button"><i>第一戦</i><b>青嶺の攻防</b><span>蒼龍軍 対 朱雀軍</span><em>出陣 ›</em></button>
+                <button class="sk-stage-card is-locked" type="button" disabled><i>第二戦</i><b>霧深き峡谷</b><span>近日解放</span><em>錠</em></button>
+              </div>
               <div class="sk-victory-note"><b>勝利条件</b><span>敵将を討つ、または敵本陣を破壊</span></div>
             </div>
           </section>
 
           <section id="sk-game" class="sk-game is-hidden">
             <header class="sk-topbar">
-              <button id="sk-home-btn" class="sk-icon-btn" type="button" aria-label="ホームへ戻る">‹</button>
+              <button id="sk-home-btn" class="sk-icon-btn" type="button" aria-label="戦場選択へ戻る">‹</button>
               <div class="sk-turn-title"><small>第 <span id="sk-turn">1</span> ターン</small><strong id="sk-phase">あなたの軍議</strong></div>
               <button id="sk-help" class="sk-icon-btn" type="button" aria-label="遊び方">?</button>
             </header>
@@ -39,6 +42,7 @@ def gunryakugoma_page():
               <div><span>軍資金</span><strong id="sk-money">4,000</strong><i>両</i></div>
               <div><span>兵糧</span><strong id="sk-food">7,000</strong><i>俵</i></div>
               <div><span>領地収入</span><strong id="sk-income">+1,000</strong><i>/ターン</i></div>
+              <div><span>軍の維持</span><strong id="sk-upkeep">-105</strong><i>俵/ターン</i></div>
             </div>
 
             <div class="sk-battle-wrap">
@@ -54,7 +58,7 @@ def gunryakugoma_page():
               </div>
               <div class="sk-actions">
                 <button id="sk-recruit" type="button"><i>＋</i><span>兵を招集</span></button>
-                <button id="sk-build" type="button"><i>⌂</i><span>築城・柵</span></button>
+                <button id="sk-build" type="button"><i>⌂</i><span>施設建設</span></button>
                 <button id="sk-cancel" type="button"><i>×</i><span>選択解除</span></button>
                 <button id="sk-end-turn" class="is-accent" type="button"><i>»</i><span>ターン終了</span></button>
               </div>

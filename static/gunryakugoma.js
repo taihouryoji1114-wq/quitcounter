@@ -9,9 +9,12 @@
   const TYPE_COST = { infantry: 1, cavalry: 1.5, archer: 1.2 };
   const SIZE_COST = { 100: 120, 500: 450, 1000: 800, 5000: 3400, 10000: 6000 };
   const BUILDINGS = {
-    fence: { name: '防柵', cost: 450, hp: 1200 },
-    base: { name: '砦', cost: 1600, hp: 2400 },
-    castle: { name: '城', cost: 3800, hp: 5000 },
+    fence: { name: '防柵', cost: 450, hp: 1200, note: '最大3基・維持100両' },
+    base: { name: '砦', cost: 1600, hp: 2400, money: 350, food: 500 },
+    market: { name: '市場', cost: 1200, hp: 1000, money: 300, note: '毎ターン300両' },
+    mine: { name: '金山', cost: 2400, hp: 1500, money: 600, note: '毎ターン600両' },
+    granary: { name: '兵糧庫', cost: 1300, hp: 1200, food: 800, note: '毎ターン800俵' },
+    castle: { name: '城', cost: 3800, hp: 5000, money: 1000, food: 1600 },
   };
   let state;
   const $ = id => document.getElementById(id);
@@ -53,11 +56,19 @@
 
   function foodCost(unit) { return Math.max(10, Math.ceil(unit.size / 100) * 4); }
   function income(owner) {
-    const owned = state.buildings.filter(b => b.owner === owner);
-    return owned.reduce((sum,b) => sum + (b.type === 'castle' ? 1000 : b.type === 'base' ? 350 : 0), 0);
+    return state.buildings.filter(b => b.owner === owner).reduce((sum,b) => sum + (BUILDINGS[b.type].money||0), 0);
   }
   function foodIncome(owner) {
-    return state.buildings.filter(b => b.owner === owner).reduce((sum,b) => sum + (b.type === 'castle' ? 1600 : b.type === 'base' ? 500 : 0), 0);
+    return state.buildings.filter(b => b.owner === owner).reduce((sum,b) => sum + (BUILDINGS[b.type].food||0), 0);
+  }
+  function armyUpkeep(owner){return state.units.filter(u=>u.owner===owner).reduce((sum,u)=>sum+Math.max(3,Math.ceil(u.size/100)*3),0);}
+  function fenceCount(owner){return state.buildings.filter(b=>b.owner===owner&&b.type==='fence').length;}
+  function fenceCost(owner){return BUILDINGS.fence.cost+fenceCount(owner)*300;}
+  function payTurnCosts(owner){
+    const foodKey=owner==='player'?'food':'enemyFood',moneyKey=owner==='player'?'money':'enemyMoney';
+    const food=armyUpkeep(owner),money=fenceCount(owner)*100;state[foodKey]=Math.max(0,state[foodKey]-food);state[moneyKey]=Math.max(0,state[moneyKey]-money);
+    if(state[foodKey]===0)state.units.filter(u=>u.owner===owner&&u.type!=='general').forEach(u=>u.size=Math.max(1,Math.floor(u.size*.95)));
+    return {food,money};
   }
   function isVisibleTo(viewer, unit) {
     if (unit.owner === viewer || terrainAt(unit.pos) !== 'forest') return true;
@@ -112,7 +123,7 @@
 
   function render() {
     $('sk-turn').textContent = state.turn; $('sk-phase').textContent = state.phase === 'player' ? 'あなたの軍議' : '敵軍進行中';
-    $('sk-money').textContent = fmt(state.money); $('sk-food').textContent = fmt(state.food); $('sk-income').textContent = `+${fmt(income('player'))}`;
+    $('sk-money').textContent = fmt(state.money); $('sk-food').textContent = fmt(state.food); $('sk-income').textContent = `+${fmt(income('player'))}`; $('sk-upkeep').textContent = `-${fmt(armyUpkeep('player'))}`;
     const board = $('sk-board'); board.innerHTML = '';
     const targets = getTargets();
     for (let p=0; p<COLS*ROWS; p++) {
@@ -120,7 +131,7 @@
       if (targets.move.has(p) || targets.place.has(p)) cell.classList.add('target');
       if (targets.attack.has(p)) cell.classList.add('attack-target');
       if (state.selected && state.selected.pos === p) cell.classList.add('selected');
-      const b = buildingAt(p), stack = unitsAt(p).filter(u=>isVisibleTo('player',u));
+      const b = buildingAt(p), stack = unitsAt(p).filter(u=>isVisibleTo('player',u)); if(stack.length)cell.classList.add('has-stack');
       if (b) cell.insertAdjacentHTML('beforeend', `<span class="sk-building ${b.type} ${b.owner}" title="${BUILDINGS[b.type].name}"></span>`);
       if (stack.length) cell.insertAdjacentHTML('beforeend', `<span class="sk-unit-stack count-${Math.min(stack.length,4)}">${stack.map((u,i)=>`<span data-unit="${u.id}" class="sk-piece slot-${i+1} ${u.owner} ${u.moved?'moved':''}"><span class="crest">${TYPES[u.type].mark}</span><span class="troops">${fmt(u.size)}</span></span>`).join('')}</span>`);
       cell.onclick = () => onCell(p); board.appendChild(cell);
@@ -258,7 +269,7 @@
     const from=u.pos,captured=capturePiece(u);
     const lockPlayer=state.phase==='player'&&u.owner==='player';if(lockPlayer)state.animating=true;
     const targetOwner=u.owner==='player'?'enemy':'player';
-    const targetU=defenderAt(p,targetOwner), targetB=buildingAt(p); let damage;
+    const targetU=defenderAt(p,targetOwner), targetB=buildingAt(p); let damage,advanced=false;
     if(terrainAt(u.pos)==='forest') revealToOpponent(u);
     if(targetU) {
       const counter=Math.round(expectedCounter(u,targetU)*(.9+Math.random()*.2));
@@ -267,7 +278,8 @@
       const targetDefeated=targetU.size<=0, attackerDefeated=u.size<=0;
       if(targetDefeated) state.units=state.units.filter(x=>x!==targetU);
       if(attackerDefeated) state.units=state.units.filter(x=>x!==u);
-      if(!quiet) log(`${TYPES[u.type].name}が攻撃。敵に${fmt(damage)}、自軍に${fmt(counter)}の損害。${targetDefeated?' 敵部隊を撃破！':''}`);
+      if(targetDefeated&&!attackerDefeated&&TYPES[u.type].range===1&&!targetB){u.pos=p;advanced=true;}
+      if(!quiet) log(`${TYPES[u.type].name}が攻撃。敵に${fmt(damage)}、自軍に${fmt(counter)}の損害。${targetDefeated?' 敵部隊を撃破！':''}${advanced?' そのまま敵マスへ前進。':''}`);
       if(targetDefeated&&targetU.type==='general') finish(u.owner,'敵将を討ち取った');
       else if(attackerDefeated&&u.type==='general') finish(targetOwner,'総大将を討ち取られた');
     } else if(targetB) {
@@ -276,7 +288,7 @@
       if(targetB.hp<=0) { state.buildings=state.buildings.filter(x=>x!==targetB); if(!quiet)log(`${BUILDINGS[targetB.type].name}を破壊！`); if(targetB.hq) finish(u.owner,'敵本陣を陥落させた'); }
       else if(!quiet) log(`${BUILDINGS[targetB.type].name}を攻撃。耐久 ${fmt(targetB.hp)}。`);
     }
-    u.moved=true; state.selected=null; render();
+    u.moved=true;if(advanced)mergeSameType(u);state.selected=null; render();
     const resting=document.querySelector(`.sk-piece[data-unit="${u.id}"]`);if(resting)resting.style.opacity='0';
     animateMove(captured,from,p,440).then(()=>{animateClash(p);return waitMs(260);}).finally(()=>{if(lockPlayer){state.animating=false;}render();});
     return true;
@@ -305,8 +317,8 @@
   function showBuild() {
     if(state.phase!=='player'||state.animating||state.over)return;
     state.selected=null; state.placement=null; const panel=$('sk-panel'); panel.classList.remove('is-hidden');
-    panel.innerHTML=`<h3>築くものを選ぶ</h3><div class="sk-option-grid">${Object.entries(BUILDINGS).map(([type,b])=>`<button class="sk-option" data-build="${type}">${b.name}<small>${fmt(b.cost)}両・耐久${fmt(b.hp)}</small></button>`).join('')}</div>`;
-    panel.querySelectorAll('[data-build]').forEach(btn=>btn.onclick=()=>{const type=btn.dataset.build,b=BUILDINGS[type];if(state.money<b.cost){log('軍資金が足りません。');return;}state.placement={kind:'building',type,cost:b.cost};closePanel();log(`${b.name}を築く場所を選択。`);render();}); render();
+    panel.innerHTML=`<h3>築くものを選ぶ</h3><div class="sk-option-grid">${Object.entries(BUILDINGS).map(([type,b])=>{const cost=type==='fence'?fenceCost('player'):b.cost;return `<button class="sk-option" data-build="${type}">${b.name}<small>${fmt(cost)}両・${b.note||`耐久${fmt(b.hp)}`}</small></button>`;}).join('')}</div>`;
+    panel.querySelectorAll('[data-build]').forEach(btn=>btn.onclick=()=>{const type=btn.dataset.build,b=BUILDINGS[type],cost=type==='fence'?fenceCost('player'):b.cost;if(type==='fence'&&fenceCount('player')>=3){log('防柵は3基が上限です。守りたい場所を選び直してください。');closePanel();return;}if(state.money<cost){log('軍資金が足りません。');return;}state.placement={kind:'building',type,cost};closePanel();log(`${b.name}を築く場所を選択。`);render();}); render();
   }
   function completePlacement(p) {
     const x=state.placement; if(state.money<x.cost)return;
@@ -327,6 +339,7 @@
   const waitMs=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   async function enemyTurn() {
     state.enemyMoney+=income('enemy'); state.enemyFood+=foodIncome('enemy');
+    payTurnCosts('enemy');
     const enemies=state.units.filter(u=>u.owner==='enemy'); enemies.forEach(u=>u.moved=false);
     for(const u of enemies) {
       if(state.over)break;
@@ -336,9 +349,9 @@
     }
     if(state.over){state.animating=false;render();return;}
     if(!state.over) enemyRecruit();
-    state.turn++; state.money+=income('player'); state.food+=foodIncome('player');
+    state.turn++; state.money+=income('player'); state.food+=foodIncome('player');const upkeep=payTurnCosts('player');
     state.units.filter(u=>u.owner==='player').forEach(u=>u.moved=false); state.phase='player';state.animating=false;
-    log(`第${state.turn}ターン。城と砦から収入が届いた。`); render();
+    log(`第${state.turn}ターン。収入が届き、全軍の兵糧${fmt(upkeep.food)}俵${upkeep.money?`・防柵維持${fmt(upkeep.money)}両`:''}を支払った。`); render();
   }
   async function enemyAction(u) {
     const possible=[];
@@ -362,15 +375,20 @@
     const type=['infantry','archer','cavalry'][Math.floor(Math.random()*3)],size=state.enemyMoney>1600?1000:500,cost=Math.round(SIZE_COST[size]*TYPE_COST[type]);
     const spots=[...validPlacementCells('enemy','unit')];if(!spots.length||state.enemyMoney<cost)return;spots.sort((a,b)=>a-b);state.enemyMoney-=cost;const unit={id:`e${Date.now()}`,owner:'enemy',type,size,pos:spots[0],moved:true};state.units.push(unit);mergeSameType(unit);
   }
-  function finish(winner,reason){state.over=true;state.phase='over';setTimeout(()=>showModal(winner==='player'?'勝鬨 — 勝利':'落城 — 敗北',`${reason}。\n${state.turn}ターンの戦いが終結した。`,winner==='player'?'勝':'敗','もう一度戦う',startGame),100);}
+  function showStageSelect(){$('sk-modal').classList.add('is-hidden');$('sk-game').classList.add('is-hidden');$('sk-home').classList.remove('is-hidden');}
+  function finish(winner,reason){
+    state.over=true;state.phase='over';setTimeout(()=>{
+      const modal=$('sk-modal'),secondary=$('sk-modal-secondary');$('sk-modal-title').textContent=winner==='player'?'勝鬨 — 勝利':'落城 — 敗北';$('sk-modal-text').textContent=`${reason}。\n${state.turn}ターンの戦いが終結した。`;$('sk-modal-mark').textContent=winner==='player'?'勝':'敗';$('sk-modal-primary').textContent='もう一度戦う';secondary.textContent='戦場選択へ戻る';secondary.classList.remove('is-hidden');modal.classList.remove('is-hidden');$('sk-modal-primary').onclick=()=>{modal.classList.add('is-hidden');startGame();};secondary.onclick=showStageSelect;
+    },100);
+  }
   function startGame(){state=freshState();$('sk-home').classList.add('is-hidden');$('sk-game').classList.remove('is-hidden');closePanel();render();}
 
   function bind() {
     $('sk-start').onclick=startGame;
     $('gun-home-exit').onclick=()=>location.href='/';
-    $('sk-home-btn').onclick=()=>{$('sk-game').classList.add('is-hidden');$('sk-home').classList.remove('is-hidden');};
+    $('sk-home-btn').onclick=showStageSelect;
     $('sk-recruit').onclick=showRecruit;$('sk-build').onclick=showBuild;$('sk-cancel').onclick=cancelSelection;$('sk-end-turn').onclick=endTurn;
-    $('sk-help').onclick=()=>showModal('遊び方','自軍の駒を選び、光るマスへ移動・攻撃します。\n同じ兵種は同じマスで合流し、兵数が加算されます。\n歩兵は弓兵に、弓兵は騎兵に、騎兵は歩兵に有利。戦闘では双方に損害が出ます。\n森に潜む敵軍は見えず、攻撃するか森を出ると姿を現します。\n軍を動かすたび兵糧を消費します。城と砦から毎ターン収入が入り、防柵は攻撃して壊すまで通れません。\n敵将または敵本陣を倒せば勝利です。','策');
+    $('sk-help').onclick=()=>showModal('遊び方','自軍の駒を選び、光るマスへ移動・攻撃します。\n近接部隊は敵を撃破するとそのマスへ前進します。弓兵は遠距離から攻撃します。\n歩兵は弓兵に、弓兵は騎兵に、騎兵は歩兵に有利。森に潜む敵軍は攻撃するか森を出るまで見えません。\n軍は移動時と毎ターンに兵糧を消費します。市場と金山は軍資金、兵糧庫は兵糧を生みます。\n防柵は最大3基。追加建設費と毎ターンの維持費がかかります。\n敵将または敵本陣を倒せば勝利です。','策');
   }
   const wait=setInterval(()=>{
     if ($('sk-app') && $('gun-home-exit') && $('sk-home-btn') && $('sk-end-turn') && $('sk-modal-primary') && $('sk-modal-secondary')) {

@@ -10,6 +10,7 @@ body { margin:0; background:#110f0c !important; color:#f7efdf !important; overfl
 .sk-home h1 { margin:10px 0 4px; font-size:clamp(52px,16vw,92px); letter-spacing:.12em; line-height:1; text-shadow:0 4px 24px #000; }
 .sk-home p { margin:12px 0 28px; color:#d6ccb9; font-size:15px; letter-spacing:.1em; }
 .sk-primary { width:100%; border:1px solid #e1ba6d; border-radius:8px; padding:15px 20px; color:#160f08; background:linear-gradient(180deg,#e4c376,#b88737); font:800 16px/1 sans-serif; box-shadow:0 8px 28px rgba(0,0,0,.35); }
+.sk-stage-list { display:grid; gap:9px; margin-top:22px; }.sk-stage-card { position:relative; width:100%; padding:14px 64px 14px 16px; border:1px solid #9b773d; border-radius:10px; color:#f3e5c8; background:linear-gradient(135deg,rgba(94,68,31,.94),rgba(32,25,17,.98)); text-align:left; box-shadow:0 10px 24px rgba(0,0,0,.28); }.sk-stage-card i,.sk-stage-card span { display:block; color:#bda675; font:9px/1.4 sans-serif; font-style:normal; letter-spacing:.12em; }.sk-stage-card b { display:block; margin:4px 0; font-size:17px; letter-spacing:.08em; }.sk-stage-card em { position:absolute; right:16px; top:50%; transform:translateY(-50%); color:#edc56f; font:700 13px/1 sans-serif; font-style:normal; }.sk-stage-card.is-locked { opacity:.42; filter:saturate(.25); }
 .sk-victory-note { margin-top:18px; display:flex; justify-content:center; gap:10px; color:#968c7b; font:12px/1.4 sans-serif; }
 .sk-victory-note b { color:#c5a668; }
 .sk-exit { position:absolute; z-index:2; top:max(18px,env(safe-area-inset-top)); right:18px; width:42px; height:42px; border:1px solid #8f7549; border-radius:50%; background:rgba(15,12,9,.65); color:#e0c17b; font-size:22px; }
@@ -18,7 +19,7 @@ body { margin:0; background:#110f0c !important; color:#f7efdf !important; overfl
 .sk-topbar { height:68px; padding:max(8px,env(safe-area-inset-top)) 14px 0; display:flex; align-items:center; justify-content:space-between; box-sizing:content-box; border-bottom:1px solid rgba(206,173,102,.24); }
 .sk-icon-btn { width:42px; height:42px; border:1px solid #665535; border-radius:50%; background:#201b15; color:#e0c17b; font:700 25px/1 sans-serif; }
 .sk-turn-title { text-align:center; font-family:sans-serif; }.sk-turn-title small { display:block; color:#a8936d; font-size:10px; letter-spacing:.12em; }.sk-turn-title strong { font-size:17px; letter-spacing:.08em; }
-.sk-resource-bar { display:grid; grid-template-columns:repeat(3,1fr); max-width:760px; margin:12px auto; padding:0 12px; gap:7px; font-family:sans-serif; }
+.sk-resource-bar { display:grid; grid-template-columns:repeat(4,1fr); max-width:760px; margin:12px auto; padding:0 12px; gap:7px; font-family:sans-serif; }
 .sk-resource-bar div { min-width:0; padding:9px 8px; border:1px solid #51452f; border-radius:8px; background:rgba(36,30,22,.9); text-align:center; }
 .sk-resource-bar span { display:block; color:#a89b83; font-size:9px; }.sk-resource-bar strong { font-size:15px; color:#f1d28a; }.sk-resource-bar i { margin-left:3px; color:#7f725e; font-size:9px; font-style:normal; }
 .sk-battle-wrap { max-width:800px; margin:0 auto; padding:0 10px; }
@@ -33,7 +34,9 @@ body { margin:0; background:#110f0c !important; color:#f7efdf !important; overfl
 .sk-building { position:absolute; inset:4px; display:flex; align-items:center; justify-content:center; border-radius:4px; filter:drop-shadow(0 3px 2px rgba(0,0,0,.5)); pointer-events:none; }
 .sk-building.castle::before { content:'城'; width:78%; height:78%; display:grid; place-items:center; border:2px solid currentColor; background:#29231b; clip-path:polygon(0 18%,18% 18%,18% 0,38% 0,38% 18%,62% 18%,62% 0,82% 0,82% 18%,100% 18%,100% 100%,0 100%); font-size:clamp(11px,2vw,20px); font-weight:900; }
 .sk-building.base::before { content:'陣'; width:68%; height:68%; display:grid; place-items:center; border:2px solid currentColor; border-radius:50% 50% 8% 8%; background:#29231b; font-weight:900; }.sk-building.fence::before { content:'╫╫'; font:bold clamp(15px,3vw,28px)/1 sans-serif; letter-spacing:-.18em; }
+.sk-building.market::before,.sk-building.mine::before,.sk-building.granary::before { width:68%; height:68%; display:grid; place-items:center; border:2px solid currentColor; border-radius:8px; background:#29231b; font-weight:900; }.sk-building.market::before { content:'市'; }.sk-building.mine::before { content:'金'; }.sk-building.granary::before { content:'倉'; }
 .sk-building.player { color:#78c3dc; }.sk-building.enemy { color:#e07f70; }
+.sk-cell.has-stack .sk-building { inset:3px auto auto 3px; width:35%; height:35%; z-index:3; opacity:.88; filter:drop-shadow(0 2px 2px #000); }.sk-cell.has-stack .sk-building::before { width:100%; height:100%; font-size:9px; clip-path:none; border-radius:4px; }
 .sk-unit-stack { position:absolute; inset:2px; z-index:2; pointer-events:none; }
 .sk-piece { position:absolute; left:50%; top:47%; width:74%; aspect-ratio:1; transform:translate(-50%,-50%) perspective(80px) rotateX(-7deg); display:grid; place-items:center; border-radius:48% 48% 34% 34%; border:2px solid; box-shadow:0 8px 7px rgba(0,0,0,.62),0 2px 0 #0b0906,inset 0 3px 2px rgba(255,255,255,.35),inset 3px 0 5px rgba(255,255,255,.10),inset -5px -7px 9px rgba(0,0,0,.46); pointer-events:none; transition:transform .18s ease; }
 .sk-piece::before { content:''; position:absolute; left:50%; bottom:-15%; width:112%; height:30%; transform:translateX(-50%); border:2px solid #b88b3d; border-radius:50%; background:linear-gradient(180deg,#4b3920 0,#1a140d 55%,#080604 100%); box-shadow:0 5px 5px rgba(0,0,0,.65),inset 0 3px 2px rgba(255,220,145,.25); z-index:-1; }
@@ -57,3 +60,4 @@ body { margin:0; background:#110f0c !important; color:#f7efdf !important; overfl
 @keyframes sk-clash { 0%{box-shadow:inset 0 0 0 4px #fff} 30%{box-shadow:inset 0 0 0 5px #ff5d42,0 0 34px #ff3d20;filter:brightness(2)} 100%{box-shadow:none;filter:none} }
 @media (prefers-reduced-motion:reduce){.sk-moving-ghost,.sk-cell{animation-duration:.01ms!important}}
 @media (min-width:700px) { .sk-board { margin:auto; }.sk-resource-bar strong { font-size:18px; }.sk-actions span { font-size:11px; } }
+@media (max-width:520px) { .sk-resource-bar { grid-template-columns:repeat(2,1fr); } }
