@@ -74,3 +74,9 @@ def schedule_login():
 def gunryakugoma_login():
     login_screen("gunryakugoma", "軍略駒", "/gunryakugoma",
                  "一手で戦局を動かす", app_name="gunryakugoma")
+
+
+@ui.page("/marble-chess/login")
+def marble_chess_login():
+    login_screen("marble_chess", "MARBLE CHESS", "/marble-chess",
+                 "一撃では終わらない戦術チェス", app_name="marble-chess")

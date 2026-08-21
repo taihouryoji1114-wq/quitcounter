@@ -22,6 +22,10 @@ class Theme:
             manifest = "/static/gunryakugoma-manifest.json"
             icon = "/static/gunryakugoma_icon.png"
             theme_color = "#17120D"
+        elif app_name == "marble-chess":
+            manifest = "/static/marble-chess-manifest.json"
+            icon = "/static/marble_chess_icon.png"
+            theme_color = "#08090B"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

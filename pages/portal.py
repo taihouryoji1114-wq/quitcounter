@@ -60,6 +60,21 @@ def portal():
 
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/marble-chess")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.image("/static/marble_chess_icon.png").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("MARBLE CHESS").classes("text-xl font-bold")
+                    ui.label("HPと個体差で進化した戦術チェス").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/store-ops")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/store_ops_chanko_icon_v2.png").classes(
