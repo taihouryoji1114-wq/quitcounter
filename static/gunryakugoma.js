@@ -114,9 +114,9 @@
     state.revealedToEnemy = state.revealedToEnemy.filter(id=>id!==unit.id);
   }
   function mergeSameType(unit) {
-    const mate = state.units.find(other=>other!==unit&&other.pos===unit.pos&&other.owner===unit.owner&&other.type===unit.type&&(other.commander||null)===(unit.commander||null));
+    const mate = state.units.find(other=>other!==unit&&other.pos===unit.pos&&other.owner===unit.owner&&other.type===unit.type);
     if (!mate) return unit;
-    mate.size += unit.size; mate.moved = mate.moved || unit.moved;mate.capturePos=unit.pos;mate.captureTurns=Math.max(mate.captureTurns||0,unit.captureTurns||0);
+    mate.size += unit.size; mate.commander=mate.commander||unit.commander||null;mate.moved = mate.moved || unit.moved;mate.capturePos=unit.pos;mate.captureTurns=Math.max(mate.captureTurns||0,unit.captureTurns||0);
     state.units = state.units.filter(other=>other!==unit);
     return mate;
   }
