@@ -1,5 +1,15 @@
 (() => {
-  const COLS = 12, ROWS = 8;
+  const COLS = 18, ROWS = 12;
+  const PROVINCES = [
+    {id:'katsushika',name:'葛飾',detail:'蒼龍軍の本拠地',x:82,y:29},{id:'musashi',name:'武蔵',detail:'関東平野の要衝',x:75,y:36},
+    {id:'sagami',name:'相模',detail:'海と山に守られた国',x:69,y:43},{id:'kai',name:'甲斐',detail:'騎馬軍が集う山国',x:63,y:35},
+    {id:'shinano',name:'信濃',detail:'大軍がぶつかる中央山地',x:57,y:27},{id:'suruga',name:'駿河',detail:'東海道を抑える豊かな国',x:57,y:45},
+    {id:'echigo',name:'越後',detail:'雪と精兵の北国',x:51,y:18},{id:'owari',name:'尾張',detail:'天下を狙う商業地',x:49,y:52},
+    {id:'omi',name:'近江',detail:'日の本の東西を結ぶ国',x:42,y:47},{id:'yamashiro',name:'山城',detail:'都へ続く最重要地',x:37,y:55},
+    {id:'harima',name:'播磨',detail:'西国攻略の玄関口',x:31,y:49},{id:'aki',name:'安芸',detail:'水軍が支配する瀬戸内',x:25,y:57},
+    {id:'sanuki',name:'讃岐',detail:'四国の海上拠点',x:28,y:70},{id:'chikuzen',name:'筑前',detail:'九州進出の足がかり',x:17,y:62},
+    {id:'higo',name:'肥後',detail:'広い平野を持つ南の大国',x:13,y:73},{id:'satsuma',name:'薩摩',detail:'日本統一を決する最終戦',x:8,y:84},
+  ];
   const TYPES = {
     general: { name: '総大将', mark: '将', move: 1, range: 1 },
     infantry: { name: '歩兵', mark: '槍', move: 1, range: 1 },
@@ -16,7 +26,7 @@
     granary: { name: '兵糧庫', cost: 1300, hp: 1200, food: 800, note: '毎ターン800俵' },
     castle: { name: '城', cost: 3800, hp: 5000, money: 1000, food: 1600 },
   };
-  let state,profile=loadProfile();
+  let state,profile=loadProfile(),selectedProvince=null;
   const $ = id => document.getElementById(id);
   const pos = (r, c) => r * COLS + c;
   const rc = p => [Math.floor(p / COLS), p % COLS];
@@ -27,34 +37,41 @@
   const defenderAt = (p, owner) => unitsAt(p, owner).sort((a,b) => (a.type === 'general') - (b.type === 'general'))[0];
   const buildingAt = p => state.buildings.find(b => b.pos === p);
   const terrainAt = p => state.terrain[p] || 'plain';
-  function loadProfile(){try{return {...{wins:0,territories:1,level:1,xp:0,command:'cavalry'},...JSON.parse(localStorage.getItem('gunryaku_empire')||'{}')}}catch{return {wins:0,territories:1,level:1,xp:0,command:'cavalry'};}}
+  function loadProfile(){try{const saved={...{wins:0,territories:1,level:1,xp:0,command:'cavalry'},...JSON.parse(localStorage.getItem('gunryaku_empire')||'{}')};if(!Array.isArray(saved.conquered))saved.conquered=PROVINCES.slice(0,Math.max(1,Math.min(PROVINCES.length,saved.territories||1))).map(p=>p.id);saved.territories=saved.conquered.length;return saved;}catch{return {wins:0,territories:1,level:1,xp:0,command:'cavalry',conquered:['katsushika']};}}
   function saveProfile(){localStorage.setItem('gunryaku_empire',JSON.stringify(profile));renderProfile();}
   function renderProfile(){
     if(!$('sk-wins'))return;const next=profile.level*100;$('sk-wins').textContent=profile.wins;$('sk-territories').textContent=profile.territories;$('sk-commander-level').textContent=profile.level;$('sk-commander-xp').textContent=profile.xp;$('sk-commander-next').textContent=next;
     document.querySelectorAll('[data-command]').forEach(button=>button.classList.toggle('is-active',button.dataset.command===profile.command));
+    renderCampaignMap();
   }
-  function awardVictory(){profile.wins++;profile.territories++;profile.xp+=100;while(profile.xp>=profile.level*100){profile.xp-=profile.level*100;profile.level++;}saveProfile();}
+  function renderCampaignMap(){
+    const map=$('sk-campaign-map');if(!map)return;const nextIndex=Math.min(profile.conquered.length,PROVINCES.length-1);if(!selectedProvince)selectedProvince=PROVINCES[nextIndex];
+    map.innerHTML=PROVINCES.map((province,index)=>{const owned=profile.conquered.includes(province.id),available=owned||index===nextIndex,selected=selectedProvince.id===province.id;return `<button class="sk-province ${owned?'is-owned':index===nextIndex?'is-next':'is-locked'} ${selected?'is-selected':''}" style="--x:${province.x}%;--y:${province.y}%" data-province="${province.id}" ${available?'':'disabled'}>${province.name}</button>`;}).join('');
+    map.querySelectorAll('[data-province]').forEach(button=>button.onclick=()=>{selectedProvince=PROVINCES.find(p=>p.id===button.dataset.province);renderCampaignMap();});
+    $('sk-unification').textContent=`${profile.conquered.length} / ${PROVINCES.length}`;$('sk-selected-province').textContent=selectedProvince.name;$('sk-selected-detail').textContent=profile.conquered.includes(selectedProvince.id)?'統治済み・再戦可能':selectedProvince.detail;
+  }
+  function awardVictory(province){profile.wins++;if(province&&!profile.conquered.includes(province.id))profile.conquered.push(province.id);profile.territories=profile.conquered.length;profile.xp+=100;while(profile.xp>=profile.level*100){profile.xp-=profile.level*100;profile.level++;}selectedProvince=null;saveProfile();}
 
   function freshState() {
     return {
-      turn: 1, phase: 'player', money: 4000, food: 7000,
+      turn: 1, phase: 'player', money: 4000, food: 7000, province:selectedProvince,
       enemyMoney: 4000, enemyFood: 7000, selected: null, placement: null,
-      terrain: { 15:'forest',16:'forest',27:'forest',28:'forest',38:'hill',39:'hill',44:'forest',45:'forest',55:'hill',56:'hill',63:'forest',76:'hill',77:'hill' },
+      terrain: { 22:'forest',23:'forest',24:'forest',39:'forest',40:'forest',53:'hill',54:'hill',55:'hill',70:'forest',71:'forest',86:'hill',87:'hill',88:'hill',101:'forest',102:'forest',119:'forest',120:'forest',133:'hill',134:'hill',151:'forest',152:'forest',169:'hill',170:'hill',185:'forest',186:'forest' },
       buildings: [
-        { id:'phq', owner:'player', type:'castle', pos:84, hp:6000, maxHp:6000, hq:true },
-        { id:'ehq', owner:'enemy', type:'castle', pos:11, hp:6000, maxHp:6000, hq:true },
-        { id:'pfence', owner:'player', type:'fence', pos:62, hp:1200, maxHp:1200 },
-        { id:'efence', owner:'enemy', type:'fence', pos:33, hp:1200, maxHp:1200 },
+        { id:'phq', owner:'player', type:'castle', pos:198, hp:6000, maxHp:6000, hq:true },
+        { id:'ehq', owner:'enemy', type:'castle', pos:17, hp:6000, maxHp:6000, hq:true },
+        { id:'pfence', owner:'player', type:'fence', pos:145, hp:1200, maxHp:1200 },
+        { id:'efence', owner:'enemy', type:'fence', pos:70, hp:1200, maxHp:1200 },
       ],
       units: [
-        { id:'pg', owner:'player', type:'general', size:1500, pos:85, moved:false },
-        { id:'pi', owner:'player', type:'infantry', size:1000, pos:72, moved:false },
-        { id:'pa', owner:'player', type:'archer', size:500, pos:74, moved:false },
-        { id:'pc', owner:'player', type:'cavalry', size:500, pos:86, moved:false },
-        { id:'eg', owner:'enemy', type:'general', size:1500, pos:10, moved:false },
-        { id:'ei', owner:'enemy', type:'infantry', size:1000, pos:23, moved:false },
-        { id:'ea', owner:'enemy', type:'archer', size:500, pos:9, moved:false },
-        { id:'ec', owner:'enemy', type:'cavalry', size:500, pos:21, moved:false },
+        { id:'pg', owner:'player', type:'general', size:1500, pos:199, moved:false },
+        { id:'pi', owner:'player', type:'infantry', size:1000, pos:180, moved:false },
+        { id:'pa', owner:'player', type:'archer', size:500, pos:183, moved:false },
+        { id:'pc', owner:'player', type:'cavalry', size:500, pos:200, moved:false },
+        { id:'eg', owner:'enemy', type:'general', size:1500, pos:16, moved:false },
+        { id:'ei', owner:'enemy', type:'infantry', size:1000, pos:35, moved:false },
+        { id:'ea', owner:'enemy', type:'archer', size:500, pos:15, moved:false },
+        { id:'ec', owner:'enemy', type:'cavalry', size:500, pos:33, moved:false },
       ],
       revealedToPlayer: [], revealedToEnemy: [],
       log: '城から軍資金と兵糧が届いた。', over:false, animating:false,
@@ -132,6 +149,7 @@
     $('sk-turn').textContent = state.turn; $('sk-phase').textContent = state.phase === 'player' ? 'あなたの軍議' : '敵軍進行中';
     $('sk-money').textContent = fmt(state.money); $('sk-food').textContent = fmt(state.food); $('sk-income').textContent = `+${fmt(income('player'))}`; $('sk-upkeep').textContent = `-${fmt(armyUpkeep('player'))}`;
     $('sk-player-status').textContent=`蒼牙 Lv.${profile.level} · ${TYPES[profile.command].name}指揮`;
+    $('sk-enemy-status').textContent=`${state.province?.name||'武蔵'}攻略戦`;
     const board = $('sk-board'); board.innerHTML = '';
     const targets = getTargets();
     for (let p=0; p<COLS*ROWS; p++) {
@@ -387,8 +405,8 @@
   }
   function showStageSelect(){$('sk-modal').classList.add('is-hidden');$('sk-game').classList.add('is-hidden');$('sk-home').classList.remove('is-hidden');}
   function finish(winner,reason){
-    state.over=true;state.phase='over';if(winner==='player')awardVictory();setTimeout(()=>{
-      const modal=$('sk-modal'),secondary=$('sk-modal-secondary');$('sk-modal-title').textContent=winner==='player'?'勝鬨 — 勝利':'落城 — 敗北';$('sk-modal-text').textContent=`${reason}。\n${state.turn}ターンの戦いが終結した。`;$('sk-modal-mark').textContent=winner==='player'?'勝':'敗';$('sk-modal-primary').textContent='もう一度戦う';secondary.textContent='戦場選択へ戻る';secondary.classList.remove('is-hidden');modal.classList.remove('is-hidden');$('sk-modal-primary').onclick=()=>{modal.classList.add('is-hidden');startGame();};secondary.onclick=showStageSelect;
+    const battleProvince=state.province,captured=winner==='player'&&battleProvince&&!profile.conquered.includes(battleProvince.id)?battleProvince.name:null;state.over=true;state.phase='over';if(winner==='player')awardVictory(battleProvince);setTimeout(()=>{
+      const modal=$('sk-modal'),secondary=$('sk-modal-secondary');$('sk-modal-title').textContent=winner==='player'?'勝鬨 — 勝利':'落城 — 敗北';$('sk-modal-text').textContent=`${reason}。\n${state.turn}ターンの戦いが終結した。${captured?`\n${captured}を蒼龍帝国の新たな領土に加えた！`:''}`;$('sk-modal-mark').textContent=winner==='player'?'勝':'敗';$('sk-modal-primary').textContent='もう一度戦う';secondary.textContent='日本攻略マップへ';secondary.classList.remove('is-hidden');modal.classList.remove('is-hidden');$('sk-modal-primary').onclick=()=>{modal.classList.add('is-hidden');selectedProvince=battleProvince;startGame();};secondary.onclick=showStageSelect;
     },100);
   }
   function startGame(){state=freshState();$('sk-home').classList.add('is-hidden');$('sk-game').classList.remove('is-hidden');closePanel();render();}

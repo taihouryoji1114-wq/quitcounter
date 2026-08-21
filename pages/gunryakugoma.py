@@ -10,8 +10,8 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=9">'
-        '<script src="/static/gunryakugoma.js?v=9" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=10">'
+        '<script src="/static/gunryakugoma.js?v=10" defer></script>'
     )
     ui.html(
         """
@@ -19,7 +19,7 @@ def gunryakugoma_page():
           <section id="sk-home" class="sk-home">
             <div class="sk-home-shade"></div>
             <div class="sk-home-copy">
-              <span class="sk-eyebrow">VERSION 0.4 · ROAD TO EMPIRE</span>
+              <span class="sk-eyebrow">VERSION 0.5 · UNIFICATION OF JAPAN</span>
               <h1>軍略駒</h1>
               <p>武将を育て、領土を広げ、帝国を築け。</p>
               <div class="sk-empire-status"><div><small>蒼龍帝国</small><b><span id="sk-territories">1</span>国</b></div><div><small>戦勝</small><b><span id="sk-wins">0</span>回</b></div></div>
@@ -28,10 +28,12 @@ def gunryakugoma_page():
                 <div class="sk-commander-copy"><small>UR · 蒼龍軍総大将</small><b>蒼牙</b><span>Lv.<strong id="sk-commander-level">1</strong> · EXP <strong id="sk-commander-xp">0</strong>/<strong id="sk-commander-next">100</strong></span></div>
                 <div class="sk-command-type"><small>得意兵種</small><div><button data-command="infantry">歩</button><button data-command="cavalry">騎</button><button data-command="archer">弓</button></div></div>
               </section>
-              <div class="sk-stage-list">
-                <button id="sk-start" class="sk-stage-card" type="button"><i>第一戦</i><b>青嶺の攻防</b><span>蒼龍軍 対 朱雀軍</span><em>出陣 ›</em></button>
-                <button class="sk-stage-card is-locked" type="button" disabled><i>第二戦</i><b>霧深き峡谷</b><span>近日解放</span><em>錠</em></button>
-              </div>
+              <section class="sk-campaign">
+                <div class="sk-campaign-heading"><div><small>CAMPAIGN MAP</small><b>日本統一</b></div><span id="sk-unification">1 / 16</span></div>
+                <div id="sk-campaign-map" class="sk-campaign-map" aria-label="日本攻略マップ"></div>
+                <div class="sk-next-battle"><small>次の戦場</small><b id="sk-selected-province">武蔵</b><span id="sk-selected-detail">関東平野の要衝</span></div>
+                <button id="sk-start" class="sk-primary" type="button">選択した領土へ出陣</button>
+              </section>
               <div class="sk-victory-note"><b>勝利条件</b><span>敵将を討つ、または敵本陣を破壊</span></div>
             </div>
           </section>
