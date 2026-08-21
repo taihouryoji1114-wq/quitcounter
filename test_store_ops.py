@@ -200,11 +200,11 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual([(item["name"], item["purchase_quantity"])
                           for item in purchase_list], [("白菜", 3.0)])
 
-    def test_previous_day_board_contains_only_ordered_destinations(self):
+    def test_completed_orders_are_not_carried_to_board(self):
         self.manager.set_daily_order_check("2026-08-19", "ミクリード", True)
         board = self.manager.previous_day_board("2026-08-20")
-        ordered = [item for item in board["items"] if item["kind"] == "order"]
-        self.assertEqual([item["name"] for item in ordered], ["ミクリードへ発注済み"])
+        self.assertFalse(any(item["name"] == "ミクリードへ発注済み"
+                             for item in board["items"]))
 
     def test_unchecked_daily_items_move_to_board_after_operating_day(self):
         self.manager.ensure_daily_checklist("2026-08-19")
