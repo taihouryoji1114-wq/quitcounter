@@ -41,8 +41,8 @@ def gunryakugoma_page():
     encoded_profile = json.dumps(server_profile, ensure_ascii=False).replace("<", "\\u003c")
     ui.add_head_html(
         f'<script>window.GUNRYAKU_SERVER_PROFILE={encoded_profile};</script>'
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=12">'
-        '<script src="/static/gunryakugoma.js?v=13" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=13">'
+        '<script src="/static/gunryakugoma.js?v=14" defer></script>'
     )
     ui.html(
         """

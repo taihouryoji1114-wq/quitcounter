@@ -59,7 +59,7 @@
   function freshState() {
     return {
       turn: 1, phase: 'player', money: 4000, food: 7000, province:selectedProvince,rival:provinceFaction(selectedProvince),territory:initialTerritory(),
-      enemyMoney: 4000, enemyFood: 7000, selected: null, placement: null,
+      enemyMoney: 4000, enemyFood: 7000, selected: null, moveSize: null, placement: null,
       terrain: { 22:'forest',23:'forest',24:'forest',39:'forest',40:'forest',53:'mountain',54:'mountain',55:'mountain',70:'forest',71:'forest',76:'river',94:'river',112:'river',130:'river',86:'hill',87:'hill',88:'hill',101:'forest',102:'forest',119:'forest',120:'forest',133:'mountain',134:'mountain',151:'forest',152:'forest',169:'hill',170:'hill',185:'forest',186:'forest' },
       buildings: [
         { id:'phq', owner:'player', type:'castle', pos:198, hp:6000, maxHp:6000, hq:true },
@@ -235,27 +235,47 @@
     const friendly=unitsAt(p,'player');
     const u=state.selected;
     if(!u) {
-      if(friendly.length===1){state.selected=friendly[0];closePanel();render();}
+      if(friendly.length===1){selectUnit(friendly[0]);}
       else if(friendly.length>1) showStackPicker(friendly);
       else log('まず動かす自軍の駒を選んでください。');
       return;
     }
     const targets=getTargets();
-    if(targets.move.has(p)) moveUnit(u,p);
+    if(targets.move.has(p)) moveUnit(splitForAction(u),p);
     else if(targets.attack.has(p)) showBattlePreview(u,p);
     else {
-      if(friendly.length===1){state.selected=friendly[0];closePanel();render();}
+      if(friendly.length===1){selectUnit(friendly[0]);}
       else if(friendly.length>1) showStackPicker(friendly);
       else log('そのマスには行動できません。');
     }
   }
+  function selectedMoveSize(u){return Math.max(100,Math.min(u.size,Math.round(Number(state.moveSize||u.size)/100)*100));}
+  function selectUnit(u){state.selected=u;state.moveSize=u.size;showSplitPanel(u);render();}
+  function showSplitPanel(u){
+    if(!u||u.owner!=='player'||u.moved)return;
+    const panel=$('sk-panel');panel.classList.remove('is-hidden');
+    if(u.type==='general'){panel.innerHTML='<h3>総大将の軍</h3><p class="sk-split-note">総大将は分割できません。この軍全体で行動します。</p>';return;}
+    const quick=[100,500,1000,5000].filter(n=>n<u.size);
+    panel.innerHTML=`<h3>動かす兵数</h3><p class="sk-split-note"><b>${fmt(u.size)}人</b>のうち、移動・攻撃させる人数を選択</p><div class="sk-split-grid">${quick.map(n=>`<button data-split="${n}">${fmt(n)}人</button>`).join('')}<button data-split="half">半分</button><button data-split="all">全員</button></div><label class="sk-split-input">自由入力（100人単位）<input id="sk-split-custom" type="number" min="100" max="${u.size}" step="100" value="${selectedMoveSize(u)}"></label>`;
+    const choose=value=>{state.moveSize=value==='all'?u.size:value==='half'?Math.max(100,Math.floor(u.size/200)*100):Number(value);panel.querySelectorAll('[data-split]').forEach(b=>b.classList.toggle('active',b.dataset.split===String(value)));const input=$('sk-split-custom');if(input)input.value=selectedMoveSize(u);render();};
+    panel.querySelectorAll('[data-split]').forEach(btn=>btn.onclick=()=>choose(btn.dataset.split));
+    $('sk-split-custom').onchange=e=>choose(e.target.value);
+  }
+  function splitForAction(u){
+    const amount=selectedMoveSize(u);state.moveSize=null;if(u.type==='general'||amount>=u.size)return u;
+    const moving={...u,id:`${u.id}-split-${Date.now()}`,size:amount,moved:false,splitFrom:u.id,splitCommander:u.commander||null};u.size-=amount;
+    if(u.commander)u.commander=null;
+    state.units.push(moving);state.selected=moving;
+    log(`${TYPES[u.type].name}を${fmt(amount)}人と${fmt(u.size)}人に分隊。`);return moving;
+  }
+  function restoreSplit(u){if(!u?.splitFrom)return;const source=state.units.find(x=>x.id===u.splitFrom);if(source){source.size+=u.size;if(u.splitCommander)source.commander=u.splitCommander;}state.units=state.units.filter(x=>x!==u);state.selected=source||null;}
   function spendFood(owner, amount) {
     const key=owner==='player'?'food':'enemyFood'; if(state[key]<amount) return false; state[key]-=amount; return true;
   }
   function moveUnit(u,p) {
     const hiddenEnemies=unitsAt(p).filter(enemy=>enemy.owner!==u.owner&&!isVisibleTo(u.owner,enemy));
     if(hiddenEnemies.length){hiddenEnemies.forEach(revealToOpponent);log('伏兵だ！ 森から敵軍が姿を現した。');attack(u,p);return;}
-    const cost=foodCost(u); if(!spendFood(u.owner,cost)){ log('兵糧が足りず、軍を動かせない。'); return; }
+    const cost=foodCost(u); if(!spendFood(u.owner,cost)){ restoreSplit(u);log('兵糧が足りず、軍を動かせない。');render();return; }
     const from=u.pos,captured=capturePiece(u); state.animating=true;
     hideAfterMove(u); u.pos=p;u.capturePos=p;u.captureTurns=0;u.moved=true; const combined=mergeSameType(u); state.selected=null;
     const merged=combined!==u?' 同兵種と合流した。':'';
@@ -302,14 +322,14 @@
     return {label,detail:`${TYPES[attacker.type].name} 対 ${TYPES[defender.type].name}\n${ranged}`};
   }
   function showBattlePreview(attacker,p) {
-    const forecast=battleForecast(attacker,p), modal=$('sk-modal'), secondary=$('sk-modal-secondary');
+    const preview=attacker.type==='general'?attacker:{...attacker,size:selectedMoveSize(attacker)},forecast=battleForecast(preview,p), modal=$('sk-modal'), secondary=$('sk-modal-secondary');
     $('sk-modal-title').textContent=forecast.label; $('sk-modal-text').textContent=forecast.detail; $('sk-modal-mark').textContent='戦';
     $('sk-modal-primary').textContent='攻撃する'; secondary.textContent='やめる'; secondary.classList.remove('is-hidden'); modal.classList.remove('is-hidden');
     secondary.onclick=()=>modal.classList.add('is-hidden');
-    $('sk-modal-primary').onclick=()=>{modal.classList.add('is-hidden');attack(attacker,p);};
+    $('sk-modal-primary').onclick=()=>{modal.classList.add('is-hidden');attack(splitForAction(attacker),p);};
   }
   function attack(u,p,quiet=false) {
-    const cost=foodCost(u); if(!spendFood(u.owner,cost)){ if(!quiet)log('兵糧が足りず、攻撃できない。'); return false; }
+    const cost=foodCost(u); if(!spendFood(u.owner,cost)){ restoreSplit(u);if(!quiet)log('兵糧が足りず、攻撃できない。');render();return false; }
     const from=u.pos,captured=capturePiece(u);
     const lockPlayer=state.phase==='player'&&u.owner==='player';if(lockPlayer)state.animating=true;
     const targetOwner=u.owner==='player'?'enemy':'player';
@@ -341,7 +361,7 @@
   function showStackPicker(units) {
     state.selected=null; const panel=$('sk-panel'); panel.classList.remove('is-hidden');
     panel.innerHTML=`<h3>動かす部隊を選ぶ</h3><div class="sk-option-grid">${units.map(u=>`<button class="sk-option" data-unit="${u.id}">${TYPES[u.type].mark} ${TYPES[u.type].name}<small>${fmt(u.size)}人${u.moved?'・行動済み':''}</small></button>`).join('')}</div>`;
-    panel.querySelectorAll('[data-unit]').forEach(btn=>btn.onclick=()=>{state.selected=state.units.find(u=>u.id===btn.dataset.unit);closePanel();render();});
+    panel.querySelectorAll('[data-unit]').forEach(btn=>btn.onclick=()=>selectUnit(state.units.find(u=>u.id===btn.dataset.unit)));
     log('同じマスにいる部隊から、動かす駒を選択。'); render();
   }
 
@@ -381,7 +401,7 @@
     log(`${x.kind==='unit'?TYPES[x.type].name:BUILDINGS[x.type].name}を配置した。`); state.placement=null; render();
   }
   function closePanel(){ $('sk-panel').classList.add('is-hidden'); $('sk-panel').innerHTML=''; }
-  function cancelSelection(){ if(state.animating)return;state.selected=null;state.placement=null;closePanel();render();log('選択を解除した。'); }
+  function cancelSelection(){ if(state.animating)return;state.selected=null;state.moveSize=null;state.placement=null;closePanel();render();log('選択を解除した。'); }
   function progressOccupation(owner){
     let claimed=0;for(const unit of state.units.filter(u=>u.owner===owner)){
       if(state.territory[unit.pos]===owner){unit.capturePos=unit.pos;unit.captureTurns=0;continue;}
