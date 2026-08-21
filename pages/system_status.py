@@ -66,23 +66,24 @@ def system_status_page():
                     ui.label("軍略駒").classes("text-xl font-bold")
                     ui.label("戦績・武将育成・途中の戦場").classes("text-grey-7 text-sm")
                 ui.badge("端末内に自動保存", color="blue-grey-8")
-            ui.html(
-                """
-                <div class="q-mt-md q-pt-md border-t border-grey-3" style="display:flex;justify-content:space-between;align-items:center">
-                  <span style="color:#616161">この端末の保存量</span><strong id="gunryaku-local-size">確認中…</strong>
-                </div>
-                <script>
-                setTimeout(() => {
-                  const keys = ['gunryaku_empire', 'gunryaku_battle_v1'];
-                  const bytes = keys.reduce((sum, key) => sum + new Blob([localStorage.getItem(key) || '']).size, 0);
-                  const text = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
-                  const target = document.getElementById('gunryaku-local-size');
-                  if (target) target.textContent = text;
-                }, 100);
-                </script>
-                """,
-                sanitize=False,
-            )
+            with ui.row().classes("w-full justify-between q-mt-md q-pt-md border-t border-grey-3"):
+                ui.label("この端末の保存量").classes("text-grey-7")
+                local_size = ui.label("確認中…").classes("font-bold")
+
+            async def update_local_size():
+                try:
+                    value = await ui.run_javascript(
+                        """(() => {
+                            const keys = ['gunryaku_empire', 'gunryaku_battle_v1'];
+                            return keys.reduce((sum, key) => sum + new Blob([localStorage.getItem(key) || '']).size, 0);
+                        })()""",
+                        timeout=2.0,
+                    )
+                    local_size.set_text(_size(int(value or 0)))
+                except Exception:
+                    local_size.set_text("確認できません")
+
+            ui.timer(0.2, update_local_size, once=True)
             ui.label("軍略駒は現在、この端末のブラウザに保存されるため、上の1GB使用量には含まれません").classes("text-grey-6 text-xs q-mt-sm")
 
         if status["percent"] < 70 and status["writable"]:
