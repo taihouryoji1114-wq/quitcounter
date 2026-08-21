@@ -10,25 +10,30 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=11">'
-        '<script src="/static/gunryakugoma.js?v=11" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=12">'
+        '<script src="/static/gunryakugoma.js?v=12" defer></script>'
     )
     ui.html(
         """
         <main id="sk-app" class="sk-app">
-          <section id="sk-home" class="sk-home">
+          <section id="sk-splash" class="sk-splash">
+            <div class="sk-splash-shade"></div>
+            <div class="sk-splash-copy">
+              <span>VERSION 0.7 · EMPIRE AWAKENS</span>
+              <h1>軍略駒</h1>
+              <p>一駒より、天下を築け。</p>
+              <button id="sk-enter" class="sk-primary" type="button">軍略を始める</button>
+            </div>
+          </section>
+
+          <section id="sk-home" class="sk-home is-hidden">
             <div class="sk-home-shade"></div>
             <div class="sk-home-copy">
-              <span class="sk-eyebrow">VERSION 0.6 · BORDERS & WARLORDS</span>
-              <h1>軍略駒</h1>
-              <p>武将を育て、領土を広げ、帝国を築け。</p>
+              <span class="sk-eyebrow">SORYU EMPIRE</span>
+              <h1>帝国軍議</h1>
+              <p>領土を治め、武将を率い、日本統一へ。</p>
               <div class="sk-empire-status"><div><small>蒼龍帝国</small><b><span id="sk-territories">1</span>国</b></div><div><small>戦勝</small><b><span id="sk-wins">0</span>回</b></div></div>
-              <section class="sk-commander-card">
-                <div class="sk-card-rarity">UR</div>
-                <div class="sk-commander-copy"><small>蒼龍軍総大将</small><b>蒼牙</b><span>Lv.<strong id="sk-commander-level">1</strong> · EXP <strong id="sk-commander-xp">0</strong>/<strong id="sk-commander-next">100</strong></span></div>
-                <div class="sk-card-skill"><small>固有技能</small><b>蒼騎の号令</b><span>得意兵種の攻撃 +<strong id="sk-command-bonus">18</strong>%</span></div>
-                <div class="sk-command-type"><small>得意兵種</small><div><button data-command="infantry">歩</button><button data-command="cavalry">騎</button><button data-command="archer">弓</button></div></div>
-              </section>
+              <div class="sk-hub-menu"><button id="sk-resume" class="sk-hub-card is-hidden" type="button"><b>戦を続ける</b><span>保存された戦場へ戻る</span></button><button id="sk-roster-btn" class="sk-hub-card" type="button"><b>武将一覧</b><span>武将の能力と得意兵種を確認</span></button></div>
               <section class="sk-campaign">
                 <div class="sk-campaign-heading"><div><small>CAMPAIGN MAP</small><b>日本統一</b></div><span id="sk-unification">1 / 16</span></div>
                 <div id="sk-campaign-map" class="sk-campaign-map" aria-label="日本攻略マップ"></div>
@@ -38,6 +43,16 @@ def gunryakugoma_page():
               </section>
               <div class="sk-victory-note"><b>勝利条件</b><span>敵将を討つ、または敵本陣を破壊</span></div>
             </div>
+          </section>
+
+          <section id="sk-roster" class="sk-roster is-hidden">
+            <header class="sk-topbar"><button id="sk-roster-back" class="sk-icon-btn" type="button">‹</button><div class="sk-turn-title"><small>COMMANDERS</small><strong>武将一覧</strong></div><span class="sk-top-spacer"></span></header>
+            <div class="sk-roster-body"><section class="sk-commander-card">
+              <div class="sk-card-rarity">UR</div>
+              <div class="sk-commander-copy"><small>蒼龍軍総大将</small><b>蒼牙</b><span>Lv.<strong id="sk-commander-level">1</strong> · EXP <strong id="sk-commander-xp">0</strong>/<strong id="sk-commander-next">100</strong></span></div>
+              <div class="sk-card-skill"><small>固有技能</small><b>蒼騎の号令</b><span>騎兵の攻撃 +<strong id="sk-command-bonus">18</strong>%</span></div>
+              <div class="sk-command-type"><small>固定の得意兵種</small><strong>騎馬</strong></div>
+            </section><div class="sk-roster-note"><b>武将召喚</b><p>騎兵を招集すると蒼牙を配属できます。武将の付いた軍は、同じ兵数でも高い戦力を発揮します。</p></div></div>
           </section>
 
           <section id="sk-game" class="sk-game is-hidden">
