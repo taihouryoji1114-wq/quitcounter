@@ -10,8 +10,8 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=10">'
-        '<script src="/static/gunryakugoma.js?v=10" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=11">'
+        '<script src="/static/gunryakugoma.js?v=11" defer></script>'
     )
     ui.html(
         """
@@ -19,18 +19,20 @@ def gunryakugoma_page():
           <section id="sk-home" class="sk-home">
             <div class="sk-home-shade"></div>
             <div class="sk-home-copy">
-              <span class="sk-eyebrow">VERSION 0.5 · UNIFICATION OF JAPAN</span>
+              <span class="sk-eyebrow">VERSION 0.6 · BORDERS & WARLORDS</span>
               <h1>軍略駒</h1>
               <p>武将を育て、領土を広げ、帝国を築け。</p>
               <div class="sk-empire-status"><div><small>蒼龍帝国</small><b><span id="sk-territories">1</span>国</b></div><div><small>戦勝</small><b><span id="sk-wins">0</span>回</b></div></div>
               <section class="sk-commander-card">
-                <div class="sk-commander-seal">蒼</div>
-                <div class="sk-commander-copy"><small>UR · 蒼龍軍総大将</small><b>蒼牙</b><span>Lv.<strong id="sk-commander-level">1</strong> · EXP <strong id="sk-commander-xp">0</strong>/<strong id="sk-commander-next">100</strong></span></div>
+                <div class="sk-card-rarity">UR</div>
+                <div class="sk-commander-copy"><small>蒼龍軍総大将</small><b>蒼牙</b><span>Lv.<strong id="sk-commander-level">1</strong> · EXP <strong id="sk-commander-xp">0</strong>/<strong id="sk-commander-next">100</strong></span></div>
+                <div class="sk-card-skill"><small>固有技能</small><b>蒼騎の号令</b><span>得意兵種の攻撃 +<strong id="sk-command-bonus">18</strong>%</span></div>
                 <div class="sk-command-type"><small>得意兵種</small><div><button data-command="infantry">歩</button><button data-command="cavalry">騎</button><button data-command="archer">弓</button></div></div>
               </section>
               <section class="sk-campaign">
                 <div class="sk-campaign-heading"><div><small>CAMPAIGN MAP</small><b>日本統一</b></div><span id="sk-unification">1 / 16</span></div>
                 <div id="sk-campaign-map" class="sk-campaign-map" aria-label="日本攻略マップ"></div>
+                <div class="sk-faction-legend"><span class="soryu">蒼龍帝国</span><span class="suzaku">朱雀同盟</span><span class="genbu">玄武連邦</span><span class="byakko">白虎軍</span></div>
                 <div class="sk-next-battle"><small>次の戦場</small><b id="sk-selected-province">武蔵</b><span id="sk-selected-detail">関東平野の要衝</span></div>
                 <button id="sk-start" class="sk-primary" type="button">選択した領土へ出陣</button>
               </section>
@@ -53,7 +55,8 @@ def gunryakugoma_page():
             </div>
 
             <div class="sk-battle-wrap">
-              <div class="sk-enemy-banner"><span>朱雀軍</span><b id="sk-enemy-status">敵将健在</b></div>
+              <div class="sk-enemy-banner"><span id="sk-enemy-name">朱雀軍</span><b id="sk-enemy-status">敵将健在</b></div>
+              <div class="sk-force-summary"><div><b>蒼龍軍</b><span>将 <strong id="sk-player-general">0</strong></span><span>歩 <strong id="sk-player-infantry">0</strong></span><span>騎 <strong id="sk-player-cavalry">0</strong></span><span>弓 <strong id="sk-player-archer">0</strong></span></div><div><b>朱雀軍</b><span>将 <strong id="sk-enemy-general">0</strong></span><span>歩 <strong id="sk-enemy-infantry">0</strong></span><span>騎 <strong id="sk-enemy-cavalry">0</strong></span><span>弓 <strong id="sk-enemy-archer">0</strong></span></div></div>
               <div id="sk-board" class="sk-board" aria-label="軍略盤"></div>
               <div class="sk-player-banner"><span>蒼龍軍</span><b id="sk-player-status">敵陣を攻略せよ</b></div>
             </div>

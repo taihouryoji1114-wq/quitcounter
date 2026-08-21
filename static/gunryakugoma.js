@@ -1,15 +1,17 @@
 (() => {
   const COLS = 18, ROWS = 12;
   const PROVINCES = [
-    {id:'katsushika',name:'葛飾',detail:'蒼龍軍の本拠地',x:82,y:29},{id:'musashi',name:'武蔵',detail:'関東平野の要衝',x:75,y:36},
-    {id:'sagami',name:'相模',detail:'海と山に守られた国',x:69,y:43},{id:'kai',name:'甲斐',detail:'騎馬軍が集う山国',x:63,y:35},
-    {id:'shinano',name:'信濃',detail:'大軍がぶつかる中央山地',x:57,y:27},{id:'suruga',name:'駿河',detail:'東海道を抑える豊かな国',x:57,y:45},
-    {id:'echigo',name:'越後',detail:'雪と精兵の北国',x:51,y:18},{id:'owari',name:'尾張',detail:'天下を狙う商業地',x:49,y:52},
-    {id:'omi',name:'近江',detail:'日の本の東西を結ぶ国',x:42,y:47},{id:'yamashiro',name:'山城',detail:'都へ続く最重要地',x:37,y:55},
-    {id:'harima',name:'播磨',detail:'西国攻略の玄関口',x:31,y:49},{id:'aki',name:'安芸',detail:'水軍が支配する瀬戸内',x:25,y:57},
-    {id:'sanuki',name:'讃岐',detail:'四国の海上拠点',x:28,y:70},{id:'chikuzen',name:'筑前',detail:'九州進出の足がかり',x:17,y:62},
-    {id:'higo',name:'肥後',detail:'広い平野を持つ南の大国',x:13,y:73},{id:'satsuma',name:'薩摩',detail:'日本統一を決する最終戦',x:8,y:84},
+    {id:'katsushika',name:'葛飾区',detail:'蒼龍軍の本拠地',x:82,y:29},{id:'musashi',name:'東京都',detail:'関東攻略の中心地',x:75,y:36},
+    {id:'sagami',name:'神奈川県',detail:'海と山に守られた地域',x:69,y:43},{id:'kai',name:'山梨県',detail:'騎馬軍が集う山地',x:63,y:35},
+    {id:'shinano',name:'長野県',detail:'大軍がぶつかる中央山地',x:57,y:27},{id:'suruga',name:'静岡県',detail:'東海を抑える豊かな地域',x:57,y:45},
+    {id:'echigo',name:'新潟県',detail:'雪と精兵の北国',x:51,y:18},{id:'owari',name:'愛知県',detail:'天下を狙う商業地',x:49,y:52},
+    {id:'omi',name:'滋賀県',detail:'東西を結ぶ重要地',x:42,y:47},{id:'yamashiro',name:'京都府',detail:'日本中心へ続く最重要地',x:37,y:55},
+    {id:'harima',name:'兵庫県',detail:'西日本攻略の玄関口',x:31,y:49},{id:'aki',name:'広島県',detail:'瀬戸内を支配する地域',x:25,y:57},
+    {id:'sanuki',name:'香川県',detail:'四国の海上拠点',x:28,y:70},{id:'chikuzen',name:'福岡県',detail:'九州進出の足がかり',x:17,y:62},
+    {id:'higo',name:'熊本県',detail:'広い平野を持つ南の大地域',x:13,y:73},{id:'satsuma',name:'鹿児島県',detail:'日本統一を決する最終戦',x:8,y:84},
   ];
+  const RIVALS={suzaku:{name:'朱雀同盟',army:'朱雀軍'},genbu:{name:'玄武連邦',army:'玄武軍'},byakko:{name:'白虎軍',army:'白虎軍'}};
+  function provinceFaction(province){const index=PROVINCES.findIndex(p=>p.id===province?.id);return index<=5?'suzaku':index<=10?'genbu':'byakko';}
   const TYPES = {
     general: { name: '総大将', mark: '将', move: 1, range: 1 },
     infantry: { name: '歩兵', mark: '槍', move: 1, range: 1 },
@@ -24,7 +26,8 @@
     market: { name: '市場', cost: 1200, hp: 1000, money: 300, note: '毎ターン300両' },
     mine: { name: '金山', cost: 2400, hp: 1500, money: 600, note: '毎ターン600両' },
     granary: { name: '兵糧庫', cost: 1300, hp: 1200, food: 800, note: '毎ターン800俵' },
-    castle: { name: '城', cost: 3800, hp: 5000, money: 1000, food: 1600 },
+    town: { name: '城下町', cost: 3800, hp: 1800, money: 1000, note:'毎ターン1,000両' },
+    castle: { name: '城', cost: 3800, hp: 5000, money: 1000, food: 1600, buildable:false },
   };
   let state,profile=loadProfile(),selectedProvince=null;
   const $ = id => document.getElementById(id);
@@ -37,24 +40,25 @@
   const defenderAt = (p, owner) => unitsAt(p, owner).sort((a,b) => (a.type === 'general') - (b.type === 'general'))[0];
   const buildingAt = p => state.buildings.find(b => b.pos === p);
   const terrainAt = p => state.terrain[p] || 'plain';
+  function initialTerritory(){const territory={};for(let r=9;r<ROWS;r++)for(let c=0;c<5;c++)territory[pos(r,c)]='player';for(let r=0;r<3;r++)for(let c=13;c<COLS;c++)territory[pos(r,c)]='enemy';return territory;}
   function loadProfile(){try{const saved={...{wins:0,territories:1,level:1,xp:0,command:'cavalry'},...JSON.parse(localStorage.getItem('gunryaku_empire')||'{}')};if(!Array.isArray(saved.conquered))saved.conquered=PROVINCES.slice(0,Math.max(1,Math.min(PROVINCES.length,saved.territories||1))).map(p=>p.id);saved.territories=saved.conquered.length;return saved;}catch{return {wins:0,territories:1,level:1,xp:0,command:'cavalry',conquered:['katsushika']};}}
   function saveProfile(){localStorage.setItem('gunryaku_empire',JSON.stringify(profile));renderProfile();}
   function renderProfile(){
-    if(!$('sk-wins'))return;const next=profile.level*100;$('sk-wins').textContent=profile.wins;$('sk-territories').textContent=profile.territories;$('sk-commander-level').textContent=profile.level;$('sk-commander-xp').textContent=profile.xp;$('sk-commander-next').textContent=next;
+    if(!$('sk-wins'))return;const next=profile.level*100;$('sk-wins').textContent=profile.wins;$('sk-territories').textContent=profile.territories;$('sk-commander-level').textContent=profile.level;$('sk-commander-xp').textContent=profile.xp;$('sk-commander-next').textContent=next;$('sk-command-bonus').textContent=Math.round((.16+Math.min(10,profile.level)*.02)*100);
     document.querySelectorAll('[data-command]').forEach(button=>button.classList.toggle('is-active',button.dataset.command===profile.command));
     renderCampaignMap();
   }
   function renderCampaignMap(){
     const map=$('sk-campaign-map');if(!map)return;const nextIndex=Math.min(profile.conquered.length,PROVINCES.length-1);if(!selectedProvince)selectedProvince=PROVINCES[nextIndex];
-    map.innerHTML=PROVINCES.map((province,index)=>{const owned=profile.conquered.includes(province.id),available=owned||index===nextIndex,selected=selectedProvince.id===province.id;return `<button class="sk-province ${owned?'is-owned':index===nextIndex?'is-next':'is-locked'} ${selected?'is-selected':''}" style="--x:${province.x}%;--y:${province.y}%" data-province="${province.id}" ${available?'':'disabled'}>${province.name}</button>`;}).join('');
+    map.innerHTML=PROVINCES.map((province,index)=>{const owned=profile.conquered.includes(province.id),available=owned||index===nextIndex,selected=selectedProvince.id===province.id,faction=provinceFaction(province);return `<button class="sk-province ${owned?'is-owned':index===nextIndex?'is-next':'is-locked'} ${owned?'':`faction-${faction}`} ${selected?'is-selected':''}" style="--x:${province.x}%;--y:${province.y}%" data-province="${province.id}" ${available?'':'disabled'}>${province.name}</button>`;}).join('');
     map.querySelectorAll('[data-province]').forEach(button=>button.onclick=()=>{selectedProvince=PROVINCES.find(p=>p.id===button.dataset.province);renderCampaignMap();});
-    $('sk-unification').textContent=`${profile.conquered.length} / ${PROVINCES.length}`;$('sk-selected-province').textContent=selectedProvince.name;$('sk-selected-detail').textContent=profile.conquered.includes(selectedProvince.id)?'統治済み・再戦可能':selectedProvince.detail;
+    $('sk-unification').textContent=`${profile.conquered.length} / ${PROVINCES.length}`;$('sk-selected-province').textContent=selectedProvince.name;$('sk-selected-detail').textContent=profile.conquered.includes(selectedProvince.id)?'統治済み・再戦可能':`${RIVALS[provinceFaction(selectedProvince)].name}領 · ${selectedProvince.detail}`;
   }
   function awardVictory(province){profile.wins++;if(province&&!profile.conquered.includes(province.id))profile.conquered.push(province.id);profile.territories=profile.conquered.length;profile.xp+=100;while(profile.xp>=profile.level*100){profile.xp-=profile.level*100;profile.level++;}selectedProvince=null;saveProfile();}
 
   function freshState() {
     return {
-      turn: 1, phase: 'player', money: 4000, food: 7000, province:selectedProvince,
+      turn: 1, phase: 'player', money: 4000, food: 7000, province:selectedProvince,rival:provinceFaction(selectedProvince),territory:initialTerritory(),
       enemyMoney: 4000, enemyFood: 7000, selected: null, placement: null,
       terrain: { 22:'forest',23:'forest',24:'forest',39:'forest',40:'forest',53:'hill',54:'hill',55:'hill',70:'forest',71:'forest',86:'hill',87:'hill',88:'hill',101:'forest',102:'forest',119:'forest',120:'forest',133:'hill',134:'hill',151:'forest',152:'forest',169:'hill',170:'hill',185:'forest',186:'forest' },
       buildings: [
@@ -86,6 +90,7 @@
     return state.buildings.filter(b => b.owner === owner).reduce((sum,b) => sum + (BUILDINGS[b.type].food||0), 0);
   }
   function armyUpkeep(owner){return state.units.filter(u=>u.owner===owner).reduce((sum,u)=>sum+Math.max(3,Math.ceil(u.size/100)*3),0);}
+  function troopTotal(owner,type){return state.units.filter(u=>u.owner===owner&&u.type===type).reduce((sum,u)=>sum+u.size,0);}
   function fenceCount(owner){return state.buildings.filter(b=>b.owner===owner&&b.type==='fence').length;}
   function fenceCost(owner){return BUILDINGS.fence.cost+fenceCount(owner)*300;}
   function payTurnCosts(owner){
@@ -110,7 +115,7 @@
   function mergeSameType(unit) {
     const mate = state.units.find(other=>other!==unit&&other.pos===unit.pos&&other.owner===unit.owner&&other.type===unit.type);
     if (!mate) return unit;
-    mate.size += unit.size; mate.moved = mate.moved || unit.moved;
+    mate.size += unit.size; mate.moved = mate.moved || unit.moved;mate.capturePos=unit.pos;mate.captureTurns=Math.max(mate.captureTurns||0,unit.captureTurns||0);
     state.units = state.units.filter(other=>other!==unit);
     return mate;
   }
@@ -150,10 +155,13 @@
     $('sk-money').textContent = fmt(state.money); $('sk-food').textContent = fmt(state.food); $('sk-income').textContent = `+${fmt(income('player'))}`; $('sk-upkeep').textContent = `-${fmt(armyUpkeep('player'))}`;
     $('sk-player-status').textContent=`蒼牙 Lv.${profile.level} · ${TYPES[profile.command].name}指揮`;
     $('sk-enemy-status').textContent=`${state.province?.name||'武蔵'}攻略戦`;
+    $('sk-enemy-name').textContent=RIVALS[state.rival]?.army||'朱雀軍';
+    for(const owner of ['player','enemy'])for(const type of ['general','infantry','cavalry','archer'])$(`sk-${owner}-${type}`).textContent=fmt(troopTotal(owner,type));
     const board = $('sk-board'); board.innerHTML = '';
     const targets = getTargets();
     for (let p=0; p<COLS*ROWS; p++) {
       const cell = document.createElement('button'); cell.type='button'; cell.className=`sk-cell terrain-${terrainAt(p)}`;
+      const territoryOwner=state.territory[p];if(territoryOwner){cell.classList.add(`territory-${territoryOwner}`);const [r,c]=rc(p),same=n=>state.territory[n]===territoryOwner;if(r===0||!same(pos(r-1,c)))cell.classList.add('border-n');if(r===ROWS-1||!same(pos(r+1,c)))cell.classList.add('border-s');if(c===0||!same(pos(r,c-1)))cell.classList.add('border-w');if(c===COLS-1||!same(pos(r,c+1)))cell.classList.add('border-e');}
       if (targets.move.has(p) || targets.place.has(p)) cell.classList.add('target');
       if (targets.attack.has(p)) cell.classList.add('attack-target');
       if (state.selected && state.selected.pos === p) cell.classList.add('selected');
@@ -174,7 +182,8 @@
     const u = state.selected;
     if (!u) { box.innerHTML='<span class="sk-selection-icon">軍</span><div><small>軍略</small><strong>動かす駒を選択</strong><p>自軍の駒をタップしてください</p></div>'; return; }
     const t=TYPES[u.type];
-    box.innerHTML=`<span class="sk-selection-icon">${t.mark}</span><div><small>${t.name}</small><strong>${fmt(u.size)}人　兵糧 ${fmt(foodCost(u))}</strong><p>${u.moved?'このターンは行動済み':'金色＝移動　赤色＝攻撃'}</p></div>`;
+    const occupying=state.territory[u.pos]!==u.owner?`領土化まであと${Math.max(1,2-(u.captureTurns||0))}ターン`:null;
+    box.innerHTML=`<span class="sk-selection-icon">${t.mark}</span><div><small>${t.name}</small><strong>${fmt(u.size)}人　兵糧 ${fmt(foodCost(u))}</strong><p>${occupying|| (u.moved?'このターンは行動済み':'金色＝移動　赤色＝攻撃')}</p></div>`;
   }
 
   function reachable(unit) {
@@ -213,7 +222,7 @@
       if(kind==='unit') {
         const type=state.placement?.type;
         if((!building || building.owner===owner) && !occupants.some(u=>u.owner!==owner)) cells.add(p);
-      } else if(!occupants.length&&!building) cells.add(p);
+      } else if(!occupants.length&&!building&&state.territory[p]===owner) cells.add(p);
     })); return cells;
   }
 
@@ -245,7 +254,7 @@
     if(hiddenEnemies.length){hiddenEnemies.forEach(revealToOpponent);log('伏兵だ！ 森から敵軍が姿を現した。');attack(u,p);return;}
     const cost=foodCost(u); if(!spendFood(u.owner,cost)){ log('兵糧が足りず、軍を動かせない。'); return; }
     const from=u.pos,captured=capturePiece(u); state.animating=true;
-    hideAfterMove(u); u.pos=p; u.moved=true; const combined=mergeSameType(u); state.selected=null;
+    hideAfterMove(u); u.pos=p;u.capturePos=p;u.captureTurns=0;u.moved=true; const combined=mergeSameType(u); state.selected=null;
     const merged=combined!==u?' 同兵種と合流した。':'';
     log(`${TYPES[combined.type].name} ${fmt(combined.size)}人が進軍。兵糧を${fmt(cost)}消費。${merged}`); render();
     animateMove(captured,from,p,680).finally(()=>{state.animating=false;render();});
@@ -306,7 +315,7 @@
       const targetDefeated=targetU.size<=0, attackerDefeated=u.size<=0;
       if(targetDefeated) state.units=state.units.filter(x=>x!==targetU);
       if(attackerDefeated) state.units=state.units.filter(x=>x!==u);
-      if(targetDefeated&&!attackerDefeated&&TYPES[u.type].range===1&&!targetB){u.pos=p;advanced=true;}
+      if(targetDefeated&&!attackerDefeated&&TYPES[u.type].range===1&&!targetB){u.pos=p;u.capturePos=p;u.captureTurns=0;advanced=true;}
       if(!quiet) log(`${TYPES[u.type].name}が攻撃。敵に${fmt(damage)}、自軍に${fmt(counter)}の損害。${targetDefeated?' 敵部隊を撃破！':''}${advanced?' そのまま敵マスへ前進。':''}`);
       if(targetDefeated&&targetU.type==='general') finish(u.owner,'敵将を討ち取った');
       else if(attackerDefeated&&u.type==='general') finish(targetOwner,'総大将を討ち取られた');
@@ -345,7 +354,7 @@
   function showBuild() {
     if(state.phase!=='player'||state.animating||state.over)return;
     state.selected=null; state.placement=null; const panel=$('sk-panel'); panel.classList.remove('is-hidden');
-    panel.innerHTML=`<h3>築くものを選ぶ</h3><div class="sk-option-grid">${Object.entries(BUILDINGS).map(([type,b])=>{const cost=type==='fence'?fenceCost('player'):b.cost;return `<button class="sk-option" data-build="${type}">${b.name}<small>${fmt(cost)}両・${b.note||`耐久${fmt(b.hp)}`}</small></button>`;}).join('')}</div>`;
+    panel.innerHTML=`<h3>築くものを選ぶ</h3><div class="sk-option-grid">${Object.entries(BUILDINGS).filter(([,b])=>b.buildable!==false).map(([type,b])=>{const cost=type==='fence'?fenceCost('player'):b.cost;return `<button class="sk-option" data-build="${type}">${b.name}<small>${fmt(cost)}両・${b.note||`耐久${fmt(b.hp)}`}</small></button>`;}).join('')}</div>`;
     panel.querySelectorAll('[data-build]').forEach(btn=>btn.onclick=()=>{const type=btn.dataset.build,b=BUILDINGS[type],cost=type==='fence'?fenceCost('player'):b.cost;if(type==='fence'&&fenceCount('player')>=3){log('防柵は3基が上限です。守りたい場所を選び直してください。');closePanel();return;}if(state.money<cost){log('軍資金が足りません。');return;}state.placement={kind:'building',type,cost};closePanel();log(`${b.name}を築く場所を選択。`);render();}); render();
   }
   function completePlacement(p) {
@@ -360,9 +369,16 @@
   }
   function closePanel(){ $('sk-panel').classList.add('is-hidden'); $('sk-panel').innerHTML=''; }
   function cancelSelection(){ if(state.animating)return;state.selected=null;state.placement=null;closePanel();render();log('選択を解除した。'); }
+  function progressOccupation(owner){
+    let claimed=0;for(const unit of state.units.filter(u=>u.owner===owner)){
+      if(state.territory[unit.pos]===owner){unit.capturePos=unit.pos;unit.captureTurns=0;continue;}
+      if(unit.capturePos===unit.pos)unit.captureTurns=(unit.captureTurns||0)+1;else{unit.capturePos=unit.pos;unit.captureTurns=1;}
+      if(unit.captureTurns>=2){state.territory[unit.pos]=owner;unit.captureTurns=0;claimed++;}
+    }return claimed;
+  }
 
   function endTurn() {
-    if(state.phase!=='player'||state.over||state.animating)return; state.selected=null;state.placement=null;closePanel();state.phase='enemy';state.animating=true;render();log('朱雀軍が動き始めた……');setTimeout(enemyTurn,600);
+    if(state.phase!=='player'||state.over||state.animating)return;state.lastPlayerClaim=progressOccupation('player');state.selected=null;state.placement=null;closePanel();state.phase='enemy';state.animating=true;render();log(state.lastPlayerClaim?`領土を${state.lastPlayerClaim}マス拡大！ 朱雀軍が動き始めた……`:'朱雀軍が動き始めた……');setTimeout(enemyTurn,600);
   }
   const waitMs=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   async function enemyTurn() {
@@ -375,6 +391,7 @@
       await enemyAction(u);
       await waitMs(220);
     }
+    progressOccupation('enemy');
     if(state.over){state.animating=false;render();return;}
     if(!state.over) enemyRecruit();
     state.turn++; state.money+=income('player'); state.food+=foodIncome('player');const upkeep=payTurnCosts('player');
@@ -391,7 +408,7 @@
       if(!choices.length)break;choices.sort((a,b)=>dist(a,hq.pos)-dist(b,hq.pos));const next=choices[0];
       const ambush=unitsAt(next,'player').filter(x=>!isVisibleTo('enemy',x));if(ambush.length){ambush.forEach(revealToOpponent);log('森に潜んでいた自軍が敵と遭遇！');attack(u,next,true);await waitMs(760);return;}
       const block=buildingAt(next);if(block&&block.owner==='player')break;
-      const from=u.pos,captured=capturePiece(u);u.pos=next;render();
+      const from=u.pos,captured=capturePiece(u);u.pos=next;u.capturePos=next;u.captureTurns=0;render();
       if(captured)log(`敵${TYPES[u.type].name} ${fmt(u.size)}人が進軍中……`);
       await animateMove(captured,from,next,720);await waitMs(120);
     }hideAfterMove(u);u.moved=true;mergeSameType(u);
@@ -416,7 +433,7 @@
     document.querySelectorAll('[data-command]').forEach(button=>button.onclick=()=>{profile.command=button.dataset.command;saveProfile();});renderProfile();
     $('sk-home-btn').onclick=showStageSelect;
     $('sk-recruit').onclick=showRecruit;$('sk-build').onclick=showBuild;$('sk-cancel').onclick=cancelSelection;$('sk-end-turn').onclick=endTurn;
-    $('sk-help').onclick=()=>showModal('遊び方','自軍の駒を選び、光るマスへ移動・攻撃します。\n近接部隊は敵を撃破するとそのマスへ前進します。弓兵は遠距離から攻撃します。\n歩兵は弓兵に、弓兵は騎兵に、騎兵は歩兵に有利。森に潜む敵軍は攻撃するか森を出るまで見えません。\n軍は移動時と毎ターンに兵糧を消費します。市場と金山は軍資金、兵糧庫は兵糧を生みます。\n防柵は最大3基。追加建設費と毎ターンの維持費がかかります。\n敵将または敵本陣を倒せば勝利です。','策');
+    $('sk-help').onclick=()=>showModal('遊び方','自軍の駒を選び、光るマスへ移動・攻撃します。\n近接部隊は敵を撃破するとそのマスへ前進し、弓兵は遠距離から攻撃します。\n中立地または敵領の同じマスに2ターン滞在すると、そのマスを自国領にできます。動くと占領はやり直しです。\n歩兵は弓兵に、弓兵は騎兵に、騎兵は歩兵に有利。森に潜む敵軍は攻撃するか森を出るまで見えません。\n軍は移動時と毎ターンに兵糧を消費します。城下町は毎ターン1,000両、市場と金山は軍資金、兵糧庫は兵糧を生みます。\n城は本陣だけの特別施設です。防柵は最大3基で、追加建設費と毎ターンの維持費がかかります。\n敵将または敵本陣を倒せば勝利です。','策');
   }
   const wait=setInterval(()=>{
     if ($('sk-app') && $('sk-home-btn') && $('sk-end-turn') && $('sk-modal-primary') && $('sk-modal-secondary')) {
