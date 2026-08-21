@@ -23,4 +23,5 @@ def operational_date_jst(cutoff_hour=2):
 
 
 def today_jst_string():
-    return today_jst().isoformat()
+    """Return Habitory's operating date; daily records reset at 02:00 JST."""
+    return operational_date_jst().isoformat()

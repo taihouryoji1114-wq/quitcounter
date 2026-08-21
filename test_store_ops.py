@@ -200,6 +200,12 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual([(item["name"], item["purchase_quantity"])
                           for item in purchase_list], [("白菜", 3.0)])
 
+    def test_purchase_plan_resets_on_next_operating_day(self):
+        item = self.manager.add_item("白菜", "野菜仕入れ", "個")
+        self.manager.save_purchase_quantities({item["id"]: 3}, "2026-08-20")
+        self.assertEqual(len(self.manager.purchase_list("2026-08-20")), 1)
+        self.assertEqual(self.manager.purchase_list("2026-08-21"), [])
+
     def test_completed_orders_are_not_carried_to_board(self):
         self.manager.set_daily_order_check("2026-08-19", "ミクリード", True)
         board = self.manager.previous_day_board("2026-08-20")

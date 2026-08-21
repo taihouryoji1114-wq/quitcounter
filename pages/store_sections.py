@@ -47,7 +47,8 @@ def inventory_page():
         return
     items = store_ops.items()
     is_owner = current_role() == "owner"
-    purchase_quantities = store_ops.purchase_quantities()
+    record_date = operational_date_jst().isoformat()
+    purchase_quantities = store_ops.purchase_quantities(record_date)
     content = section_shell("在庫確認", "現在の在庫をまとめて入力")
     with content:
         fields, purchase_fields = [], []
@@ -85,7 +86,7 @@ def inventory_page():
                 store_ops.save_inventory_check(updates)
                 if is_owner:
                     store_ops.save_purchase_quantities(
-                        {item_id: field.value for item_id, field in purchase_fields})
+                        {item_id: field.value for item_id, field in purchase_fields}, record_date)
             except ValueError as error:
                 ui.notify(str(error), type="negative")
                 return

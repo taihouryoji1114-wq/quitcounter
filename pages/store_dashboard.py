@@ -121,8 +121,3 @@ def cleaning_page():
 @ui.page("/store-ops/manual")
 def manual_page():
     placeholder_page("マニュアル", "手順と考え方をひとつに", "menu_book")
-
-
-@ui.page("/store-ops/events")
-def events_page():
-    placeholder_page("イベントスケジュール", "店舗の予定を共有", "event")

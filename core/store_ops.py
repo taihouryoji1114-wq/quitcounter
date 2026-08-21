@@ -215,15 +215,34 @@ class StoreOperationsManager:
         self._event("received", item)
         self._data_manager.save()
 
-    def purchase_quantities(self):
+    def purchase_quantities(self, record_date=None):
         """Return the owner's current purchase plan by inventory item."""
+        if record_date is None:
+            from core.clock import operational_date_jst
+            record_date = operational_date_jst().isoformat()
+        self._date(record_date)
         stored = self._data_manager.data.get("store_purchase_quantities", {})
         if not isinstance(stored, dict):
             stored = {}
-        return {item["id"]: stored.get(item["id"]) for item in self.items()}
+        legacy = {key: value for key, value in stored.items()
+                  if not (len(str(key)) == 10 and str(key)[4] == "-" and str(key)[7] == "-")}
+        day_values = stored.get(record_date, {})
+        if not isinstance(day_values, dict):
+            day_values = {}
+        if legacy and not day_values:
+            day_values = dict(legacy)
+            for key in legacy:
+                stored.pop(key, None)
+            stored[record_date] = day_values
+            self._data_manager.save()
+        return {item["id"]: day_values.get(item["id"]) for item in self.items()}
 
-    def save_purchase_quantities(self, quantities):
+    def save_purchase_quantities(self, quantities, record_date=None):
         """Replace the purchase plan; zero/blank values remove an item from the list."""
+        if record_date is None:
+            from core.clock import operational_date_jst
+            record_date = operational_date_jst().isoformat()
+        self._date(record_date)
         cleaned = {}
         for item_id, value in (quantities or {}).items():
             item = self._find(item_id)
@@ -233,12 +252,16 @@ class StoreOperationsManager:
             if number < 0:
                 raise ValueError("仕入れ数は0以上で入力してください。")
             cleaned[item_id] = number
-        self._data_manager.data["store_purchase_quantities"] = cleaned
+        stored = self._data_manager.data.setdefault("store_purchase_quantities", {})
+        for key in list(stored):
+            if not (len(str(key)) == 10 and str(key)[4] == "-" and str(key)[7] == "-"):
+                stored.pop(key, None)
+        stored[record_date] = cleaned
         self._data_manager.save()
         return len(cleaned)
 
-    def purchase_list(self):
-        quantities = self.purchase_quantities()
+    def purchase_list(self, record_date=None):
+        quantities = self.purchase_quantities(record_date)
         return [{**item, "purchase_quantity": quantities.get(item["id"])}
                 for item in self.items() if quantities.get(item["id"]) not in (None, 0)]
 

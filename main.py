@@ -26,6 +26,7 @@ import pages.store_operations
 import pages.store_dashboard
 import pages.store_checklist
 import pages.store_sections
+import pages.store_events
 import pages.shift_submission
 import pages.purchase_list
 import pages.schedule

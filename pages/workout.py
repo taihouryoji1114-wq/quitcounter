@@ -4,7 +4,7 @@ from nicegui import ui
 
 from core.auth import require_app_access, selected_user_id
 from core.calories import calculate_period_expenditure, nutrition_settings
-from core.clock import now_jst, today_jst
+from core.clock import now_jst, operational_date_jst
 from core.data import BODY_PARTS, data
 from core.nutrition import nutrition
 from core.theme import Theme
@@ -19,7 +19,7 @@ def workout():
         return
     Theme.page("筋トレ")
     page_user_id = selected_user_id()
-    today = today_jst()
+    today = operational_date_jst()
     content = Theme.shell("筋トレ", "今日の自分に、ひとつ記録を。", back_to="/habitory")
     with content:
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-xl"):
