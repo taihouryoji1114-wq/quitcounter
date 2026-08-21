@@ -10,19 +10,24 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=8">'
-        '<script src="/static/gunryakugoma.js?v=8" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=9">'
+        '<script src="/static/gunryakugoma.js?v=9" defer></script>'
     )
     ui.html(
         """
         <main id="sk-app" class="sk-app">
           <section id="sk-home" class="sk-home">
             <div class="sk-home-shade"></div>
-            <button id="gun-home-exit" class="sk-exit" type="button" aria-label="R-BASEへ戻る">⌂</button>
             <div class="sk-home-copy">
-              <span class="sk-eyebrow">VERSION 0.3 · SIEGE & ECONOMY</span>
+              <span class="sk-eyebrow">VERSION 0.4 · ROAD TO EMPIRE</span>
               <h1>軍略駒</h1>
-              <p>戦場を選び、天下への一歩を刻め。</p>
+              <p>武将を育て、領土を広げ、帝国を築け。</p>
+              <div class="sk-empire-status"><div><small>蒼龍帝国</small><b><span id="sk-territories">1</span>国</b></div><div><small>戦勝</small><b><span id="sk-wins">0</span>回</b></div></div>
+              <section class="sk-commander-card">
+                <div class="sk-commander-seal">蒼</div>
+                <div class="sk-commander-copy"><small>UR · 蒼龍軍総大将</small><b>蒼牙</b><span>Lv.<strong id="sk-commander-level">1</strong> · EXP <strong id="sk-commander-xp">0</strong>/<strong id="sk-commander-next">100</strong></span></div>
+                <div class="sk-command-type"><small>得意兵種</small><div><button data-command="infantry">歩</button><button data-command="cavalry">騎</button><button data-command="archer">弓</button></div></div>
+              </section>
               <div class="sk-stage-list">
                 <button id="sk-start" class="sk-stage-card" type="button"><i>第一戦</i><b>青嶺の攻防</b><span>蒼龍軍 対 朱雀軍</span><em>出陣 ›</em></button>
                 <button class="sk-stage-card is-locked" type="button" disabled><i>第二戦</i><b>霧深き峡谷</b><span>近日解放</span><em>錠</em></button>

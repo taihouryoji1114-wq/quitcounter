@@ -1,5 +1,5 @@
 (() => {
-  const COLS = 10, ROWS = 7;
+  const COLS = 12, ROWS = 8;
   const TYPES = {
     general: { name: '総大将', mark: '将', move: 1, range: 1 },
     infantry: { name: '歩兵', mark: '槍', move: 1, range: 1 },
@@ -16,7 +16,7 @@
     granary: { name: '兵糧庫', cost: 1300, hp: 1200, food: 800, note: '毎ターン800俵' },
     castle: { name: '城', cost: 3800, hp: 5000, money: 1000, food: 1600 },
   };
-  let state;
+  let state,profile=loadProfile();
   const $ = id => document.getElementById(id);
   const pos = (r, c) => r * COLS + c;
   const rc = p => [Math.floor(p / COLS), p % COLS];
@@ -27,27 +27,34 @@
   const defenderAt = (p, owner) => unitsAt(p, owner).sort((a,b) => (a.type === 'general') - (b.type === 'general'))[0];
   const buildingAt = p => state.buildings.find(b => b.pos === p);
   const terrainAt = p => state.terrain[p] || 'plain';
+  function loadProfile(){try{return {...{wins:0,territories:1,level:1,xp:0,command:'cavalry'},...JSON.parse(localStorage.getItem('gunryaku_empire')||'{}')}}catch{return {wins:0,territories:1,level:1,xp:0,command:'cavalry'};}}
+  function saveProfile(){localStorage.setItem('gunryaku_empire',JSON.stringify(profile));renderProfile();}
+  function renderProfile(){
+    if(!$('sk-wins'))return;const next=profile.level*100;$('sk-wins').textContent=profile.wins;$('sk-territories').textContent=profile.territories;$('sk-commander-level').textContent=profile.level;$('sk-commander-xp').textContent=profile.xp;$('sk-commander-next').textContent=next;
+    document.querySelectorAll('[data-command]').forEach(button=>button.classList.toggle('is-active',button.dataset.command===profile.command));
+  }
+  function awardVictory(){profile.wins++;profile.territories++;profile.xp+=100;while(profile.xp>=profile.level*100){profile.xp-=profile.level*100;profile.level++;}saveProfile();}
 
   function freshState() {
     return {
       turn: 1, phase: 'player', money: 4000, food: 7000,
       enemyMoney: 4000, enemyFood: 7000, selected: null, placement: null,
-      terrain: { 14:'forest',15:'forest',24:'forest',35:'hill',36:'hill',43:'forest',54:'hill',55:'hill' },
+      terrain: { 15:'forest',16:'forest',27:'forest',28:'forest',38:'hill',39:'hill',44:'forest',45:'forest',55:'hill',56:'hill',63:'forest',76:'hill',77:'hill' },
       buildings: [
-        { id:'phq', owner:'player', type:'castle', pos:60, hp:6000, maxHp:6000, hq:true },
-        { id:'ehq', owner:'enemy', type:'castle', pos:9, hp:6000, maxHp:6000, hq:true },
-        { id:'pfence', owner:'player', type:'fence', pos:41, hp:1200, maxHp:1200 },
-        { id:'efence', owner:'enemy', type:'fence', pos:28, hp:1200, maxHp:1200 },
+        { id:'phq', owner:'player', type:'castle', pos:84, hp:6000, maxHp:6000, hq:true },
+        { id:'ehq', owner:'enemy', type:'castle', pos:11, hp:6000, maxHp:6000, hq:true },
+        { id:'pfence', owner:'player', type:'fence', pos:62, hp:1200, maxHp:1200 },
+        { id:'efence', owner:'enemy', type:'fence', pos:33, hp:1200, maxHp:1200 },
       ],
       units: [
-        { id:'pg', owner:'player', type:'general', size:1500, pos:61, moved:false },
-        { id:'pi', owner:'player', type:'infantry', size:1000, pos:50, moved:false },
-        { id:'pa', owner:'player', type:'archer', size:500, pos:52, moved:false },
-        { id:'pc', owner:'player', type:'cavalry', size:500, pos:62, moved:false },
-        { id:'eg', owner:'enemy', type:'general', size:1500, pos:8, moved:false },
-        { id:'ei', owner:'enemy', type:'infantry', size:1000, pos:19, moved:false },
-        { id:'ea', owner:'enemy', type:'archer', size:500, pos:7, moved:false },
-        { id:'ec', owner:'enemy', type:'cavalry', size:500, pos:17, moved:false },
+        { id:'pg', owner:'player', type:'general', size:1500, pos:85, moved:false },
+        { id:'pi', owner:'player', type:'infantry', size:1000, pos:72, moved:false },
+        { id:'pa', owner:'player', type:'archer', size:500, pos:74, moved:false },
+        { id:'pc', owner:'player', type:'cavalry', size:500, pos:86, moved:false },
+        { id:'eg', owner:'enemy', type:'general', size:1500, pos:10, moved:false },
+        { id:'ei', owner:'enemy', type:'infantry', size:1000, pos:23, moved:false },
+        { id:'ea', owner:'enemy', type:'archer', size:500, pos:9, moved:false },
+        { id:'ec', owner:'enemy', type:'cavalry', size:500, pos:21, moved:false },
       ],
       revealedToPlayer: [], revealedToEnemy: [],
       log: '城から軍資金と兵糧が届いた。', over:false, animating:false,
@@ -124,6 +131,7 @@
   function render() {
     $('sk-turn').textContent = state.turn; $('sk-phase').textContent = state.phase === 'player' ? 'あなたの軍議' : '敵軍進行中';
     $('sk-money').textContent = fmt(state.money); $('sk-food').textContent = fmt(state.food); $('sk-income').textContent = `+${fmt(income('player'))}`; $('sk-upkeep').textContent = `-${fmt(armyUpkeep('player'))}`;
+    $('sk-player-status').textContent=`蒼牙 Lv.${profile.level} · ${TYPES[profile.command].name}指揮`;
     const board = $('sk-board'); board.innerHTML = '';
     const targets = getTargets();
     for (let p=0; p<COLS*ROWS; p++) {
@@ -229,7 +237,9 @@
     if(def==='infantry'&&att==='archer')return .75; if(def==='archer'&&att==='cavalry')return .75; if(def==='cavalry'&&att==='infantry')return .75; return 1;
   }
   function nearbyGeneralBonus(unit) {
-    return state.units.some(other=>other.owner===unit.owner&&other.type==='general'&&dist(other.pos,unit.pos)<=1) ? 1.12 : 1;
+    const led=state.units.some(other=>other.owner===unit.owner&&other.type==='general'&&dist(other.pos,unit.pos)<=1);if(!led)return 1;
+    if(unit.owner==='player'&&unit.type===profile.command)return 1.16+Math.min(10,profile.level)*.02;
+    return 1.12;
   }
   function defensiveFactor(p, owner) {
     let factor=terrainAt(p)==='forest'?.82:terrainAt(p)==='hill'?.88:1;
@@ -377,7 +387,7 @@
   }
   function showStageSelect(){$('sk-modal').classList.add('is-hidden');$('sk-game').classList.add('is-hidden');$('sk-home').classList.remove('is-hidden');}
   function finish(winner,reason){
-    state.over=true;state.phase='over';setTimeout(()=>{
+    state.over=true;state.phase='over';if(winner==='player')awardVictory();setTimeout(()=>{
       const modal=$('sk-modal'),secondary=$('sk-modal-secondary');$('sk-modal-title').textContent=winner==='player'?'勝鬨 — 勝利':'落城 — 敗北';$('sk-modal-text').textContent=`${reason}。\n${state.turn}ターンの戦いが終結した。`;$('sk-modal-mark').textContent=winner==='player'?'勝':'敗';$('sk-modal-primary').textContent='もう一度戦う';secondary.textContent='戦場選択へ戻る';secondary.classList.remove('is-hidden');modal.classList.remove('is-hidden');$('sk-modal-primary').onclick=()=>{modal.classList.add('is-hidden');startGame();};secondary.onclick=showStageSelect;
     },100);
   }
@@ -385,13 +395,13 @@
 
   function bind() {
     $('sk-start').onclick=startGame;
-    $('gun-home-exit').onclick=()=>location.href='/';
+    document.querySelectorAll('[data-command]').forEach(button=>button.onclick=()=>{profile.command=button.dataset.command;saveProfile();});renderProfile();
     $('sk-home-btn').onclick=showStageSelect;
     $('sk-recruit').onclick=showRecruit;$('sk-build').onclick=showBuild;$('sk-cancel').onclick=cancelSelection;$('sk-end-turn').onclick=endTurn;
     $('sk-help').onclick=()=>showModal('遊び方','自軍の駒を選び、光るマスへ移動・攻撃します。\n近接部隊は敵を撃破するとそのマスへ前進します。弓兵は遠距離から攻撃します。\n歩兵は弓兵に、弓兵は騎兵に、騎兵は歩兵に有利。森に潜む敵軍は攻撃するか森を出るまで見えません。\n軍は移動時と毎ターンに兵糧を消費します。市場と金山は軍資金、兵糧庫は兵糧を生みます。\n防柵は最大3基。追加建設費と毎ターンの維持費がかかります。\n敵将または敵本陣を倒せば勝利です。','策');
   }
   const wait=setInterval(()=>{
-    if ($('sk-app') && $('gun-home-exit') && $('sk-home-btn') && $('sk-end-turn') && $('sk-modal-primary') && $('sk-modal-secondary')) {
+    if ($('sk-app') && $('sk-home-btn') && $('sk-end-turn') && $('sk-modal-primary') && $('sk-modal-secondary')) {
       clearInterval(wait); bind();
     }
   },50);
