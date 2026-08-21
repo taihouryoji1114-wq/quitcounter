@@ -19,7 +19,9 @@
   const rc = p => [Math.floor(p / COLS), p % COLS];
   const dist = (a, b) => { const [ar, ac] = rc(a), [br, bc] = rc(b); return Math.abs(ar-br)+Math.abs(ac-bc); };
   const fmt = n => Math.max(0, Math.round(n)).toLocaleString('ja-JP');
-  const unitAt = p => state.units.find(u => u.pos === p);
+  const unitsAt = (p, owner=null) => state.units.filter(u => u.pos === p && (!owner || u.owner === owner));
+  const unitAt = (p, owner=null) => unitsAt(p, owner)[0];
+  const defenderAt = (p, owner) => unitsAt(p, owner).sort((a,b) => (a.type === 'general') - (b.type === 'general'))[0];
   const buildingAt = p => state.buildings.find(b => b.pos === p);
   const terrainAt = p => state.terrain[p] || 'plain';
 
@@ -73,9 +75,9 @@
       if (targets.move.has(p) || targets.place.has(p)) cell.classList.add('target');
       if (targets.attack.has(p)) cell.classList.add('attack-target');
       if (state.selected && state.selected.pos === p) cell.classList.add('selected');
-      const b = buildingAt(p), u = unitAt(p);
+      const b = buildingAt(p), stack = unitsAt(p);
       if (b) cell.insertAdjacentHTML('beforeend', `<span class="sk-building ${b.type} ${b.owner}" title="${BUILDINGS[b.type].name}"></span>`);
-      if (u) cell.insertAdjacentHTML('beforeend', `<span class="sk-piece ${u.owner} ${u.moved?'moved':''}"><span class="crest">${TYPES[u.type].mark}</span><span class="troops">${fmt(u.size)}</span></span>`);
+      if (stack.length) cell.insertAdjacentHTML('beforeend', `<span class="sk-unit-stack count-${Math.min(stack.length,4)}">${stack.map((u,i)=>`<span class="sk-piece slot-${i+1} ${u.owner} ${u.moved?'moved':''}"><span class="crest">${TYPES[u.type].mark}</span><span class="troops">${fmt(u.size)}</span></span>`).join('')}</span>`);
       cell.onclick = () => onCell(p); board.appendChild(cell);
     }
     renderSelection();
@@ -100,9 +102,9 @@
       const {p,d}=frontier.shift(); if(d>=TYPES[unit.type].move) continue;
       for(const n of neighbors(p)) {
         if(seen.has(n)) continue; seen.add(n);
-        const u=unitAt(n), b=buildingAt(n);
-        if(u || (b && b.owner!==unit.owner) || (b && b.type==='fence')) continue;
-        out.add(n); frontier.push({p:n,d:d+1});
+        const occupants=unitsAt(n), b=buildingAt(n);
+        if(occupants.some(x=>x.owner!==unit.owner) || occupants.some(x=>x.owner===unit.owner&&x.type===unit.type) || (b && b.owner!==unit.owner) || (b && b.type==='fence')) continue;
+        out.add(n); if(!occupants.length) frontier.push({p:n,d:d+1});
       }
     }
     return out;
@@ -113,7 +115,7 @@
     const u=state.selected; if(!u || u.owner!=='player' || u.moved) return result;
     reachable(u).forEach(p=>result.move.add(p));
     for(let p=0;p<COLS*ROWS;p++) {
-      const enemyU=unitAt(p), enemyB=buildingAt(p);
+      const enemyU=unitAt(p,'enemy'), enemyB=buildingAt(p);
       if(dist(u.pos,p)<=TYPES[u.type].range && ((enemyU&&enemyU.owner==='enemy')||(enemyB&&enemyB.owner==='enemy'))) result.attack.add(p);
     }
     return result;
@@ -123,19 +125,34 @@
     const anchors = kind === 'unit'
       ? state.buildings.filter(b => b.owner === owner && (b.type === 'castle' || b.type === 'base'))
       : [...state.units.filter(u=>u.owner===owner),...state.buildings.filter(b=>b.owner===owner)];
-    const cells=new Set(); anchors.forEach(a=>neighbors(a.pos).forEach(p=>{ if(!unitAt(p)&&!buildingAt(p)) cells.add(p); })); return cells;
+    const cells=new Set(); anchors.forEach(a=>neighbors(a.pos).forEach(p=>{
+      const occupants=unitsAt(p), building=buildingAt(p);
+      if(kind==='unit') {
+        const type=state.placement?.type;
+        if((!building || building.owner===owner) && !occupants.some(u=>u.owner!==owner) && !occupants.some(u=>u.owner===owner&&u.type===type)) cells.add(p);
+      } else if(!occupants.length&&!building) cells.add(p);
+    })); return cells;
   }
 
   function onCell(p) {
     if(state.over || state.phase!=='player') return;
     if(state.placement) { if(validPlacementCells().has(p)) completePlacement(p); else log('金色の配置可能マスを選んでください。'); return; }
-    const clicked=unitAt(p);
-    if(clicked && clicked.owner==='player') { state.selected=clicked; closePanel(); render(); return; }
-    const u=state.selected; if(!u) { log('まず動かす自軍の駒を選んでください。'); return; }
+    const friendly=unitsAt(p,'player');
+    const u=state.selected;
+    if(!u) {
+      if(friendly.length===1){state.selected=friendly[0];closePanel();render();}
+      else if(friendly.length>1) showStackPicker(friendly);
+      else log('まず動かす自軍の駒を選んでください。');
+      return;
+    }
     const targets=getTargets();
     if(targets.move.has(p)) moveUnit(u,p);
     else if(targets.attack.has(p)) attack(u,p);
-    else log('そのマスには行動できません。');
+    else {
+      if(friendly.length===1){state.selected=friendly[0];closePanel();render();}
+      else if(friendly.length>1) showStackPicker(friendly);
+      else log('そのマスには行動できません。');
+    }
   }
   function spendFood(owner, amount) {
     const key=owner==='player'?'food':'enemyFood'; if(state[key]<amount) return false; state[key]-=amount; return true;
@@ -150,7 +167,8 @@
   }
   function attack(u,p,quiet=false) {
     const cost=foodCost(u); if(!spendFood(u.owner,cost)){ if(!quiet)log('兵糧が足りず、攻撃できない。'); return false; }
-    const targetU=unitAt(p), targetB=buildingAt(p); let damage;
+    const targetOwner=u.owner==='player'?'enemy':'player';
+    const targetU=defenderAt(p,targetOwner), targetB=buildingAt(p); let damage;
     if(targetU) {
       const terrainBonus=terrainAt(p)==='forest'?0.82:terrainAt(p)==='hill'?0.88:1;
       damage=Math.max(20,Math.round(u.size*.58*matchup(u.type,targetU.type)*terrainBonus*(.9+Math.random()*.2)));
@@ -163,6 +181,13 @@
       else if(!quiet) log(`${BUILDINGS[targetB.type].name}を攻撃。耐久 ${fmt(targetB.hp)}。`);
     }
     u.moved=true; state.selected=null; render(); return true;
+  }
+
+  function showStackPicker(units) {
+    state.selected=null; const panel=$('sk-panel'); panel.classList.remove('is-hidden');
+    panel.innerHTML=`<h3>動かす部隊を選ぶ</h3><div class="sk-option-grid">${units.map(u=>`<button class="sk-option" data-unit="${u.id}">${TYPES[u.type].mark} ${TYPES[u.type].name}<small>${fmt(u.size)}人${u.moved?'・行動済み':''}</small></button>`).join('')}</div>`;
+    panel.querySelectorAll('[data-unit]').forEach(btn=>btn.onclick=()=>{state.selected=state.units.find(u=>u.id===btn.dataset.unit);closePanel();render();});
+    log('同じマスにいる部隊から、動かす駒を選択。'); render();
   }
 
   function showRecruit() {
@@ -206,20 +231,20 @@
   }
   function enemyAction(u) {
     const possible=[];
-    for(let p=0;p<COLS*ROWS;p++){const tu=unitAt(p),tb=buildingAt(p);if(dist(u.pos,p)<=TYPES[u.type].range&&((tu&&tu.owner==='player')||(tb&&tb.owner==='player')))possible.push(p);}
+    for(let p=0;p<COLS*ROWS;p++){const tu=unitAt(p,'player'),tb=buildingAt(p);if(dist(u.pos,p)<=TYPES[u.type].range&&((tu&&tu.owner==='player')||(tb&&tb.owner==='player')))possible.push(p);}
     if(possible.length){possible.sort((a,b)=>targetPriority(a)-targetPriority(b));attack(u,possible[0],true);return;}
     const hq=state.buildings.find(b=>b.owner==='player'&&b.hq); if(!hq)return;
     let steps=TYPES[u.type].move;
-    while(steps--){const choices=neighbors(u.pos).filter(p=>!unitAt(p)&&!(buildingAt(p)&&buildingAt(p).owner==='enemy')&&!(buildingAt(p)&&buildingAt(p).type==='fence'));
+    while(steps--){const choices=neighbors(u.pos).filter(p=>{const occupants=unitsAt(p);return !occupants.some(x=>x.owner==='player')&&!occupants.some(x=>x.owner==='enemy'&&x.type===u.type)&&!(buildingAt(p)&&buildingAt(p).owner==='enemy')&&!(buildingAt(p)&&buildingAt(p).type==='fence');});
       if(!choices.length)break;choices.sort((a,b)=>dist(a,hq.pos)-dist(b,hq.pos));const next=choices[0];
       const block=buildingAt(next);if(block&&block.owner==='player')break;u.pos=next;
     }u.moved=true;
   }
-  function targetPriority(p){const u=unitAt(p),b=buildingAt(p);if(u&&u.type==='general')return 0;if(b&&b.hq)return 1;if(u)return 2;return 3;}
+  function targetPriority(p){const troops=unitsAt(p,'player'),b=buildingAt(p);if(b&&b.hq)return 0;if(troops.length===1&&troops[0].type==='general')return 1;if(troops.length)return 2;return 3;}
   function enemyRecruit(){
     const count=state.units.filter(u=>u.owner==='enemy').length;if(count>=9||state.enemyMoney<450)return;
     const type=['infantry','archer','cavalry'][Math.floor(Math.random()*3)],size=state.enemyMoney>1600?1000:500,cost=Math.round(SIZE_COST[size]*TYPE_COST[type]);
-    const spots=[...validPlacementCells('enemy','unit')];if(!spots.length||state.enemyMoney<cost)return;spots.sort((a,b)=>a-b);state.enemyMoney-=cost;state.units.push({id:`e${Date.now()}`,owner:'enemy',type,size,pos:spots[0],moved:true});
+    const spots=[...validPlacementCells('enemy','unit')].filter(p=>!unitsAt(p,'enemy').some(u=>u.type===type));if(!spots.length||state.enemyMoney<cost)return;spots.sort((a,b)=>a-b);state.enemyMoney-=cost;state.units.push({id:`e${Date.now()}`,owner:'enemy',type,size,pos:spots[0],moved:true});
   }
   function finish(winner,reason){state.over=true;state.phase='over';setTimeout(()=>showModal(winner==='player'?'勝鬨 — 勝利':'落城 — 敗北',`${reason}。\n${state.turn}ターンの戦いが終結した。`,winner==='player'?'勝':'敗','もう一度戦う',startGame),100);}
   function startGame(){state=freshState();$('sk-home').classList.add('is-hidden');$('sk-game').classList.remove('is-hidden');closePanel();render();}
