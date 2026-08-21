@@ -1,0 +1,11 @@
+{
+  "name": "軍略駒",
+  "short_name": "軍略駒",
+  "start_url": "/gunryakugoma",
+  "display": "standalone",
+  "background_color": "#17120D",
+  "theme_color": "#17120D",
+  "icons": [
+    {"src": "/static/gunryakugoma_icon.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

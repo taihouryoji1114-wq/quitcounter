@@ -68,3 +68,9 @@ def future_financials_login():
 @ui.page("/schedule/login")
 def schedule_login():
     login_screen("schedule", "My Schedule", "/schedule", "自分だけの予定を開く")
+
+
+@ui.page("/gunryakugoma/login")
+def gunryakugoma_login():
+    login_screen("gunryakugoma", "軍略駒", "/gunryakugoma",
+                 "一手で戦局を動かす", app_name="gunryakugoma")

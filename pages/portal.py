@@ -45,6 +45,21 @@ def portal():
 
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/gunryakugoma")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.image("/static/gunryakugoma_icon.png").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("軍略駒").classes("text-xl font-bold")
+                    ui.label("兵を動かし、敵将か本陣を討つ").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/store-ops")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/store_ops_chanko_icon_v2.png").classes(

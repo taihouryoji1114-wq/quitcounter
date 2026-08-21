@@ -18,6 +18,10 @@ class Theme:
             manifest = "/static/schedule-manifest.json"
             icon = "/static/schedule_icon.svg"
             theme_color = "#172F4B"
+        elif app_name == "gunryakugoma":
+            manifest = "/static/gunryakugoma-manifest.json"
+            icon = "/static/gunryakugoma_icon.png"
+            theme_color = "#17120D"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

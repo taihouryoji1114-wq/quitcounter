@@ -34,6 +34,7 @@ import pages.attendance
 import pages.smoking
 import pages.settings
 import pages.workout
+import pages.gunryakugoma
 
 ui.run(
     title="R-BASE",
