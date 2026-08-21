@@ -10,8 +10,8 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=5">'
-        '<script src="/static/gunryakugoma.js?v=4" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=6">'
+        '<script src="/static/gunryakugoma.js?v=6" defer></script>'
     )
     ui.html(
         """
@@ -69,6 +69,7 @@ def gunryakugoma_page():
               <span id="sk-modal-mark" class="sk-modal-mark">軍</span>
               <h2 id="sk-modal-title">軍略駒</h2>
               <p id="sk-modal-text"></p>
+              <button id="sk-modal-secondary" class="sk-secondary is-hidden" type="button">やめる</button>
               <button id="sk-modal-primary" class="sk-primary" type="button">閉じる</button>
             </div>
           </div>
