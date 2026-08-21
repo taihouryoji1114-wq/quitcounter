@@ -10,8 +10,8 @@ def gunryakugoma_page():
         return
     Theme.page("軍略駒", app_name="gunryakugoma")
     ui.add_head_html(
-        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=6">'
-        '<script src="/static/gunryakugoma.js?v=6" defer></script>'
+        '<link rel="stylesheet" href="/static/gunryakugoma.css?v=7">'
+        '<script src="/static/gunryakugoma.js?v=7" defer></script>'
     )
     ui.html(
         """
@@ -20,7 +20,7 @@ def gunryakugoma_page():
             <div class="sk-home-shade"></div>
             <button id="gun-home-exit" class="sk-exit" type="button" aria-label="R-BASEへ戻る">⌂</button>
             <div class="sk-home-copy">
-              <span class="sk-eyebrow">TURN-BASED STRATEGY</span>
+              <span class="sk-eyebrow">VERSION 0.2 · TURN-BASED STRATEGY</span>
               <h1>軍略駒</h1>
               <p>兵糧を読み、陣を築き、敵将を討て。</p>
               <button id="sk-start" class="sk-primary" type="button">初陣を始める</button>

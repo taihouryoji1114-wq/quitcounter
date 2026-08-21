@@ -47,7 +47,7 @@
         { id:'ec', owner:'enemy', type:'cavalry', size:500, pos:17, moved:false },
       ],
       revealedToPlayer: [], revealedToEnemy: [],
-      log: '城から軍資金と兵糧が届いた。', over:false,
+      log: '城から軍資金と兵糧が届いた。', over:false, animating:false,
     };
   }
 
@@ -80,6 +80,29 @@
     return mate;
   }
   function log(message) { state.log = message; $('sk-log').textContent = message; }
+  function capturePiece(unit) {
+    const element=document.querySelector(`.sk-piece[data-unit="${unit.id}"]`);
+    if(!element) return null;
+    const rect=element.getBoundingClientRect(), clone=element.cloneNode(true);
+    clone.classList.add('sk-moving-ghost');
+    Object.assign(clone.style,{left:`${rect.left}px`,top:`${rect.top}px`,width:`${rect.width}px`,height:`${rect.height}px`});
+    document.body.appendChild(clone);
+    return {clone,rect};
+  }
+  function animateMove(captured,from,to,duration=620) {
+    if(!captured)return Promise.resolve();
+    const board=$('sk-board'),origin=board.children[from],arrival=board.children[to];
+    if(origin){origin.classList.add('move-origin');setTimeout(()=>origin.classList.remove('move-origin'),850);}
+    if(arrival){arrival.classList.add('move-arrival');setTimeout(()=>arrival.classList.remove('move-arrival'),780);}
+    if(!arrival){captured.clone.remove();return Promise.resolve();}
+    const target=arrival.getBoundingClientRect(),dx=target.left+target.width/2-(captured.rect.left+captured.rect.width/2),dy=target.top+target.height/2-(captured.rect.top+captured.rect.height/2);
+    const animation=captured.clone.animate([{transform:'translate(0,0) scale(1)',opacity:1},{offset:.82,transform:`translate(${dx}px,${dy}px) scale(1.08)`,opacity:1},{transform:`translate(${dx}px,${dy}px) scale(.82)`,opacity:0}],{duration,easing:'cubic-bezier(.22,.75,.2,1)',fill:'forwards'});
+    return animation.finished.catch(()=>{}).then(()=>captured.clone.remove());
+  }
+  function animateClash(position) {
+    const cell=$('sk-board').children[position];if(!cell)return;
+    cell.classList.remove('battle-clash');void cell.offsetWidth;cell.classList.add('battle-clash');setTimeout(()=>cell.classList.remove('battle-clash'),600);
+  }
   function showModal(title, text, mark='軍', button='閉じる', callback=null) {
     $('sk-modal-title').textContent = title; $('sk-modal-text').textContent = text; $('sk-modal-mark').textContent = mark;
     $('sk-modal-secondary').classList.add('is-hidden');
@@ -99,7 +122,7 @@
       if (state.selected && state.selected.pos === p) cell.classList.add('selected');
       const b = buildingAt(p), stack = unitsAt(p).filter(u=>isVisibleTo('player',u));
       if (b) cell.insertAdjacentHTML('beforeend', `<span class="sk-building ${b.type} ${b.owner}" title="${BUILDINGS[b.type].name}"></span>`);
-      if (stack.length) cell.insertAdjacentHTML('beforeend', `<span class="sk-unit-stack count-${Math.min(stack.length,4)}">${stack.map((u,i)=>`<span class="sk-piece slot-${i+1} ${u.owner} ${u.moved?'moved':''}"><span class="crest">${TYPES[u.type].mark}</span><span class="troops">${fmt(u.size)}</span></span>`).join('')}</span>`);
+      if (stack.length) cell.insertAdjacentHTML('beforeend', `<span class="sk-unit-stack count-${Math.min(stack.length,4)}">${stack.map((u,i)=>`<span data-unit="${u.id}" class="sk-piece slot-${i+1} ${u.owner} ${u.moved?'moved':''}"><span class="crest">${TYPES[u.type].mark}</span><span class="troops">${fmt(u.size)}</span></span>`).join('')}</span>`);
       cell.onclick = () => onCell(p); board.appendChild(cell);
     }
     renderSelection();
@@ -158,7 +181,7 @@
   }
 
   function onCell(p) {
-    if(state.over || state.phase!=='player') return;
+    if(state.over || state.phase!=='player' || state.animating) return;
     if(state.placement) { if(validPlacementCells().has(p)) completePlacement(p); else log('金色の配置可能マスを選んでください。'); return; }
     const friendly=unitsAt(p,'player');
     const u=state.selected;
@@ -184,9 +207,11 @@
     const hiddenEnemies=unitsAt(p).filter(enemy=>enemy.owner!==u.owner&&!isVisibleTo(u.owner,enemy));
     if(hiddenEnemies.length){hiddenEnemies.forEach(revealToOpponent);log('伏兵だ！ 森から敵軍が姿を現した。');attack(u,p);return;}
     const cost=foodCost(u); if(!spendFood(u.owner,cost)){ log('兵糧が足りず、軍を動かせない。'); return; }
+    const from=u.pos,captured=capturePiece(u); state.animating=true;
     hideAfterMove(u); u.pos=p; u.moved=true; const combined=mergeSameType(u); state.selected=null;
     const merged=combined!==u?' 同兵種と合流した。':'';
     log(`${TYPES[combined.type].name} ${fmt(combined.size)}人が進軍。兵糧を${fmt(cost)}消費。${merged}`); render();
+    animateMove(captured,from,p,680).finally(()=>{state.animating=false;render();});
   }
   function matchup(att,def) {
     if(att==='infantry'&&def==='archer')return 1.35; if(att==='archer'&&def==='cavalry')return 1.35; if(att==='cavalry'&&def==='infantry')return 1.35;
@@ -230,6 +255,8 @@
   }
   function attack(u,p,quiet=false) {
     const cost=foodCost(u); if(!spendFood(u.owner,cost)){ if(!quiet)log('兵糧が足りず、攻撃できない。'); return false; }
+    const from=u.pos,captured=capturePiece(u);
+    const lockPlayer=state.phase==='player'&&u.owner==='player';if(lockPlayer)state.animating=true;
     const targetOwner=u.owner==='player'?'enemy':'player';
     const targetU=defenderAt(p,targetOwner), targetB=buildingAt(p); let damage;
     if(terrainAt(u.pos)==='forest') revealToOpponent(u);
@@ -249,7 +276,10 @@
       if(targetB.hp<=0) { state.buildings=state.buildings.filter(x=>x!==targetB); if(!quiet)log(`${BUILDINGS[targetB.type].name}を破壊！`); if(targetB.hq) finish(u.owner,'敵本陣を陥落させた'); }
       else if(!quiet) log(`${BUILDINGS[targetB.type].name}を攻撃。耐久 ${fmt(targetB.hp)}。`);
     }
-    u.moved=true; state.selected=null; render(); return true;
+    u.moved=true; state.selected=null; render();
+    const resting=document.querySelector(`.sk-piece[data-unit="${u.id}"]`);if(resting)resting.style.opacity='0';
+    animateMove(captured,from,p,440).then(()=>{animateClash(p);return waitMs(260);}).finally(()=>{if(lockPlayer){state.animating=false;}render();});
+    return true;
   }
 
   function showStackPicker(units) {
@@ -260,6 +290,7 @@
   }
 
   function showRecruit() {
+    if(state.phase!=='player'||state.animating||state.over)return;
     state.selected=null; state.placement=null; const panel=$('sk-panel'); panel.classList.remove('is-hidden');
     panel.innerHTML=`<h3>兵種を選ぶ</h3><div class="sk-option-grid">${['infantry','cavalry','archer'].map(t=>`<button class="sk-option" data-type="${t}">${TYPES[t].name}<small>${t==='infantry'?'弓兵に強い':t==='cavalry'?'歩兵に強い・移動2':'騎兵に強い・射程2'}</small></button>`).join('')}</div><div id="sk-size-row" class="sk-size-row"></div>`;
     panel.querySelectorAll('[data-type]').forEach(btn=>btn.onclick=()=>showSizes(btn.dataset.type)); render();
@@ -272,6 +303,7 @@
     });
   }
   function showBuild() {
+    if(state.phase!=='player'||state.animating||state.over)return;
     state.selected=null; state.placement=null; const panel=$('sk-panel'); panel.classList.remove('is-hidden');
     panel.innerHTML=`<h3>築くものを選ぶ</h3><div class="sk-option-grid">${Object.entries(BUILDINGS).map(([type,b])=>`<button class="sk-option" data-build="${type}">${b.name}<small>${fmt(b.cost)}両・耐久${fmt(b.hp)}</small></button>`).join('')}</div>`;
     panel.querySelectorAll('[data-build]').forEach(btn=>btn.onclick=()=>{const type=btn.dataset.build,b=BUILDINGS[type];if(state.money<b.cost){log('軍資金が足りません。');return;}state.placement={kind:'building',type,cost:b.cost};closePanel();log(`${b.name}を築く場所を選択。`);render();}); render();
@@ -287,31 +319,42 @@
     log(`${x.kind==='unit'?TYPES[x.type].name:BUILDINGS[x.type].name}を配置した。`); state.placement=null; render();
   }
   function closePanel(){ $('sk-panel').classList.add('is-hidden'); $('sk-panel').innerHTML=''; }
-  function cancelSelection(){ state.selected=null;state.placement=null;closePanel();render();log('選択を解除した。'); }
+  function cancelSelection(){ if(state.animating)return;state.selected=null;state.placement=null;closePanel();render();log('選択を解除した。'); }
 
   function endTurn() {
-    if(state.phase!=='player'||state.over)return; state.selected=null;state.placement=null;closePanel();state.phase='enemy';render();log('朱雀軍が動き始めた……');setTimeout(enemyTurn,600);
+    if(state.phase!=='player'||state.over||state.animating)return; state.selected=null;state.placement=null;closePanel();state.phase='enemy';state.animating=true;render();log('朱雀軍が動き始めた……');setTimeout(enemyTurn,600);
   }
-  function enemyTurn() {
+  const waitMs=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  async function enemyTurn() {
     state.enemyMoney+=income('enemy'); state.enemyFood+=foodIncome('enemy');
     const enemies=state.units.filter(u=>u.owner==='enemy'); enemies.forEach(u=>u.moved=false);
-    for(const u of enemies) { if(state.over)break; enemyAction(u); }
+    for(const u of enemies) {
+      if(state.over)break;
+      if(!state.units.includes(u))continue;
+      await enemyAction(u);
+      await waitMs(220);
+    }
+    if(state.over){state.animating=false;render();return;}
     if(!state.over) enemyRecruit();
     state.turn++; state.money+=income('player'); state.food+=foodIncome('player');
-    state.units.filter(u=>u.owner==='player').forEach(u=>u.moved=false); state.phase='player';
+    state.units.filter(u=>u.owner==='player').forEach(u=>u.moved=false); state.phase='player';state.animating=false;
     log(`第${state.turn}ターン。城と砦から収入が届いた。`); render();
   }
-  function enemyAction(u) {
+  async function enemyAction(u) {
     const possible=[];
     for(let p=0;p<COLS*ROWS;p++){const tu=unitsAt(p,'player').find(x=>isVisibleTo('enemy',x)),tb=buildingAt(p);if(dist(u.pos,p)<=TYPES[u.type].range&&((tu&&tu.owner==='player')||(tb&&tb.owner==='player')))possible.push(p);}
-    if(possible.length){possible.sort((a,b)=>targetPriority(a)-targetPriority(b));attack(u,possible[0],true);return;}
+    if(possible.length){possible.sort((a,b)=>targetPriority(a)-targetPriority(b));const target=possible[0];log(`敵${TYPES[u.type].name}が攻撃を開始！`);attack(u,target,true);await waitMs(760);return;}
     const hq=state.buildings.find(b=>b.owner==='player'&&b.hq); if(!hq)return;
     let steps=TYPES[u.type].move;
     while(steps--){const choices=neighbors(u.pos).filter(p=>{const occupants=unitsAt(p);return !occupants.some(x=>x.owner==='player'&&isVisibleTo('enemy',x))&&!(buildingAt(p)&&buildingAt(p).owner==='enemy')&&!(buildingAt(p)&&buildingAt(p).type==='fence');});
       if(!choices.length)break;choices.sort((a,b)=>dist(a,hq.pos)-dist(b,hq.pos));const next=choices[0];
-      const ambush=unitsAt(next,'player').filter(x=>!isVisibleTo('enemy',x));if(ambush.length){ambush.forEach(revealToOpponent);attack(u,next,true);return;}
-      const block=buildingAt(next);if(block&&block.owner==='player')break;u.pos=next;
+      const ambush=unitsAt(next,'player').filter(x=>!isVisibleTo('enemy',x));if(ambush.length){ambush.forEach(revealToOpponent);log('森に潜んでいた自軍が敵と遭遇！');attack(u,next,true);await waitMs(760);return;}
+      const block=buildingAt(next);if(block&&block.owner==='player')break;
+      const from=u.pos,captured=capturePiece(u);u.pos=next;render();
+      if(captured)log(`敵${TYPES[u.type].name} ${fmt(u.size)}人が進軍中……`);
+      await animateMove(captured,from,next,720);await waitMs(120);
     }hideAfterMove(u);u.moved=true;mergeSameType(u);
+    render();
   }
   function targetPriority(p){const troops=unitsAt(p,'player'),b=buildingAt(p);if(b&&b.hq)return 0;if(troops.length===1&&troops[0].type==='general')return 1;if(troops.length)return 2;return 3;}
   function enemyRecruit(){
