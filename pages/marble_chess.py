@@ -11,8 +11,8 @@ def marble_chess_page():
     Theme.page("MARBLE CHESS", app_name="marble-chess")
     ui.add_head_html(
         '<link rel="stylesheet" href="/static/marble_chess.css?v=1">'
-        '<link rel="stylesheet" href="/static/marble_chess_v2.css?v=7">'
-        '<script src="/static/marble_chess.js?v=7" defer></script>'
+        '<link rel="stylesheet" href="/static/marble_chess_v2.css?v=8">'
+        '<script src="/static/marble_chess.js?v=8" defer></script>'
     )
     ui.html("""
     <main id="mc-app" class="mc-app">
