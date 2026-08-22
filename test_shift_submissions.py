@@ -51,6 +51,32 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertEqual(saved["days"]["16"]["type"], "通し")
         self.assertEqual(saved["days"]["17"]["type"], "絶対休み")
 
+    def test_edit_before_deadline_updates_immediately(self):
+        first = {"1": {"type": "ランチ", "start": "11:00", "end": "15:00"}}
+        changed = {"1": {"type": "通し", "start": "11:00", "end": "22:00"}}
+        self.manager.save("スタッフA", 2099, 9, "first", first, "最初")
+        result = self.manager.save("スタッフA", 2099, 9, "first", changed, "変更")
+        self.assertFalse(result["change_request"])
+        self.assertEqual(
+            self.manager.submission("スタッフA", 2099, 9, "first")["days"], changed)
+
+    def test_edit_after_deadline_waits_for_admin_approval(self):
+        first = {"16": {"type": "ランチ", "start": "11:00", "end": "15:00"}}
+        changed = {"16": {"type": "ディナー", "start": "17:00", "end": "22:00"}}
+        self.manager.save("スタッフA", 2026, 8, "second", first, "最初")
+        result = self.manager.save("スタッフA", 2026, 8, "second", changed, "変更希望")
+        self.assertTrue(result["change_request"])
+        self.assertEqual(
+            self.manager.submission("スタッフA", 2026, 8, "second")["days"], first)
+        self.assertIn(
+            "スタッフA", self.manager.pending_changes(2026, 8, "second"))
+        self.assertTrue(
+            self.manager.review_change("スタッフA", 2026, 8, "second", True))
+        self.assertEqual(
+            self.manager.submission("スタッフA", 2026, 8, "second")["days"], changed)
+        self.assertEqual(
+            self.manager.pending_changes(2026, 8, "second"), {})
+
 
 if __name__ == "__main__":
     unittest.main()

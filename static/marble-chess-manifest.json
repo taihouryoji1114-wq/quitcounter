@@ -3,6 +3,7 @@
   "short_name": "M.CHESS",
   "start_url": "/marble-chess",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#08090b",
   "theme_color": "#08090b",
   "icons": [{"src":"/static/marble_chess_icon.png","sizes":"1024x1024","type":"image/png"}]

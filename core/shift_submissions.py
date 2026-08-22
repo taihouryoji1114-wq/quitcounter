@@ -6,6 +6,7 @@ from calendar import monthrange
 from datetime import date, datetime
 
 from core.data import data
+from core.clock import today_jst
 from core.staffing import StaffingManager
 
 
@@ -41,10 +42,14 @@ class ShiftSubmissionManager:
             period["key"], {}).get(staff, {})
         raw_days = dict(stored.get("days", {})) if isinstance(stored, dict) else {}
         days = {str(day): self._day_value(value) for day, value in raw_days.items()}
+        pending = self._data_manager.data.get("store_shift_change_requests", {}).get(
+            period["key"], {}).get(staff, {})
         return {"staff": staff, "period": period,
                 "days": days,
                 "note": str(stored.get("note", "")) if isinstance(stored, dict) else "",
-                "submitted_at": str(stored.get("submitted_at", "")) if isinstance(stored, dict) else ""}
+                "submitted_at": str(stored.get("submitted_at", "")) if isinstance(stored, dict) else "",
+                "pending_change": dict(pending) if isinstance(pending, dict)
+                and pending.get("status") == "pending" else {}}
 
     def save(self, staff, year, month, half, days, note=""):
         self._staff(staff)
@@ -62,16 +67,54 @@ class ShiftSubmissionManager:
                 cleaned[str(day)] = value
         record = {"days": cleaned, "note": str(note or "").strip()[:500],
                   "submitted_at": datetime.now().isoformat(timespec="minutes")}
-        self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
-            period["key"], {})[staff] = record
+        submissions = self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
+            period["key"], {})
+        existing = submissions.get(staff)
+        if existing and today_jst() > date.fromisoformat(period["deadline"]):
+            request = {**record, "status": "pending", "requested_at": record["submitted_at"]}
+            self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(
+                period["key"], {})[staff] = request
+            self._data_manager.save()
+            return {**request, "change_request": True}
+        submissions[staff] = record
         self._data_manager.save()
-        return record
+        return {**record, "change_request": False}
 
     def period_submissions(self, year, month, half):
         period = self.period(year, month, half)
         stored = self._data_manager.data.get("store_shift_submissions", {}).get(period["key"], {})
         return {staff: dict(record) for staff, record in stored.items()
                 if staff in self.STAFF and isinstance(record, dict)}
+
+    def pending_changes(self, year, month, half):
+        period = self.period(year, month, half)
+        stored = self._data_manager.data.get("store_shift_change_requests", {}).get(
+            period["key"], {})
+        return {staff: dict(record) for staff, record in stored.items()
+                if staff in self.STAFF and isinstance(record, dict)
+                and record.get("status") == "pending"}
+
+    def review_change(self, staff, year, month, half, approved):
+        self._staff(staff)
+        period = self.period(year, month, half)
+        requests = self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(
+            period["key"], {})
+        request = requests.get(staff)
+        if not isinstance(request, dict) or request.get("status") != "pending":
+            raise ValueError("確認待ちの変更申請がありません。")
+        now = datetime.now().isoformat(timespec="minutes")
+        request["status"] = "approved" if approved else "rejected"
+        request["reviewed_at"] = now
+        if approved:
+            self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
+                period["key"], {})[staff] = {
+                    "days": dict(request.get("days", {})),
+                    "note": str(request.get("note", "")),
+                    "submitted_at": now,
+                    "approved_change": True,
+                }
+        self._data_manager.save()
+        return True
 
     def _staff(self, staff):
         if staff not in self.STAFF:
