@@ -456,6 +456,115 @@ class StoreOperationsManager:
                               "source": "handover"})
         return result
 
+    @staticmethod
+    def _service_period(period):
+        if period not in {"lunch", "dinner"}:
+            raise ValueError("営業区分が正しくありません。")
+        return period
+
+    @staticmethod
+    def _is_quantity_prep(item):
+        name = str(item.get("name", ""))
+        return "サバ" in name or "ホッケ" in name
+
+    def ensure_service_checklist(self, record_date, period):
+        self._date(record_date)
+        period = self._service_period(period)
+        sessions = self._data_manager.data.setdefault("store_checklist_sessions", {})
+        day = sessions.setdefault(record_date, {})
+        if period not in day:
+            day[period] = {"opened_at": datetime.now().isoformat(timespec="minutes")}
+            self._data_manager.save()
+
+    def service_prep_items(self, record_date, period):
+        self._date(record_date)
+        period = self._service_period(period)
+        states = self._data_manager.data.get("store_service_prep_records", {}).get(
+            record_date, {}).get(period, {})
+        quantities = self._data_manager.data.get("store_service_prep_quantities", {}).get(
+            record_date, {}).get(period, {})
+        result = []
+        for item in self.prep_templates():
+            quantity_mode = self._is_quantity_prep(item)
+            quantity = int(quantities.get(item["id"], 0) or 0) if quantity_mode else None
+            status = states.get(item["id"], "incomplete")
+            if quantity_mode:
+                status = "done" if quantity >= 2 else "incomplete"
+            elif status not in self.PREP_STATUSES:
+                status = "incomplete"
+            result.append({**item, "status": status, "quantity_mode": quantity_mode,
+                           "quantity": quantity})
+        return result
+
+    def set_service_prep_status(self, record_date, period, item_id, status):
+        self._date(record_date)
+        period = self._service_period(period)
+        if status not in self.PREP_STATUSES:
+            raise ValueError("仕込み状況が正しくありません。")
+        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
+        if not item:
+            raise ValueError("仕込み項目が見つかりません。")
+        if self._is_quantity_prep(item):
+            raise ValueError("サバとホッケは個数で入力してください。")
+        self._data_manager.data.setdefault("store_service_prep_records", {}).setdefault(
+            record_date, {}).setdefault(period, {})[item_id] = status
+        self._data_manager.save()
+
+    def set_service_prep_quantity(self, record_date, period, item_id, quantity):
+        self._date(record_date)
+        period = self._service_period(period)
+        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
+        if not item or not self._is_quantity_prep(item):
+            raise ValueError("個数で管理する項目が見つかりません。")
+        try:
+            quantity = max(0, int(quantity or 0))
+        except (TypeError, ValueError) as error:
+            raise ValueError("個数は数字で入力してください。") from error
+        self._data_manager.data.setdefault("store_service_prep_quantities", {}).setdefault(
+            record_date, {}).setdefault(period, {})[item_id] = quantity
+        self._data_manager.save()
+
+    def service_handover_board(self, record_date, period):
+        """Unfinished work, free notes and open order requests for the active service."""
+        day = self._date(record_date)
+        period = self._service_period(period)
+        if period == "dinner":
+            source_date, source_period = record_date, "lunch"
+            source_label = "ランチ"
+        else:
+            source_date = (day - timedelta(days=1)).strftime("%Y-%m-%d")
+            source_period = "dinner"
+            source_label = "前日ディナー"
+        sessions = self._data_manager.data.get("store_checklist_sessions", {})
+        source_started = source_period in sessions.get(source_date, {})
+        items = []
+        if source_started:
+            for prep in self.service_prep_items(source_date, source_period):
+                if prep["status"] == "done":
+                    continue
+                detail = prep["name"]
+                if prep.get("quantity_mode"):
+                    detail = f"{detail}（残り{prep.get('quantity', 0)}・2個必要）"
+                items.append({"id": prep["id"], "kind": "prep", "name": detail,
+                              "area": prep.get("area", "厨房"), "from_date": source_date,
+                              "from_period": source_period,
+                              "quantity_mode": prep.get("quantity_mode", False)})
+        handover_days = self._data_manager.data.get("store_handovers", {})
+        for note_date in sorted(handover_days):
+            if note_date > record_date:
+                continue
+            for note in self.handovers(note_date):
+                if not note.get("confirmed", False):
+                    items.append({"id": note["id"], "kind": "note",
+                                  "name": note.get("message", "引き継ぎ"),
+                                  "area": note.get("area", "厨房"), "from_date": note_date})
+        for request in self.order_requests(open_only=True):
+            items.append({"id": request["id"], "kind": "request",
+                          "name": request.get("message", "発注依頼"), "area": "発注依頼",
+                          "from_date": str(request.get("created_at", ""))[:10]})
+        return {"source_date": source_date, "source_period": source_period,
+                "source_label": source_label, "items": items}
+
     def previous_day_board(self, record_date):
         """前日のチェック残り・自由引き継ぎ・発注依頼を返す。"""
         day = self._date(record_date)

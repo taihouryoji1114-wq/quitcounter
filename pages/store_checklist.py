@@ -1,7 +1,7 @@
 from nicegui import ui
 
 from core.auth import require_app_access
-from core.clock import operational_date_jst
+from core.clock import operational_date_jst, store_service_period_jst
 from core.store_ops import store_ops
 from core.theme import Theme
 from pages.store_common import store_header_actions
@@ -14,16 +14,19 @@ def checklist_page():
     Theme.page("今日のチェック表｜店舗運営", app_name="store-ops")
     store_ops.move_kitchen_handovers_to_prep()
     record_date = operational_date_jst().isoformat()
-    store_ops.ensure_daily_checklist(record_date)
-    prep_items = [item for item in store_ops.prep_items(record_date)
-                  if item["status"] != "done"]
+    period = store_service_period_jst()
+    period_label = "ランチ" if period == "lunch" else "ディナー"
+    store_ops.ensure_service_checklist(record_date, period)
+    all_prep_items = store_ops.service_prep_items(record_date, period)
+    prep_items = [item for item in all_prep_items if item["status"] != "done"]
+    completed_items = [item for item in all_prep_items if item["status"] == "done"]
     order_checks = store_ops.daily_order_checks(record_date)
     order_attention = store_ops.daily_order_attention(record_date)
-    content = Theme.shell("今日のチェック表", "完了した項目は一覧から消えます",
+    content = Theme.shell("今日のチェック表", f"{period_label}営業のチェック",
                           back_to="/store-ops", action=store_header_actions,
                           brand="店舗運営")
     with content:
-        ui.label("毎日午前2時に新しいチェック表へ切り替わります").classes(
+        ui.label(f"{period_label}営業中　15:30にディナー用へ、午前2:00に翌日ランチ用へ切り替わります").classes(
             "cutoff-note w-full")
         completion_target = {"kind": "", "id": "", "name": ""}
         with ui.dialog() as confirm_dialog, ui.card().classes("confirm-card q-pa-lg"):
@@ -32,7 +35,8 @@ def checklist_page():
 
             def complete_item():
                 if completion_target["kind"] == "prep":
-                    store_ops.set_prep_status(record_date, completion_target["id"], "done")
+                    store_ops.set_service_prep_status(
+                        record_date, period, completion_target["id"], "done")
                 else:
                     store_ops.set_daily_order_check(
                         record_date, completion_target["id"], True)
@@ -51,7 +55,7 @@ def checklist_page():
 
         def mark_attention(kind, item_id):
             if kind == "prep":
-                store_ops.set_prep_status(record_date, item_id, "attention")
+                store_ops.set_service_prep_status(record_date, period, item_id, "attention")
             else:
                 store_ops.set_daily_order_attention(record_date, item_id, True)
             ui.navigate.to("/store-ops/checklist")
@@ -62,13 +66,27 @@ def checklist_page():
                 with ui.card().classes("check-item attention" if attention else "check-item"):
                     ui.label(item["name"]).classes("check-name")
                     ui.label(item.get("area", "厨房")).classes("check-area")
-                    with ui.row().classes("w-full gap-1 q-mt-sm no-wrap"):
-                        ui.button("完了", icon="check", on_click=lambda _, value=item: ask_complete(
-                            "prep", value["id"], value["name"])).props(
-                                "unelevated dense no-caps color=positive").classes("grow")
-                        ui.button(icon="change_history", on_click=lambda _, value=item: mark_attention(
-                            "prep", value["id"])).props(
-                                "flat dense round color=warning aria-label='注意として残す'")
+                    if item.get("quantity_mode"):
+                        quantity = ui.number(value=item.get("quantity", 0), min=0, step=1,
+                                             suffix="個").props(
+                                                 "outlined dense inputmode=numeric").classes(
+                                                     "w-full q-mt-sm")
+                        ui.label("2個以上なら引き継ぎません。0〜1個は次の営業へ引き継ぎます").classes(
+                            "text-[8px] text-grey-6 q-mt-xs")
+                        ui.button("個数を保存", icon="save", on_click=lambda _, value=item,
+                                  field=quantity: (
+                                      store_ops.set_service_prep_quantity(
+                                          record_date, period, value["id"], field.value),
+                                      ui.navigate.to("/store-ops/checklist")
+                                  )).props("unelevated dense no-caps").classes("w-full q-mt-sm")
+                    else:
+                        with ui.row().classes("w-full gap-1 q-mt-sm no-wrap"):
+                            ui.button("完了", icon="check", on_click=lambda _, value=item: ask_complete(
+                                "prep", value["id"], value["name"])).props(
+                                    "unelevated dense no-caps color=positive").classes("grow")
+                            ui.button(icon="change_history", on_click=lambda _, value=item: mark_attention(
+                                "prep", value["id"])).props(
+                                    "flat dense round color=warning aria-label='注意として残す'")
             for destination in store_ops.DAILY_ORDER_DESTINATIONS:
                 if order_checks[destination]:
                     continue
@@ -89,6 +107,28 @@ def checklist_page():
                 ui.icon("task_alt").classes("text-6xl text-positive")
                 ui.label("今日のチェックはすべて完了！").classes("text-xl font-black q-mt-sm")
 
+        if completed_items:
+            with ui.expansion(f"完了済み　{len(completed_items)}件", icon="task_alt",
+                              value=False).classes("completed-list w-full q-mt-lg"):
+                ui.label("忙しくなって再び必要になった項目は、未完了へ戻せます").classes(
+                    "text-[10px] text-grey-6 q-mb-sm")
+                for item in completed_items:
+                    with ui.row().classes("completed-row w-full items-center no-wrap"):
+                        ui.label(item["name"]).classes("text-xs font-black grow")
+                        if item.get("quantity_mode"):
+                            ui.label(f"{item.get('quantity', 0)}個").classes("text-xs text-positive")
+                            ui.button("0個に戻す", icon="undo", on_click=lambda _, value=item: (
+                                store_ops.set_service_prep_quantity(
+                                    record_date, period, value["id"], 0),
+                                ui.navigate.to("/store-ops/checklist")
+                            )).props("flat dense no-caps color=warning")
+                        else:
+                            ui.button("未完了へ戻す", icon="undo", on_click=lambda _, value=item: (
+                                store_ops.set_service_prep_status(
+                                    record_date, period, value["id"], "incomplete"),
+                                ui.navigate.to("/store-ops/checklist")
+                            )).props("flat dense no-caps color=warning")
+
         ui.add_css("""
-        .cutoff-note{padding:10px 12px;border-radius:13px;background:#EEF5F1;color:#527060;font-size:10px;font-weight:800}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check-item{padding:13px!important;border-radius:18px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}.check-item.attention{border:2px solid #E2A63B!important}.check-item.order{background:#F4F7FB!important}.check-name{font-size:13px;font-weight:900;line-height:1.25}.check-area{font-size:9px;color:#7A8780;margin-top:3px}.confirm-card{width:min(92vw,420px)!important;border-radius:24px!important}.all-done{border-radius:24px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}@media(max-width:360px){.check-grid{grid-template-columns:1fr}}
+        .cutoff-note{padding:10px 12px;border-radius:13px;background:#EEF5F1;color:#527060;font-size:10px;font-weight:800}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check-item{padding:13px!important;border-radius:18px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}.check-item.attention{border:2px solid #E2A63B!important}.check-item.order{background:#F4F7FB!important}.check-name{font-size:13px;font-weight:900;line-height:1.25}.check-area{font-size:9px;color:#7A8780;margin-top:3px}.confirm-card{width:min(92vw,420px)!important;border-radius:24px!important}.all-done{border-radius:24px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.completed-list{border:1px solid #E1E9E4;border-radius:18px;background:#fff}.completed-row{padding:9px 4px;border-bottom:1px solid #EEF1EF}@media(max-width:360px){.check-grid{grid-template-columns:1fr}}
         """)

@@ -41,6 +41,63 @@ def handover_page():
                 ui.label(note["message"]).classes("text-sm font-bold q-mt-xs")
 
 
+@ui.page("/store-ops/order-requests")
+def order_requests_page():
+    if not require_app_access("store_ops"):
+        return
+    requests = store_ops.order_requests()
+    open_requests = [item for item in requests if not item.get("completed", False)]
+    completed_requests = [item for item in requests if item.get("completed", False)]
+    content = section_shell("発注依頼", "気づいたその場で、発注してほしい物を共有")
+    with content:
+        message = ui.textarea("発注してほしい物").props(
+            "outlined autogrow placeholder='例：キッチンペーパー 2箱'").classes("w-full")
+
+        def add_request():
+            try:
+                store_ops.add_order_request(message.value)
+            except ValueError as error:
+                ui.notify(str(error), type="negative")
+                return
+            ui.navigate.to("/store-ops/order-requests")
+
+        ui.button("発注依頼を追加", icon="send", on_click=add_request).classes("w-full q-mt-sm")
+        ui.label(f"未対応　{len(open_requests)}件").classes("text-base font-black q-mt-xl q-mb-sm")
+        if not open_requests:
+            ui.label("未対応の発注依頼はありません").classes("request-empty w-full")
+        for request in open_requests:
+            with ui.card().classes("request-card w-full q-pa-md q-mb-sm"):
+                with ui.row().classes("w-full items-center no-wrap"):
+                    with ui.column().classes("gap-0 grow min-w-0"):
+                        ui.label(request["message"]).classes("text-sm font-black")
+                        ui.label(str(request.get("created_at", ""))[:16].replace("T", " ")).classes(
+                            "text-[9px] text-grey-6 q-mt-xs")
+                    ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
+                        store_ops.set_order_request_completed(item_id, True),
+                        ui.navigate.to("/store-ops/order-requests")
+                    )).props("unelevated dense no-caps color=positive")
+        if completed_requests:
+            with ui.expansion(f"対応済み　{len(completed_requests)}件", icon="task_alt",
+                              value=False).classes("request-completed w-full q-mt-lg"):
+                for request in completed_requests:
+                    with ui.row().classes("w-full items-center no-wrap q-py-sm"):
+                        ui.label(request["message"]).classes("text-xs text-grey-7 grow")
+                        ui.button("戻す", icon="undo", on_click=lambda _, item_id=request["id"]: (
+                            store_ops.set_order_request_completed(item_id, False),
+                            ui.navigate.to("/store-ops/order-requests")
+                        )).props("flat dense no-caps")
+                        if current_role() == "owner":
+                            ui.button(icon="delete_outline", on_click=lambda _, item_id=request["id"]: (
+                                store_ops.delete_order_request(item_id),
+                                ui.navigate.to("/store-ops/order-requests")
+                            )).props("flat round dense color=negative aria-label='削除'")
+        ui.add_css("""
+        .request-card{border:1px solid #E1E9E4!important;border-radius:18px!important;box-shadow:none!important}
+        .request-empty{padding:22px;border:1px dashed #C9D4CD;border-radius:18px;text-align:center;color:#7C8982;font-size:11px}
+        .request-completed{border:1px solid #E1E9E4;border-radius:18px;background:#fff}
+        """)
+
+
 @ui.page("/store-ops/inventory")
 def inventory_page():
     if not require_app_access("store_ops"):

@@ -22,6 +22,12 @@ def operational_date_jst(cutoff_hour=2):
     return current.date()
 
 
+def store_service_period_jst():
+    """Return the active restaurant service. Dinner starts at 15:30 JST."""
+    current = now_jst()
+    return "lunch" if (current.hour, current.minute) < (15, 30) else "dinner"
+
+
 def today_jst_string():
     """Return Habitory's operating date; daily records reset at 02:00 JST."""
     return operational_date_jst().isoformat()
