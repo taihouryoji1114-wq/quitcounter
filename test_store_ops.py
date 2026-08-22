@@ -191,6 +191,39 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual({item["status"] for item in self.manager.prep_items("2026-08-20")},
                          {"incomplete"})
 
+    def test_leftover_rice_choice_is_always_shown_on_next_handover_board(self):
+        rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager.ensure_service_checklist("2026-08-20", "lunch")
+        self.manager.set_service_prep_choice("2026-08-20", "lunch", rice["id"], "なし")
+        board = self.manager.service_handover_board("2026-08-20", "dinner")
+        result = [item for item in board["items"] if item["kind"] == "check_result"]
+        self.assertEqual([item["name"] for item in result], ["余り米：なし"])
+
+    def test_checklist_item_can_be_sent_to_next_day_and_withdrawn(self):
+        prep = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.ensure_service_checklist("2026-08-20", "lunch")
+        self.manager.set_service_prep_status("2026-08-20", "lunch", prep["id"], "done")
+        self.manager.set_service_prep_sent_to_next_day(
+            "2026-08-20", "lunch", prep["id"], True)
+        board = self.manager.service_handover_board("2026-08-21", "lunch")
+        self.assertTrue(any(item["name"] == "唐揚げ" for item in board["items"]))
+        self.manager.set_service_prep_sent_to_next_day(
+            "2026-08-20", "lunch", prep["id"], False)
+        board = self.manager.service_handover_board("2026-08-21", "lunch")
+        self.assertFalse(any(item["name"] == "唐揚げ" for item in board["items"]))
+
+    def test_completed_service_items_can_be_bulk_reset(self):
+        normal = self.manager.add_prep_template("唐揚げ", "厨房")
+        fish = self.manager.add_prep_template("サバ", "厨房")
+        rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager.set_service_prep_status("2026-08-20", "dinner", normal["id"], "done")
+        self.manager.set_service_prep_quantity("2026-08-20", "dinner", fish["id"], 2)
+        self.manager.set_service_prep_choice("2026-08-20", "dinner", rice["id"], "あり")
+        self.assertEqual(self.manager.reset_service_prep_items(
+            "2026-08-20", "dinner", [normal["id"], fish["id"], rice["id"]]), 3)
+        self.assertEqual({item["status"] for item in self.manager.service_prep_items(
+            "2026-08-20", "dinner")}, {"incomplete"})
+
     def test_purchase_plan_is_saved_and_blank_values_are_removed(self):
         first = self.manager.add_item("白菜", "野菜仕入れ", "個")
         second = self.manager.add_item("ラップ", "備品", "本")

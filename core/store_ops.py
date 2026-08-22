@@ -467,6 +467,10 @@ class StoreOperationsManager:
         name = str(item.get("name", ""))
         return "サバ" in name or "ホッケ" in name
 
+    @staticmethod
+    def _is_leftover_rice(item):
+        return "余り米" in str(item.get("name", ""))
+
     def ensure_service_checklist(self, record_date, period):
         self._date(record_date)
         period = self._service_period(period)
@@ -483,17 +487,26 @@ class StoreOperationsManager:
             record_date, {}).get(period, {})
         quantities = self._data_manager.data.get("store_service_prep_quantities", {}).get(
             record_date, {}).get(period, {})
+        choices = self._data_manager.data.get("store_service_prep_choices", {}).get(
+            record_date, {}).get(period, {})
         result = []
         for item in self.prep_templates():
             quantity_mode = self._is_quantity_prep(item)
+            choice_mode = self._is_leftover_rice(item)
             quantity = int(quantities.get(item["id"], 0) or 0) if quantity_mode else None
+            choice = choices.get(item["id"], "") if choice_mode else ""
             status = states.get(item["id"], "incomplete")
             if quantity_mode:
                 status = "done" if quantity >= 2 else "incomplete"
+            elif choice_mode:
+                status = "done" if choice in {"あり", "なし"} else "incomplete"
             elif status not in self.PREP_STATUSES:
                 status = "incomplete"
             result.append({**item, "status": status, "quantity_mode": quantity_mode,
-                           "quantity": quantity})
+                           "quantity": quantity, "choice_mode": choice_mode,
+                           "choice": choice,
+                           "next_day_carried": self.is_service_prep_sent_to_next_day(
+                               record_date, period, item["id"])})
         return result
 
     def set_service_prep_status(self, record_date, period, item_id, status):
@@ -504,8 +517,8 @@ class StoreOperationsManager:
         item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
         if not item:
             raise ValueError("仕込み項目が見つかりません。")
-        if self._is_quantity_prep(item):
-            raise ValueError("サバとホッケは個数で入力してください。")
+        if self._is_quantity_prep(item) or self._is_leftover_rice(item):
+            raise ValueError("この項目は専用の入力方法で記録してください。")
         self._data_manager.data.setdefault("store_service_prep_records", {}).setdefault(
             record_date, {}).setdefault(period, {})[item_id] = status
         self._data_manager.save()
@@ -524,6 +537,76 @@ class StoreOperationsManager:
             record_date, {}).setdefault(period, {})[item_id] = quantity
         self._data_manager.save()
 
+    def set_service_prep_choice(self, record_date, period, item_id, choice):
+        self._date(record_date)
+        period = self._service_period(period)
+        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
+        if not item or not self._is_leftover_rice(item):
+            raise ValueError("あり・なしで管理する項目が見つかりません。")
+        if choice not in {"あり", "なし", ""}:
+            raise ValueError("あり、または、なしを選んでください。")
+        values = self._data_manager.data.setdefault(
+            "store_service_prep_choices", {}).setdefault(record_date, {}).setdefault(period, {})
+        if choice:
+            values[item_id] = choice
+        else:
+            values.pop(item_id, None)
+        self._data_manager.save()
+
+    def set_service_prep_sent_to_next_day(self, record_date, period, item_id, enabled=True):
+        """Send or withdraw one checklist item from the following day's lunch board."""
+        day = self._date(record_date)
+        period = self._service_period(period)
+        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
+        if not item:
+            raise ValueError("仕込み項目が見つかりません。")
+        target_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
+        carry_id = f"{record_date}:{period}:{item_id}"
+        carries = self._data_manager.data.setdefault(
+            "store_service_next_day_carries", {}).setdefault(target_date, {})
+        if enabled:
+            carries[carry_id] = {
+                "source_date": record_date, "source_period": period, "item_id": item_id,
+                "sent_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        else:
+            carries.pop(carry_id, None)
+        self._data_manager.save()
+
+    def is_service_prep_sent_to_next_day(self, record_date, period, item_id):
+        day = self._date(record_date)
+        period = self._service_period(period)
+        target_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
+        carry_id = f"{record_date}:{period}:{item_id}"
+        return carry_id in self._data_manager.data.get(
+            "store_service_next_day_carries", {}).get(target_date, {})
+
+    def reset_service_prep_items(self, record_date, period, item_ids):
+        """Return several completed checklist entries to their uncompleted state."""
+        self._date(record_date)
+        period = self._service_period(period)
+        selected = set(item_ids or [])
+        changed = 0
+        for item in self.prep_templates():
+            if item["id"] not in selected:
+                continue
+            if self._is_quantity_prep(item):
+                self._data_manager.data.setdefault(
+                    "store_service_prep_quantities", {}).setdefault(
+                        record_date, {}).setdefault(period, {})[item["id"]] = 0
+            elif self._is_leftover_rice(item):
+                self._data_manager.data.setdefault(
+                    "store_service_prep_choices", {}).setdefault(
+                        record_date, {}).setdefault(period, {}).pop(item["id"], None)
+            else:
+                self._data_manager.data.setdefault(
+                    "store_service_prep_records", {}).setdefault(
+                        record_date, {}).setdefault(period, {})[item["id"]] = "incomplete"
+            changed += 1
+        if changed:
+            self._data_manager.save()
+        return changed
+
     def service_handover_board(self, record_date, period):
         """Unfinished work, free notes and open order requests for the active service."""
         day = self._date(record_date)
@@ -540,6 +623,12 @@ class StoreOperationsManager:
         items = []
         if source_started:
             for prep in self.service_prep_items(source_date, source_period):
+                if prep.get("choice_mode") and prep.get("choice"):
+                    items.append({"id": prep["id"], "kind": "check_result",
+                                  "name": f"{prep['name']}：{prep['choice']}",
+                                  "area": prep.get("area", "厨房"),
+                                  "from_date": source_date, "from_period": source_period})
+                    continue
                 if prep["status"] == "done":
                     continue
                 detail = prep["name"]
@@ -549,6 +638,36 @@ class StoreOperationsManager:
                               "area": prep.get("area", "厨房"), "from_date": source_date,
                               "from_period": source_period,
                               "quantity_mode": prep.get("quantity_mode", False)})
+        if period == "lunch":
+            manual_carries = self._data_manager.data.get(
+                "store_service_next_day_carries", {}).get(record_date, {})
+            existing = {(item["from_date"], item.get("from_period"), item["id"])
+                        for item in items if item.get("kind") in {"prep", "check_result"}}
+            for carry in manual_carries.values():
+                source_day = carry.get("source_date", "")
+                source_service = carry.get("source_period", "")
+                item_id = carry.get("item_id", "")
+                key = (source_day, source_service, item_id)
+                if key in existing:
+                    continue
+                prep = next((value for value in self.service_prep_items(
+                    source_day, source_service) if value["id"] == item_id), None)
+                if not prep:
+                    continue
+                if prep.get("choice_mode") and prep.get("choice"):
+                    name = f"{prep['name']}：{prep['choice']}"
+                    kind = "check_result"
+                else:
+                    name = prep["name"]
+                    if prep.get("quantity_mode"):
+                        name = f"{name}（残り{prep.get('quantity', 0)}）"
+                    kind = "prep"
+                items.append({"id": item_id, "kind": kind, "name": name,
+                              "area": prep.get("area", "厨房"), "from_date": source_day,
+                              "from_period": source_service,
+                              "quantity_mode": prep.get("quantity_mode", False),
+                              "manually_carried": True})
+                existing.add(key)
         handover_days = self._data_manager.data.get("store_handovers", {})
         for note_date in sorted(handover_days):
             if note_date > record_date:
