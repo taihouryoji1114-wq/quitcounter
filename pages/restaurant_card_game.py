@@ -19,7 +19,7 @@ def restaurant_card_game_page():
     profile = profiles.setdefault(user_id, initial_profile())
     for key, value in initial_profile().items():
         profile.setdefault(key, value)
-    state = {"screen": "home", "last_draw": None}
+    state = {"screen": "home", "last_draw": None, "selected_staff": ""}
 
     def save():
         profiles[user_id] = profile
@@ -32,8 +32,20 @@ def restaurant_card_game_page():
         state["screen"] = screen
         render.refresh()
 
-    def assign(position, value):
-        profile["assignments"][position] = value or ""
+    def select_staff(card_id):
+        state["selected_staff"] = "" if state.get("selected_staff") == card_id else card_id
+        render.refresh()
+
+    def assign(position, value=None):
+        card_id = value if value is not None else state.get("selected_staff", "")
+        if not card_id:
+            profile["assignments"][position] = ""
+        else:
+            for other_position, assigned_id in profile["assignments"].items():
+                if assigned_id == card_id:
+                    profile["assignments"][other_position] = ""
+            profile["assignments"][position] = card_id
+            state["selected_staff"] = ""
         save()
         render.refresh()
 
@@ -159,25 +171,59 @@ def restaurant_card_game_page():
                             ui.label(subtitle).classes("text-[9px] text-grey-6")
             elif state["screen"] == "business":
                 ui.label("スタッフ配置").classes("rg-page-title")
-                ui.label("各部門に1人ずつ配置。適材適所が利益を生みます").classes("rg-page-copy")
-                choices = {
-                    item_id: (f"{card(item_id)['name']}　"
-                              + " ".join(f"{key}{effective_ability(profile, item_id, key)}"
-                                         for key in POSITIONS))
-                    for item_id in profile["owned"]
-                }
-                choices[""] = "未配置"
+                ui.label("手元のスタッフを選び、目の前のスロットへ差し込む").classes("rg-page-copy")
+                ui.label("あなたのスタッフ").classes("rg-hand-title")
+                with ui.element("div").classes("rg-staff-hand"):
+                    for item_id in profile["owned"]:
+                        info = card(item_id)
+                        assigned_position = next((position for position, assigned in profile["assignments"].items()
+                                                  if assigned == item_id), "")
+                        selected = state.get("selected_staff") == item_id
+                        card_classes = "rg-hand-card selected" if selected else "rg-hand-card"
+                        if assigned_position:
+                            card_classes += " assigned"
+                        with ui.card().classes(card_classes).on(
+                                "click", lambda _, value=item_id: select_staff(value)):
+                            with ui.row().classes("w-full items-center no-wrap gap-1"):
+                                ui.label(info["rarity"]).classes(f"rarity {info['rarity'].lower()}")
+                                ui.label(info["name"]).classes("rg-hand-name grow")
+                                if assigned_position:
+                                    ui.badge(assigned_position).props("rounded color=amber-9")
+                            with ui.element("div").classes("rg-hand-stats"):
+                                for stat_key in POSITIONS:
+                                    ui.label(f"{stat_key}{effective_ability(profile, item_id, stat_key)}")
+                selected_id = state.get("selected_staff", "")
+                ui.label(
+                    f"{card(selected_id)['name']}を選択中 — 配置先をタップ" if selected_id
+                    else "スタッフカードを1枚選んでください"
+                ).classes("rg-selection-guide active" if selected_id else "rg-selection-guide")
+                ui.label("あなたの配置スロット").classes("rg-hand-title q-mt-sm")
                 with ui.element("div").classes("rg-positions"):
                     for key, label in POSITIONS.items():
-                        with ui.card().classes(f"rg-position pos-{key.lower()}"):
-                            ui.label(key).classes("rg-position-mark")
-                            ui.label(label).classes("font-black")
-                            ui.select(choices, value=profile["assignments"].get(key, ""),
-                                      on_change=lambda event, position=key: assign(
-                                          position, event.value)).props("outlined dense").classes("w-full")
-                            current = profile["assignments"].get(key, "")
-                            ui.label(f"能力 {effective_ability(profile, current, key)}").classes(
-                                "rg-power")
+                        current = profile["assignments"].get(key, "")
+                        slot_classes = f"rg-position rg-slot pos-{key.lower()}"
+                        if selected_id:
+                            slot_classes += " ready"
+                        with ui.card().classes(slot_classes).on(
+                                "click", lambda _, position=key: assign(position)):
+                            with ui.row().classes("w-full items-center no-wrap"):
+                                ui.label(key).classes("rg-position-mark")
+                                with ui.column().classes("gap-0 grow"):
+                                    ui.label(label).classes("font-black")
+                                    ui.label("タップして差し込む" if not current else "配置済み").classes(
+                                        "text-[8px] text-grey-6")
+                            if current:
+                                ui.label(card(current)["name"]).classes("rg-slotted-name")
+                                with ui.element("div").classes("rg-hand-stats"):
+                                    for stat_key in POSITIONS:
+                                        ui.label(f"{stat_key}{effective_ability(profile, current, stat_key)}")
+                                with ui.row().classes("w-full items-center"):
+                                    ui.label(f"この持ち場の能力 {effective_ability(profile, current, key)}").classes(
+                                        "rg-power grow")
+                                    ui.button("外す", on_click=lambda _, position=key: assign(position, "")).props(
+                                            "flat dense no-caps color=negative")
+                            else:
+                                ui.icon("move_to_inbox").classes("rg-empty-slot")
                 ui.button("この布陣で営業する", icon="play_arrow", on_click=business).props(
                     "unelevated no-caps").classes("rg-primary w-full q-mt-md")
                 result = profile.get("last_result")
@@ -257,5 +303,5 @@ def restaurant_card_game_page():
                                     "unelevated no-caps").classes("rg-primary w-full")
     render()
     ui.add_css("""
-    body{background:radial-gradient(circle at 50% -10%,#49320f,#120e0a 42%,#080706)!important;color:#f7ead0!important}.rg-app{width:min(100%,720px);margin:auto;min-height:100vh;padding:18px 16px 60px}.rg-topbar{padding:4px 2px 18px}.rg-logo{font-family:serif;font-size:24px;font-weight:900;color:#f4cc73;text-shadow:0 2px 14px #b56a18}.rg-sublogo{font-size:9px;letter-spacing:.18em;color:#c3aa7b}.rg-currency{padding:8px 12px;border:1px solid #8e682c;border-radius:999px;background:#17110a;font-weight:900}.rg-hero{padding:28px!important;border-radius:28px!important;border:1px solid #9d7431!important;background:linear-gradient(145deg,rgba(10,13,20,.94),rgba(68,32,10,.92)),url('/static/restaurant_card_yamada.jpg') 88% 20%/44% auto no-repeat!important;box-shadow:0 22px 55px rgba(0,0,0,.42)!important;overflow:hidden}.rg-kicker{font-size:10px;font-weight:900;color:#efc66e;letter-spacing:.12em}.rg-title{font-family:serif;font-size:30px;font-weight:900;margin-top:12px}.rg-copy{font-size:11px;color:#d8cdb8}.rg-primary{background:linear-gradient(135deg,#d99d32,#8f5116)!important;color:white!important;box-shadow:0 8px 20px rgba(198,126,28,.3)!important}.rg-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:12px}.rg-metric{padding:14px!important;border-radius:18px!important;background:rgba(27,22,17,.94)!important;border:1px solid #46371f!important}.rg-metric>div:first-child{font-size:9px;color:#ae9c7c}.rg-metric>div:last-child{font-size:17px;font-weight:900;color:#fff}.rg-menu{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.rg-menu-card{padding:18px!important;border-radius:21px!important;background:linear-gradient(145deg,#fffaf0,#ead9b9)!important;color:#22170d!important;border:1px solid #c4994d!important}.rg-page-title{font-family:serif;font-size:27px;font-weight:900;color:#f6d584}.rg-page-copy{font-size:10px;color:#bcae98;margin-bottom:14px}.rg-positions{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.rg-position{padding:13px!important;border-radius:19px!important;background:#f7efdf!important;color:#1f160d!important;border:2px solid #875b27!important}.rg-position-mark{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#6e1616;color:#fff;font-weight:900}.pos-d .rg-position-mark{background:#173c68}.pos-c .rg-position-mark{background:#195b31}.pos-s .rg-position-mark{background:#563067}.rg-power{font-size:11px;font-weight:900;color:#9a641b}.rg-result,.rg-gacha{padding:20px!important;border-radius:23px!important;background:#fff8e9!important;color:#24180d!important;border:1px solid #b7863e!important}.rg-customer-card{width:min(100%,330px);margin:8px auto 16px;border-radius:16px;box-shadow:0 12px 28px rgba(29,13,3,.28)}.rg-result-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:10px 0}.success{color:#17683c;font-weight:900}.failure{color:#ae2525;font-weight:900}.rg-profit{font-size:24px;font-weight:900}.rg-profit.positive{color:#137044}.rg-profit.negative{color:#b32424}.rg-staff-grid,.rg-company-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.rg-staff-card{padding:10px!important;border-radius:19px!important;background:#fff7e8!important;color:#21160d!important;border:2px solid #9c712e!important}.rg-staff-card.compact{width:min(100%,300px);margin:12px auto}.rg-card-art{width:100%;aspect-ratio:2/2.7;object-fit:cover;border-radius:12px;margin-bottom:8px}.rg-card-art[class*='rg-art-']{display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,#d6ac53,#30200e);color:#fff}.rg-art-ssr{background:radial-gradient(circle,#a56cdb,#130e1e)!important}.rg-art-sr{background:radial-gradient(circle,#4a91cb,#101b29)!important}.rg-art-r{background:radial-gradient(circle,#5fa56b,#132018)!important}.rg-art-skill{font-size:12px;font-weight:900;margin-top:10px}.rarity{padding:3px 7px;border-radius:7px;background:#333;color:white;font-size:9px;font-weight:900}.rarity.ssr{background:#7540a8}.rarity.sr{background:#226aa0}.rarity.r{background:#28753d}.rg-stats{font-size:10px;font-weight:900;padding:6px 0}.rg-company-card{padding:11px!important;border-radius:20px!important;background:#fff7e8!important;color:#21160d!important;border:1px solid #b98b46!important}.rg-company-art{width:100%;aspect-ratio:1/1.15;object-fit:cover;border-radius:13px}.q-field--outlined .q-field__control{border-radius:11px!important;background:white}@media(max-width:390px){.rg-staff-grid,.rg-company-grid{grid-template-columns:1fr}.rg-title{font-size:25px}.rg-hero{background-size:55% auto!important}}
+    body{background:radial-gradient(circle at 50% -10%,#49320f,#120e0a 42%,#080706)!important;color:#f7ead0!important}.rg-app{width:min(100%,720px);margin:auto;min-height:100vh;padding:18px 16px 60px}.rg-topbar{padding:4px 2px 18px}.rg-logo{font-family:serif;font-size:24px;font-weight:900;color:#f4cc73;text-shadow:0 2px 14px #b56a18}.rg-sublogo{font-size:9px;letter-spacing:.18em;color:#c3aa7b}.rg-currency{padding:8px 12px;border:1px solid #8e682c;border-radius:999px;background:#17110a;font-weight:900}.rg-hero{padding:28px!important;border-radius:28px!important;border:1px solid #9d7431!important;background:linear-gradient(145deg,rgba(10,13,20,.94),rgba(68,32,10,.92)),url('/static/restaurant_card_yamada.jpg') 88% 20%/44% auto no-repeat!important;box-shadow:0 22px 55px rgba(0,0,0,.42)!important;overflow:hidden}.rg-kicker{font-size:10px;font-weight:900;color:#efc66e;letter-spacing:.12em}.rg-title{font-family:serif;font-size:30px;font-weight:900;margin-top:12px}.rg-copy{font-size:11px;color:#d8cdb8}.rg-primary{background:linear-gradient(135deg,#d99d32,#8f5116)!important;color:white!important;box-shadow:0 8px 20px rgba(198,126,28,.3)!important}.rg-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:12px}.rg-metric{padding:14px!important;border-radius:18px!important;background:rgba(27,22,17,.94)!important;border:1px solid #46371f!important}.rg-metric>div:first-child{font-size:9px;color:#ae9c7c}.rg-metric>div:last-child{font-size:17px;font-weight:900;color:#fff}.rg-menu{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.rg-menu-card{padding:18px!important;border-radius:21px!important;background:linear-gradient(145deg,#fffaf0,#ead9b9)!important;color:#22170d!important;border:1px solid #c4994d!important}.rg-page-title{font-family:serif;font-size:27px;font-weight:900;color:#f6d584}.rg-page-copy{font-size:10px;color:#bcae98;margin-bottom:14px}.rg-hand-title{font-size:11px;font-weight:900;color:#e9c577;letter-spacing:.08em}.rg-staff-hand{display:flex;gap:8px;overflow-x:auto;padding:8px 2px 12px;scroll-snap-type:x proximity}.rg-hand-card{flex:0 0 148px;padding:10px!important;border-radius:16px!important;background:linear-gradient(145deg,#fff8e8,#e8d4ad)!important;color:#21160d!important;border:2px solid #7d5b2c!important;scroll-snap-align:start;transition:.18s transform,.18s box-shadow,.18s opacity}.rg-hand-card.selected{transform:translateY(-5px);border-color:#ffd05b!important;box-shadow:0 0 0 3px rgba(255,194,60,.2),0 10px 22px rgba(0,0,0,.35)!important}.rg-hand-card.assigned:not(.selected){opacity:.62}.rg-hand-name{font-size:11px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rg-hand-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;width:100%;margin-top:7px}.rg-hand-stats>div{font-size:10px;font-weight:900;text-align:center;padding:3px 1px;border-radius:6px;background:rgba(68,42,16,.1)}.rg-selection-guide{text-align:center;padding:8px;border:1px dashed #665235;border-radius:12px;color:#a99470;font-size:10px}.rg-selection-guide.active{color:#ffe3a1;border-color:#d99d32;background:rgba(217,157,50,.12);animation:rg-pulse 1.4s infinite}.rg-positions{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.rg-position{padding:13px!important;border-radius:19px!important;background:#f7efdf!important;color:#1f160d!important;border:2px solid #875b27!important}.rg-slot.ready{box-shadow:0 0 0 3px rgba(242,183,67,.16)!important;animation:rg-pulse 1.4s infinite}.rg-position-mark{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#6e1616;color:#fff;font-weight:900}.pos-d .rg-position-mark{background:#173c68}.pos-c .rg-position-mark{background:#195b31}.pos-s .rg-position-mark{background:#563067}.rg-slotted-name{font-size:15px;font-weight:900;margin-top:8px}.rg-empty-slot{font-size:30px;color:#b99b6e;margin:11px auto 3px}.rg-power{font-size:10px;font-weight:900;color:#9a641b}.rg-result,.rg-gacha{padding:20px!important;border-radius:23px!important;background:#fff8e9!important;color:#24180d!important;border:1px solid #b7863e!important}.rg-customer-card{width:min(100%,330px);margin:8px auto 16px;border-radius:16px;box-shadow:0 12px 28px rgba(29,13,3,.28)}.rg-result-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:10px 0}.success{color:#17683c;font-weight:900}.failure{color:#ae2525;font-weight:900}.rg-profit{font-size:24px;font-weight:900}.rg-profit.positive{color:#137044}.rg-profit.negative{color:#b32424}.rg-staff-grid,.rg-company-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.rg-staff-card{padding:10px!important;border-radius:19px!important;background:#fff7e8!important;color:#21160d!important;border:2px solid #9c712e!important}.rg-staff-card.compact{width:min(100%,300px);margin:12px auto}.rg-card-art{width:100%;aspect-ratio:2/2.7;object-fit:cover;border-radius:12px;margin-bottom:8px}.rg-card-art[class*='rg-art-']{display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,#d6ac53,#30200e);color:#fff}.rg-art-ssr{background:radial-gradient(circle,#a56cdb,#130e1e)!important}.rg-art-sr{background:radial-gradient(circle,#4a91cb,#101b29)!important}.rg-art-r{background:radial-gradient(circle,#5fa56b,#132018)!important}.rg-art-skill{font-size:12px;font-weight:900;margin-top:10px}.rarity{padding:3px 7px;border-radius:7px;background:#333;color:white;font-size:9px;font-weight:900}.rarity.ssr{background:#7540a8}.rarity.sr{background:#226aa0}.rarity.r{background:#28753d}.rg-stats{font-size:10px;font-weight:900;padding:6px 0}.rg-company-card{padding:11px!important;border-radius:20px!important;background:#fff7e8!important;color:#21160d!important;border:1px solid #b98b46!important}.rg-company-art{width:100%;aspect-ratio:1/1.15;object-fit:cover;border-radius:13px}.q-field--outlined .q-field__control{border-radius:11px!important;background:white}@keyframes rg-pulse{50%{filter:brightness(1.12)}}@media(max-width:390px){.rg-staff-grid,.rg-company-grid{grid-template-columns:1fr}.rg-title{font-size:25px}.rg-hero{background-size:55% auto!important}.rg-positions{grid-template-columns:1fr 1fr}.rg-hand-card{flex-basis:138px}}
     """)
