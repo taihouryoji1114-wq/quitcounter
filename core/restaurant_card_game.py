@@ -36,11 +36,28 @@ STAFF_POOL = (
      "effect": "人件費-1万円"},
 )
 
+CUSTOMER_POOL = (
+    {"id": "kitsune", "name": "妖狐のコン吉", "rarity": "N", "sales": 180_000,
+     "requirements": {"H": 3, "D": 3, "C": 4, "S": 2},
+     "image": "/static/rg_customer_kitsune.jpg"},
+    {"id": "oni", "name": "ペコペコ鬼", "rarity": "N", "sales": 200_000,
+     "requirements": {"H": 3, "D": 3, "C": 4, "S": 2},
+     "image": "/static/rg_customer_oni.jpg"},
+    {"id": "tanuki", "name": "常連たぬき", "rarity": "N", "sales": 200_000,
+     "requirements": {"H": 3, "D": 3, "C": 4, "S": 2},
+     "image": "/static/rg_customer_tanuki.jpg"},
+    {"id": "tengu", "name": "週末大騒ぎ天狗", "rarity": "R", "sales": 320_000,
+     "requirements": {"H": 5, "D": 4, "C": 6, "S": 5},
+     "image": "/static/rg_customer_tengu.jpg"},
+)
+
 
 def initial_profile():
     return {
         "year": 1, "cash": 2_000_000, "gems": 500, "support": 0,
         "management_points": 0, "branches": 1, "total_profit": 0,
+        "office_level": 0, "manager_id": "", "branch_assets": ["ryogoku"],
+        "ceo_level": 1,
         "owned": {"yamada": {"level": 1, "xp": 0, "shards": 0},
                   "momo": {"level": 1, "xp": 0, "shards": 0},
                   "gen": {"level": 1, "xp": 0, "shards": 0}},
@@ -64,14 +81,18 @@ def effective_ability(profile, card_id, position):
 def run_business(profile, rng=None):
     rng = rng or random.Random()
     year = int(profile.get("year", 1))
-    requirements = {key: min(10, rng.randint(3, 5) + year // 3) for key in POSITIONS}
+    customer = deepcopy(rng.choice(CUSTOMER_POOL))
+    requirements = customer["requirements"]
     assignments = profile.get("assignments", {})
     abilities = {key: effective_ability(profile, assignments.get(key, ""), key)
                  for key in POSITIONS}
+    if profile.get("manager_id"):
+        abilities = {key: min(10, value + 1) for key, value in abilities.items()}
     achieved = {key: abilities[key] >= requirements[key] for key in POSITIONS}
     support = sum(max(0, abilities[key] - requirements[key]) for key in POSITIONS)
     completed = sum(achieved.values())
-    sales = 120_000 * completed * profile.get("branches", 1)
+    sales = sum(customer["sales"] // 4 for key in POSITIONS if achieved[key])
+    sales *= max(1, int(profile.get("branches", 1)))
     if assignments.get("H") == "sakura":
         sales = int(sales * 1.05)
     labor = sum(card(value)["cost"] * 10_000 for value in assignments.values() if card(value))
@@ -84,12 +105,14 @@ def run_business(profile, rng=None):
     profile["cash"] = int(profile.get("cash", 0)) + profit
     profile["total_profit"] = int(profile.get("total_profit", 0)) + profit
     profile["support"] = support
-    profile["management_points"] = int(profile.get("management_points", 0)) + completed
+    profile["management_points"] = (int(profile.get("management_points", 0)) + completed
+                                    + int(profile.get("office_level", 0)))
     for card_id in set(assignments.values()) - {""}:
         owned = profile["owned"].setdefault(card_id, {"level": 1, "xp": 0, "shards": 0})
         owned["xp"] = int(owned.get("xp", 0)) + 15 + completed * 5
     profile["last_result"] = {
-        "requirements": requirements, "abilities": abilities, "achieved": achieved,
+        "customer": customer, "requirements": requirements, "abilities": abilities,
+        "achieved": achieved,
         "sales": sales, "labor": labor, "rent": rent, "profit": profit,
         "support": support, "completed": completed,
     }
@@ -97,6 +120,40 @@ def run_business(profile, rng=None):
     profile["gems"] = int(profile.get("gems", 0)) + 30
     profile["updated_at"] = datetime.now().isoformat(timespec="seconds")
     return profile["last_result"]
+
+
+def promote_manager(profile, card_id):
+    if card_id not in profile.get("owned", {}):
+        raise ValueError("未獲得のスタッフです。")
+    if any(effective_ability(profile, card_id, position) < 5 for position in POSITIONS):
+        raise ValueError("店長昇格には全ポジション能力5以上が必要です。")
+    profile["manager_id"] = card_id
+    return card_id
+
+
+def open_office(profile):
+    if int(profile.get("office_level", 0)):
+        raise ValueError("事務所は開設済みです。")
+    if int(profile.get("cash", 0)) < 500_000:
+        raise ValueError("事務所の開設には50万円必要です。")
+    profile["cash"] -= 500_000
+    profile["office_level"] = 1
+    return 1
+
+
+def open_branch(profile, branch_id):
+    costs = {"nagoya": 700_000, "ginza": 1_500_000}
+    if branch_id not in costs:
+        raise ValueError("支店が見つかりません。")
+    assets = profile.setdefault("branch_assets", ["ryogoku"])
+    if branch_id in assets:
+        raise ValueError("この支店は開業済みです。")
+    if int(profile.get("cash", 0)) < costs[branch_id]:
+        raise ValueError("支店を開く資金が足りません。")
+    profile["cash"] -= costs[branch_id]
+    assets.append(branch_id)
+    profile["branches"] = len(assets)
+    return len(assets)
 
 
 def draw_gacha(profile, rng=None):
