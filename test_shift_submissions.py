@@ -27,10 +27,29 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
 
     def test_submission_is_saved_by_staff_and_period(self):
         self.manager.save("スタッフA", 2026, 8, "second",
-                          {"16": "ランチ", "17": "休み"}, "18日は相談")
+                          {"16": {"type": "ランチ", "start": "11:30", "end": "15:30"},
+                           "17": {"type": "絶対休み", "start": "", "end": ""}},
+                          "18日は相談")
         saved = self.manager.submission("スタッフA", 2026, 8, "second")
-        self.assertEqual(saved["days"], {"16": "ランチ", "17": "休み"})
+        self.assertEqual(saved["days"], {
+            "16": {"type": "ランチ", "start": "11:30", "end": "15:30"},
+            "17": {"type": "絶対休み", "start": "", "end": ""},
+        })
         self.assertEqual(saved["note"], "18日は相談")
+
+    def test_empty_submission_is_allowed_and_means_days_off(self):
+        self.manager.save("スタッフA", 2026, 8, "second", {}, "全日希望なし")
+        saved = self.manager.submission("スタッフA", 2026, 8, "second")
+        self.assertEqual(saved["days"], {})
+        self.assertTrue(saved["submitted_at"])
+
+    def test_old_labels_are_migrated_when_read(self):
+        self.data.data.setdefault("store_shift_submissions", {}).setdefault(
+            "2026-08-second", {})["スタッフA"] = {
+                "days": {"16": "出勤可", "17": "休み"}, "submitted_at": "old"}
+        saved = self.manager.submission("スタッフA", 2026, 8, "second")
+        self.assertEqual(saved["days"]["16"]["type"], "通し")
+        self.assertEqual(saved["days"]["17"]["type"], "絶対休み")
 
 
 if __name__ == "__main__":

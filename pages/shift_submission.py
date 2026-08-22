@@ -75,10 +75,17 @@ def shift_submission_page():
                                       "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
                         with ui.row().classes("shift-day-row w-full items-center no-wrap"):
                             ui.label(f"{day}日（{weekday_jp}）").classes("shift-day-label")
-                            fields[str(day)] = ui.select(
+                            saved_day = submission["days"].get(
+                                str(day), {"type": "", "start": "", "end": ""})
+                            shift_type = ui.select(
                                 ["", *shift_submissions.OPTIONS],
-                                value=submission["days"].get(str(day), ""),
-                            ).props("outlined dense options-dense").classes("grow")
+                                value=saved_day.get("type", ""),
+                            ).props("outlined dense options-dense").classes("shift-kind")
+                            start = ui.input("開始", value=saved_day.get("start", "")).props(
+                                "outlined dense type=time").classes("shift-time")
+                            end = ui.input("終了", value=saved_day.get("end", "")).props(
+                                "outlined dense type=time").classes("shift-time")
+                            fields[str(day)] = {"type": shift_type, "start": start, "end": end}
                     note = ui.textarea("希望・連絡事項（任意）", value=submission["note"]).props(
                         "outlined autogrow").classes("w-full q-mt-sm")
 
@@ -86,7 +93,8 @@ def shift_submission_page():
                         try:
                             shift_submissions.save(
                                 staff.value, period["year"], period["month"], period["half"],
-                                {day: field.value for day, field in fields.items()}, note.value)
+                                {day: {key: field.value for key, field in day_fields.items()}
+                                 for day, day_fields in fields.items()}, note.value)
                         except ValueError as error:
                             ui.notify(str(error), type="negative")
                             return
@@ -97,6 +105,8 @@ def shift_submission_page():
                     if submission["submitted_at"]:
                         ui.label(f"前回提出：{submission['submitted_at'][5:].replace('-', '/')}").classes(
                             "text-[9px] text-grey-6 text-center w-full q-mt-xs")
+                    ui.button("入力を閉じる", icon="expand_less", on_click=editor.clear).props(
+                        "flat no-caps color=grey-7").classes("w-full q-mt-sm")
 
             ui.button("入力を開く", icon="edit_calendar", on_click=open_editor).props(
                 "outline no-caps").classes("w-full q-mt-md")
@@ -118,20 +128,37 @@ def shift_submission_page():
                     overview.clear()
                     with overview:
                         ui.label(period["label"]).classes("text-sm font-black q-mb-xs")
-                        for name in shift_submissions.STAFF:
-                            record = submitted.get(name)
-                            with ui.row().classes("overview-row w-full items-center no-wrap"):
-                                ui.icon("check_circle" if record else "radio_button_unchecked").classes(
-                                    "text-positive" if record else "text-grey-4")
-                                ui.label(name).classes("text-xs font-bold grow")
-                                ui.label("提出済み" if record else "未提出").classes(
-                                    "text-[10px] text-positive font-bold" if record
-                                    else "text-[10px] text-grey-5")
+                        ui.label("未入力の日は休み扱い。未提出とは区別して表示します").classes(
+                            "text-[9px] text-grey-6 q-mb-sm")
+                        for day in range(period["start"], period["end"] + 1):
+                            weekday = date(period["year"], period["month"], day).strftime("%a")
+                            weekday_jp = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木",
+                                          "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
+                            with ui.card().classes("admin-day-card w-full q-pa-md q-mb-sm"):
+                                ui.label(f"{day}日（{weekday_jp}）").classes(
+                                    "text-sm font-black q-mb-xs")
+                                for name in shift_submissions.STAFF:
+                                    record = submitted.get(name)
+                                    if not record:
+                                        summary, css = "未提出", "not-submitted"
+                                    else:
+                                        value = shift_submissions._day_value(
+                                            record.get("days", {}).get(str(day), {}))
+                                        if not any(value.values()):
+                                            summary, css = "希望なし（休み扱い）", "day-off"
+                                        else:
+                                            summary = value["type"] or "時間指定"
+                                            if value["start"] or value["end"]:
+                                                summary += f"　{value['start'] or '指定なし'}〜{value['end'] or '指定なし'}"
+                                            css = "absolute-off" if value["type"] == "絶対休み" else "available"
+                                    with ui.row().classes("admin-shift-row w-full items-center no-wrap"):
+                                        ui.label(name).classes("admin-staff-name")
+                                        ui.label(summary).classes(f"admin-shift-value {css}")
 
                 ui.button("選択中の期間を確認", icon="refresh", on_click=show_overview).props(
                     "outline no-caps").classes("w-full q-mb-sm")
 
         ui.add_css("""
         .shift-guide{border:0!important;border-radius:24px!important;color:white!important;background:linear-gradient(135deg,#173D30,#4F7C68)!important}
-        .shift-day-row{padding:7px 0;border-bottom:1px solid #EDF1EE}.shift-day-label{width:76px;font-size:12px;font-weight:900}.shift-submit{background:#2F7457!important;color:#fff!important;border-radius:14px!important;font-weight:900!important}.overview-row{padding:8px 2px;border-bottom:1px solid #EDF1EE}
+        .shift-day-row{padding:7px 0;border-bottom:1px solid #EDF1EE;gap:5px}.shift-day-label{width:68px;flex:0 0 68px;font-size:11px;font-weight:900}.shift-kind{width:104px}.shift-time{min-width:76px;flex:1}.shift-time .q-field__label{font-size:9px}.shift-submit{background:#2F7457!important;color:#fff!important;border-radius:14px!important;font-weight:900!important}.admin-day-card{border:1px solid #E1E9E4!important;border-radius:17px!important;box-shadow:none!important}.admin-shift-row{padding:5px 0;border-top:1px solid #F0F2F1}.admin-staff-name{width:64px;flex:0 0 64px;font-size:10px;font-weight:900}.admin-shift-value{min-width:0;padding:5px 8px;border-radius:8px;font-size:9px;font-weight:800}.admin-shift-value.available{background:#DFF2E7;color:#276D49}.admin-shift-value.absolute-off{background:#FFE2E2;color:#A43E3E}.admin-shift-value.day-off{background:#F1F3F2;color:#7C8781}.admin-shift-value.not-submitted{background:#FFF0D7;color:#9A671D}@media(max-width:420px){.shift-day-row{flex-wrap:wrap!important}.shift-day-label{width:100%;flex-basis:100%}.shift-kind{width:104px}.shift-time{min-width:92px}}
         """)

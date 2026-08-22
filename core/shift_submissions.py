@@ -10,7 +10,7 @@ from core.staffing import StaffingManager
 
 
 class ShiftSubmissionManager:
-    OPTIONS = ("出勤可", "ランチ", "ディナー", "休み")
+    OPTIONS = ("通し", "ランチ", "ディナー", "絶対休み")
     STAFF = StaffingManager.STAFF
 
     def __init__(self, data_manager=None):
@@ -39,8 +39,10 @@ class ShiftSubmissionManager:
         period = self.period(year, month, half)
         stored = self._data_manager.data.get("store_shift_submissions", {}).get(
             period["key"], {}).get(staff, {})
+        raw_days = dict(stored.get("days", {})) if isinstance(stored, dict) else {}
+        days = {str(day): self._day_value(value) for day, value in raw_days.items()}
         return {"staff": staff, "period": period,
-                "days": dict(stored.get("days", {})) if isinstance(stored, dict) else {},
+                "days": days,
                 "note": str(stored.get("note", "")) if isinstance(stored, dict) else "",
                 "submitted_at": str(stored.get("submitted_at", "")) if isinstance(stored, dict) else ""}
 
@@ -49,13 +51,15 @@ class ShiftSubmissionManager:
         period = self.period(year, month, half)
         cleaned = {}
         for day in range(period["start"], period["end"] + 1):
-            value = str((days or {}).get(str(day), "")).strip()
-            if value and value not in self.OPTIONS:
+            value = self._day_value((days or {}).get(str(day), {}))
+            if value["type"] and value["type"] not in self.OPTIONS:
                 raise ValueError(f"{day}日の希望が正しくありません。")
-            if value:
+            if value["start"] and not self._valid_time(value["start"]):
+                raise ValueError(f"{day}日の開始時間が正しくありません。")
+            if value["end"] and not self._valid_time(value["end"]):
+                raise ValueError(f"{day}日の終了時間が正しくありません。")
+            if value["type"] or value["start"] or value["end"]:
                 cleaned[str(day)] = value
-        if not cleaned:
-            raise ValueError("勤務希望を1日以上入力してください。")
         record = {"days": cleaned, "note": str(note or "").strip()[:500],
                   "submitted_at": datetime.now().isoformat(timespec="minutes")}
         self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
@@ -72,6 +76,28 @@ class ShiftSubmissionManager:
     def _staff(self, staff):
         if staff not in self.STAFF:
             raise ValueError("スタッフを選択してください。")
+
+    @classmethod
+    def _day_value(cls, value):
+        if isinstance(value, dict):
+            shift_type = str(value.get("type", "")).strip()
+            start = str(value.get("start", "")).strip()
+            end = str(value.get("end", "")).strip()
+        else:
+            shift_type, start, end = str(value or "").strip(), "", ""
+        if shift_type == "出勤可":
+            shift_type = "通し"
+        elif shift_type == "休み":
+            shift_type = "絶対休み"
+        return {"type": shift_type, "start": start, "end": end}
+
+    @staticmethod
+    def _valid_time(value):
+        try:
+            datetime.strptime(value, "%H:%M")
+            return True
+        except ValueError:
+            return False
 
 
 shift_submissions = ShiftSubmissionManager()
