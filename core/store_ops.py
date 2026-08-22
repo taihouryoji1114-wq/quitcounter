@@ -504,9 +504,7 @@ class StoreOperationsManager:
                 status = "incomplete"
             result.append({**item, "status": status, "quantity_mode": quantity_mode,
                            "quantity": quantity, "choice_mode": choice_mode,
-                           "choice": choice,
-                           "next_day_carried": self.is_service_prep_sent_to_next_day(
-                               record_date, period, item["id"])})
+                           "choice": choice})
         return result
 
     def set_service_prep_status(self, record_date, period, item_id, status):
@@ -552,34 +550,6 @@ class StoreOperationsManager:
         else:
             values.pop(item_id, None)
         self._data_manager.save()
-
-    def set_service_prep_sent_to_next_day(self, record_date, period, item_id, enabled=True):
-        """Send or withdraw one checklist item from the following day's lunch board."""
-        day = self._date(record_date)
-        period = self._service_period(period)
-        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
-        if not item:
-            raise ValueError("仕込み項目が見つかりません。")
-        target_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
-        carry_id = f"{record_date}:{period}:{item_id}"
-        carries = self._data_manager.data.setdefault(
-            "store_service_next_day_carries", {}).setdefault(target_date, {})
-        if enabled:
-            carries[carry_id] = {
-                "source_date": record_date, "source_period": period, "item_id": item_id,
-                "sent_at": datetime.now().isoformat(timespec="seconds"),
-            }
-        else:
-            carries.pop(carry_id, None)
-        self._data_manager.save()
-
-    def is_service_prep_sent_to_next_day(self, record_date, period, item_id):
-        day = self._date(record_date)
-        period = self._service_period(period)
-        target_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
-        carry_id = f"{record_date}:{period}:{item_id}"
-        return carry_id in self._data_manager.data.get(
-            "store_service_next_day_carries", {}).get(target_date, {})
 
     def reset_service_prep_items(self, record_date, period, item_ids):
         """Return several completed checklist entries to their uncompleted state."""
@@ -638,36 +608,6 @@ class StoreOperationsManager:
                               "area": prep.get("area", "厨房"), "from_date": source_date,
                               "from_period": source_period,
                               "quantity_mode": prep.get("quantity_mode", False)})
-        if period == "lunch":
-            manual_carries = self._data_manager.data.get(
-                "store_service_next_day_carries", {}).get(record_date, {})
-            existing = {(item["from_date"], item.get("from_period"), item["id"])
-                        for item in items if item.get("kind") in {"prep", "check_result"}}
-            for carry in manual_carries.values():
-                source_day = carry.get("source_date", "")
-                source_service = carry.get("source_period", "")
-                item_id = carry.get("item_id", "")
-                key = (source_day, source_service, item_id)
-                if key in existing:
-                    continue
-                prep = next((value for value in self.service_prep_items(
-                    source_day, source_service) if value["id"] == item_id), None)
-                if not prep:
-                    continue
-                if prep.get("choice_mode") and prep.get("choice"):
-                    name = f"{prep['name']}：{prep['choice']}"
-                    kind = "check_result"
-                else:
-                    name = prep["name"]
-                    if prep.get("quantity_mode"):
-                        name = f"{name}（残り{prep.get('quantity', 0)}）"
-                    kind = "prep"
-                items.append({"id": item_id, "kind": kind, "name": name,
-                              "area": prep.get("area", "厨房"), "from_date": source_day,
-                              "from_period": source_service,
-                              "quantity_mode": prep.get("quantity_mode", False),
-                              "manually_carried": True})
-                existing.add(key)
         handover_days = self._data_manager.data.get("store_handovers", {})
         for note_date in sorted(handover_days):
             if note_date > record_date:

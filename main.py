@@ -35,7 +35,7 @@ import pages.smoking
 import pages.settings
 import pages.workout
 import pages.gunryakugoma
-import pages.marble_chess
+import pages.restaurant_card_game
 import pages.system_status
 
 ui.run(

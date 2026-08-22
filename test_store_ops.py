@@ -199,19 +199,6 @@ class StoreOperationsManagerTest(unittest.TestCase):
         result = [item for item in board["items"] if item["kind"] == "check_result"]
         self.assertEqual([item["name"] for item in result], ["余り米：なし"])
 
-    def test_checklist_item_can_be_sent_to_next_day_and_withdrawn(self):
-        prep = self.manager.add_prep_template("唐揚げ", "厨房")
-        self.manager.ensure_service_checklist("2026-08-20", "lunch")
-        self.manager.set_service_prep_status("2026-08-20", "lunch", prep["id"], "done")
-        self.manager.set_service_prep_sent_to_next_day(
-            "2026-08-20", "lunch", prep["id"], True)
-        board = self.manager.service_handover_board("2026-08-21", "lunch")
-        self.assertTrue(any(item["name"] == "唐揚げ" for item in board["items"]))
-        self.manager.set_service_prep_sent_to_next_day(
-            "2026-08-20", "lunch", prep["id"], False)
-        board = self.manager.service_handover_board("2026-08-21", "lunch")
-        self.assertFalse(any(item["name"] == "唐揚げ" for item in board["items"]))
-
     def test_completed_service_items_can_be_bulk_reset(self):
         normal = self.manager.add_prep_template("唐揚げ", "厨房")
         fish = self.manager.add_prep_template("サバ", "厨房")

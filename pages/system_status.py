@@ -55,7 +55,8 @@ def system_status_page():
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
             ui.label("アプリ別データ概算").classes("text-xl font-bold")
             ui.label("サーバーに保存されているデータを分類").classes("text-grey-7 text-sm q-mb-md")
-            for name in ("未来決算", "店舗管理", "Habitory", "スケジュール", "その他"):
+            for name in ("未来決算", "店舗管理", "Habitory", "スケジュール",
+                         "飲食店経営ゲーム", "その他"):
                 with ui.row().classes("w-full justify-between q-py-sm border-t border-grey-3"):
                     ui.label(name)
                     ui.label(_size(status["groups"][name])).classes("font-bold")

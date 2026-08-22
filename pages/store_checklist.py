@@ -60,11 +60,6 @@ def checklist_page():
                 store_ops.set_daily_order_attention(record_date, item_id, True)
             ui.navigate.to("/store-ops/checklist")
 
-        def toggle_next_day(item):
-            store_ops.set_service_prep_sent_to_next_day(
-                record_date, period, item["id"], not item.get("next_day_carried", False))
-            ui.navigate.to("/store-ops/checklist")
-
         with ui.element("div").classes("check-grid w-full q-mt-md"):
             for item in prep_items:
                 attention = item["status"] == "attention"
@@ -106,11 +101,6 @@ def checklist_page():
                             ui.button(icon="change_history", on_click=lambda _, value=item: mark_attention(
                                 "prep", value["id"])).props(
                                     "flat dense round color=warning aria-label='注意として残す'")
-                    ui.button(
-                        "翌日送信を取り消す" if item.get("next_day_carried") else "今すぐ翌日へ送る",
-                        icon="undo" if item.get("next_day_carried") else "forward_to_inbox",
-                        on_click=lambda _, value=item: toggle_next_day(value),
-                    ).props("flat dense no-caps color=primary").classes("next-day-button w-full q-mt-xs")
             for destination in store_ops.DAILY_ORDER_DESTINATIONS:
                 if order_checks[destination]:
                     continue
@@ -148,11 +138,6 @@ def checklist_page():
                             ui.label(f"{item.get('quantity', 0)}個").classes("text-xs text-positive")
                         elif item.get("choice_mode"):
                             ui.label(item.get("choice", "")).classes("text-xs text-positive")
-                        ui.button(
-                            "送信取消" if item.get("next_day_carried") else "翌日へ",
-                            icon="undo" if item.get("next_day_carried") else "forward_to_inbox",
-                            on_click=lambda _, value=item: toggle_next_day(value),
-                        ).props("flat dense no-caps color=primary")
                 ui.button("選択した項目を未完了へ戻す", icon="undo", on_click=lambda: (
                     store_ops.reset_service_prep_items(
                         record_date, period, list(selected_completed)),
@@ -160,5 +145,5 @@ def checklist_page():
                 )).props("unelevated no-caps color=warning").classes("w-full q-mt-sm")
 
         ui.add_css("""
-        .cutoff-note{padding:10px 12px;border-radius:13px;background:#EEF5F1;color:#527060;font-size:10px;font-weight:800}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check-item{padding:13px!important;border-radius:18px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}.check-item.attention{border:2px solid #E2A63B!important}.check-item.order{background:#F4F7FB!important}.check-name{font-size:13px;font-weight:900;line-height:1.25}.check-area{font-size:9px;color:#7A8780;margin-top:3px}.next-day-button{font-size:9px!important}.confirm-card{width:min(92vw,420px)!important;border-radius:24px!important}.all-done{border-radius:24px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.completed-list{border:1px solid #E1E9E4;border-radius:18px;background:#fff}.completed-row{padding:9px 4px;border-bottom:1px solid #EEF1EF}@media(max-width:360px){.check-grid{grid-template-columns:1fr}}
+        .cutoff-note{padding:10px 12px;border-radius:13px;background:#EEF5F1;color:#527060;font-size:10px;font-weight:800}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check-item{padding:13px!important;border-radius:18px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}.check-item.attention{border:2px solid #E2A63B!important}.check-item.order{background:#F4F7FB!important}.check-name{font-size:13px;font-weight:900;line-height:1.25}.check-area{font-size:9px;color:#7A8780;margin-top:3px}.confirm-card{width:min(92vw,420px)!important;border-radius:24px!important}.all-done{border-radius:24px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.completed-list{border:1px solid #E1E9E4;border-radius:18px;background:#fff}.completed-row{padding:9px 4px;border-bottom:1px solid #EEF1EF}@media(max-width:360px){.check-grid{grid-template-columns:1fr}}
         """)

@@ -8,7 +8,7 @@ from nicegui import app, ui
 
 
 ROLE_PERMISSIONS = {
-    "owner": {"portal", "habitory", "store_ops", "future_financials", "schedule", "gunryakugoma", "marble_chess", "system_status"},
+    "owner": {"portal", "habitory", "store_ops", "future_financials", "schedule", "gunryakugoma", "restaurant_card_game", "system_status"},
     "partner": {"habitory"},
     "executive": {"store_ops", "future_financials"},
     "manager": {"store_ops", "future_financials"},
@@ -30,7 +30,7 @@ APP_LOGIN_PATHS = {
     "store_ops": "/store-ops/login", "future_financials": "/mirai-kessan/login",
     "schedule": "/schedule/login",
     "gunryakugoma": "/gunryakugoma/login",
-    "marble_chess": "/marble-chess/login",
+    "restaurant_card_game": "/restaurant-card-game/login",
     "system_status": "/login",
 }
 

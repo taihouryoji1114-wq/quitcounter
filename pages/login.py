@@ -76,7 +76,7 @@ def gunryakugoma_login():
                  "一手で戦局を動かす", app_name="gunryakugoma")
 
 
-@ui.page("/marble-chess/login")
-def marble_chess_login():
-    login_screen("marble_chess", "MARBLE CHESS", "/marble-chess",
-                 "一撃では終わらない戦術チェス", app_name="marble-chess")
+@ui.page("/restaurant-card-game/login")
+def restaurant_card_game_login():
+    login_screen("restaurant_card_game", "一生懸命！飲食店経営", "/restaurant-card-game",
+                 "人を育て、店を伸ばす経営カードゲーム", app_name="restaurant-card-game")
