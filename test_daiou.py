@@ -1,5 +1,6 @@
-from core.daiou import (apply_policy, derived_identity, initial_game, map_cell,
-                         nation, perform_map_action, strength)
+from core.daiou import (apply_policy, derived_identity, diplomatic_label,
+                         initial_game, map_cell, nation, normalize_game,
+                         perform_map_action, relation, strength)
 
 
 def test_policy_advances_turn_and_is_deterministic_with_seed():
@@ -38,3 +39,30 @@ def test_country_identity_is_created_by_actions():
     player = nation(game, "n0")
     player["actions"]["trade"] = 3
     assert derived_identity(player) == "交易の国"
+
+
+def test_old_save_receives_diplomacy_without_losing_progress():
+    game = initial_game()
+    game.pop("diplomacy")
+    game.pop("coalition")
+    game["turn"] = 9
+    normalize_game(game)
+    assert game["turn"] == 9
+    assert game["diplomacy"] == {}
+    assert game["coalition"] is None
+
+
+def test_alliance_blocks_friendly_fire():
+    game = initial_game()
+    relation(game, "n0", "n1").update(status="alliance", trust=80)
+    source = map_cell(game, "r0c0")
+    target = map_cell(game, "r0c1")
+    target.update(owner="n1", troops=2)
+    before = source["troops"]
+    try:
+        perform_map_action(game, "advance", source["id"], target["id"], seed=3)
+        assert False, "同盟国を攻撃できてしまった"
+    except ValueError as error:
+        assert "同盟国" in str(error)
+    assert source["troops"] == before
+    assert diplomatic_label(game, "n0", "n1") == "同盟"

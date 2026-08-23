@@ -1,8 +1,9 @@
 from nicegui import ui
 
 from core.auth import require_app_access, selected_user_id
-from core.daiou import (derived_identity, initial_game, map_cell, nation,
-                         normalize_game, perform_map_action, strength)
+from core.daiou import (derived_identity, diplomatic_label, end_alliance,
+                         initial_game, map_cell, nation, normalize_game,
+                         perform_map_action, propose_alliance, relation, strength)
 from core.data import data
 from core.theme import Theme
 
@@ -43,6 +44,12 @@ def daiou_page():
 
     def dismiss_event():
         state['event']=None; render.refresh()
+
+    def negotiate(target_id,kind='propose'):
+        try:
+            message=propose_alliance(game,target_id) if kind=='propose' else end_alliance(game,target_id)
+            state['event']={'kind':'order','message':message}; save(); render.refresh()
+        except ValueError as error: ui.notify(str(error),type='warning')
 
     def new_game():
         replacement=initial_game(); game.clear(); game.update(replacement)
@@ -88,6 +95,10 @@ def daiou_page():
                 ui.label('戦況').classes('war-status-title')
                 ui.label(f"国境の緊張 {len(fronts)}か所").classes('war-status-item danger' if fronts else 'war-status-item')
                 ui.label(f"領土化中 {len(camps)}陣").classes('war-status-item')
+            if game.get('coalition'):
+                members='・'.join(nation(game,x)['name'] for x in game['coalition']['members'])
+                with ui.element('section').classes('coalition-alert'):
+                    ui.label('合従軍').classes('coalition-title'); ui.label(f"{members}があなたの国を包囲しています").classes('coalition-copy')
             ui.label('天下盤').classes('daiou-heading'); ui.label('金色の自国領を選び、隣の土地をタップして進みます').classes('map-guide')
             with ui.element('div').classes('world-scroll'):
                 with ui.element('div').classes('world-map'):
@@ -138,6 +149,13 @@ def daiou_page():
                         action=max(item.get('actions',{}),key=item.get('actions',{}).get)
                         intent={'expand':'↗ 拡大','trade':'⇄ 交易','build':'▣ 建設','defend':'⬟ 防衛','battle':'⚔ 交戦'}[action]
                         ui.label(f"{intent}　領土 {item['territory']}").classes('nation-detail')
+                        if item['id']!=game['player']:
+                            status=diplomatic_label(game,game['player'],item['id'])
+                            ui.label(status).classes('relation-chip '+relation(game,game['player'],item['id'])['status'])
+                            if status in {'同盟','不可侵'}:
+                                ui.button('破棄',on_click=lambda _,nid=item['id']:negotiate(nid,'end')).props('flat dense no-caps').classes('diplomacy-button danger')
+                            else:
+                                ui.button('同盟提案',on_click=lambda _,nid=item['id']:negotiate(nid)).props('flat dense no-caps').classes('diplomacy-button')
             with ui.expansion('国史',icon='history').classes('nation-box w-full'):
                 for line in game.get('log',[]): ui.label(line).classes('history-line')
             if state.get('event'):
@@ -174,7 +192,9 @@ DAIOU_BATTLE_CSS='''
 @keyframes battlePulse{50%{transform:scale(1.24);filter:drop-shadow(0 0 10px #FF4D35)}}
 .war-status{display:flex;align-items:center;gap:7px;margin:0 0 9px;padding:9px 11px;border-radius:13px;background:linear-gradient(90deg,rgba(118,30,24,.72),rgba(25,39,31,.85));border:1px solid rgba(238,187,92,.24)}.war-status-title{font-family:serif;font-size:12px;font-weight:950;color:#FFD98A;margin-right:auto}.war-status-item{padding:4px 7px;border-radius:99px;background:rgba(255,255,255,.08);font-size:8px;font-weight:900}.war-status-item.danger{color:#FFD2A0;box-shadow:inset 0 0 0 1px rgba(255,102,70,.35)}
 .army-flag{position:absolute;left:7px;top:17px;font-size:17px;z-index:2;color:#F8D77E;text-shadow:0 2px 3px #000}.army-rank{position:absolute;left:20px;top:29px;font-size:7px;letter-spacing:-2px;color:#F3E4C5;text-shadow:0 1px 2px #000;opacity:.88}.frontline{animation:frontGlow 1.7s ease-in-out infinite}.frontline .army-rank{color:#FFD7A0}.battle-event{position:fixed;z-index:9999;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px;text-align:center;background:radial-gradient(circle,rgba(104,25,18,.94),rgba(3,7,8,.96) 62%);animation:eventEnter .34s ease-out}.battle-event.occupy{background:radial-gradient(circle,rgba(82,66,20,.94),rgba(3,9,8,.96) 62%)}.battle-event.order{background:radial-gradient(circle,rgba(24,68,52,.94),rgba(3,9,8,.96) 62%)}.battle-event-mark{font-family:serif;font-size:84px;line-height:1;color:#FFD071;filter:drop-shadow(0 0 20px rgba(255,86,45,.75));animation:markStrike .55s ease-out}.battle-event-title{margin-top:14px;font-family:serif;font-size:27px;font-weight:950;letter-spacing:.28em;color:#FFE6A9}.battle-event-message{max-width:340px;margin-top:16px;font-size:13px;font-weight:900;line-height:1.8;color:#FFF5DC}.battle-event-close{margin-top:24px;font-size:9px;opacity:.55}@keyframes frontGlow{50%{filter:brightness(1.16)}}@keyframes eventEnter{from{opacity:0;transform:scale(1.08)}}@keyframes markStrike{0%{transform:scale(2) rotate(-10deg);opacity:0}65%{transform:scale(.88) rotate(3deg)}100%{transform:scale(1)}}
+.coalition-alert{margin:0 0 10px;padding:12px 14px;border-radius:15px;background:linear-gradient(115deg,rgba(128,24,20,.9),rgba(62,25,24,.78));border:1px solid rgba(255,194,96,.42);box-shadow:0 8px 24px rgba(0,0,0,.22)}.coalition-title{font-family:serif;font-size:15px;font-weight:950;color:#FFD985}.coalition-copy{margin-top:3px;font-size:9px;font-weight:800;color:#F8E4C7}.relation-chip{margin-left:7px;padding:3px 7px;border-radius:999px;font-size:8px;font-weight:950;white-space:nowrap;background:rgba(255,255,255,.08)}.relation-chip.alliance{color:#91E8CA;background:rgba(33,130,104,.25)}.relation-chip.war{color:#FFB09F;background:rgba(176,43,34,.28)}.relation-chip.pact{color:#A9D7F3;background:rgba(48,111,154,.28)}.relation-chip.neutral{color:#C8C6BD}.diplomacy-button{margin-left:4px!important;min-height:28px!important;padding:0 7px!important;border-radius:9px!important;color:#EFD492!important;background:rgba(239,212,146,.09)!important;font-size:8px!important;font-weight:900!important}.diplomacy-button.danger{color:#FFAAA0!important;background:rgba(175,48,40,.16)!important}
 @media(min-width:430px){.world-map{grid-template-columns:repeat(8,76px)!important;grid-template-rows:repeat(6,76px)!important}.map-cell{width:76px!important;height:76px!important}.army-flag{font-size:21px}.army-rank{font-size:9px;top:34px}}
+@media(max-width:520px){.nation-row{flex-wrap:wrap;gap:4px}.nation-row>.grow{min-width:42%}.nation-detail{margin-left:auto}.diplomacy-button{margin-left:auto!important}}
 '''
 
 DAIOU_CSS='''

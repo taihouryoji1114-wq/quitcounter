@@ -21,7 +21,7 @@ def initial_game(now=None):
     now=now or datetime.now(); nations=[]
     for i,(name,purpose) in enumerate(NATION_SEEDS):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
-    return {"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
+    return {"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
     default=initial_game()
@@ -41,6 +41,41 @@ def normalize_game(game):
 def nation(game,nation_id): return next(x for x in game["nations"] if x["id"]==nation_id)
 def map_cell(game,cell_id): return next(x for x in game["map"] if x["id"]==cell_id)
 def adjacent_cells(game,source): return [x for x in game["map"] if abs(x["row"]-source["row"])+abs(x["col"]-source["col"])==1]
+
+def relation_key(a,b): return "|".join(sorted((a,b)))
+def relation(game,a,b):
+    if a==b: return {"status":"self","trust":100}
+    return game.setdefault("diplomacy",{}).setdefault(relation_key(a,b),{"status":"neutral","trust":50})
+
+def diplomatic_label(game,a,b):
+    return {"self":"自国","neutral":"中立","pact":"不可侵","alliance":"同盟","war":"交戦"}.get(relation(game,a,b)["status"],"中立")
+
+def propose_alliance(game,target_id,seed=None):
+    normalize_game(game); pid=game["player"]
+    if target_id==pid: raise ValueError("自国とは交渉できません。")
+    target=nation(game,target_id)
+    if not target["alive"]: raise ValueError("この国はすでに滅亡しています。")
+    rel=relation(game,pid,target_id)
+    if rel["status"]=="alliance": raise ValueError("すでに同盟国です。")
+    if rel["status"]=="war" and rel["trust"]<35: raise ValueError("戦の傷が深く、今は交渉に応じません。")
+    player=nation(game,pid); rng=random.Random(seed if seed is not None else game["turn"]*3571+int(target_id[1:]))
+    compatibility=15 if target["purpose"] in {"外交","交易","生存"} else (-10 if target["purpose"] in {"拡大","軍備"} else 0)
+    power_fear=max(-10,min(20,(strength(player)-strength(target))//3))
+    accepted=rel["trust"]+compatibility+power_fear+rng.randint(-12,12)>=55
+    if accepted:
+        rel.update(status="alliance",trust=min(100,rel["trust"]+15)); message=f"{target['name']}と同盟を結んだ。"
+    else:
+        rel["trust"]=max(0,rel["trust"]-3); message=f"{target['name']}は同盟を見送った。"
+    game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=datetime.now().isoformat(timespec="seconds")
+    return message
+
+def end_alliance(game,target_id):
+    normalize_game(game); pid=game["player"]
+    rel=relation(game,pid,target_id)
+    if rel["status"] not in {"alliance","pact"}: raise ValueError("破棄できる協定がありません。")
+    rel.update(status="neutral",trust=max(0,rel["trust"]-25)); target=nation(game,target_id)
+    message=f"{target['name']}との協定を破棄した。信用が低下した。"; game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=datetime.now().isoformat(timespec="seconds")
+    return message
 
 def strength(item):
     land=max(1,int(item["territory"])); cohesion=max(.58,1.08-(land-1)*.055)
@@ -89,6 +124,10 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
             source["troops"]-=moving; target["troops"]+=moving; player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
         else:
             defender=nation(game,target["owner"]); attack=moving+rng.randint(0,3); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
+            if relation(game,pid,defender["id"])["status"]=="alliance":
+                source["troops"]+=moving
+                raise ValueError(f"{defender['name']}は同盟国です。先に同盟を破棄する必要があります。")
+            relation(game,pid,defender["id"])["status"]="war"
             if attack>defence:
                 defender["morale"]=max(15,defender["morale"]-5)
                 target.update(owner=pid,troops=max(2,attack-defence),claim=None)
@@ -130,6 +169,7 @@ def _advance_world(game,rng):
     player=nation(game,game["player"]); owned=[x for x in game["map"] if x["owner"]==player["id"]]; player["wealth"]+=len(owned)+sum(2 for x in owned if x["structure"]=="town")
     for cpu in game["nations"]:
         if cpu["id"]!=player["id"] and cpu["alive"]: _cpu_turn(game,cpu,rng)
+    _consider_coalition(game,rng)
     game["turn"]+=1; game["season"]=("春","夏","秋","冬")[(game["turn"]-1)%4]
 
 def _cpu_turn(game,cpu,rng):
@@ -143,7 +183,11 @@ def _cpu_turn(game,cpu,rng):
     owned=[x for x in game["map"] if x["owner"]==cpu["id"]]
     if not owned: cpu["alive"]=False; return
     cpu["wealth"]+=len(owned)+sum(2 for x in owned if x["structure"]=="town")
-    frontier=[(a,b) for a in owned for b in adjacent_cells(game,a) if b["owner"]!=cpu["id"]]
+    frontier=[(a,b) for a in owned for b in adjacent_cells(game,a) if b["owner"]!=cpu["id"] and (b["owner"] is None or relation(game,cpu["id"],b["owner"])["status"]!="alliance")]
+    coalition=game.get("coalition") or {}
+    if cpu["id"] in coalition.get("members",[]):
+        coalition_frontier=[pair for pair in frontier if pair[1].get("owner")==coalition.get("target") or (pair[1].get("claim") or {}).get("owner")==coalition.get("target")]
+        if coalition_frontier: frontier=coalition_frontier
     if frontier and rng.random()<(0.46 if cpu["purpose"] in {"拡大","軍備","機会"} else 0.24):
         source,target=rng.choice(frontier)
         if source["troops"]>=4:
@@ -162,6 +206,24 @@ def _cpu_turn(game,cpu,rng):
     elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1
     elif cpu["purpose"] in {"交易","富国","外交"}: cpu["wealth"]+=3; cpu["actions"]["trade"]+=1
     else: rng.choice(owned)["troops"]+=1
+
+def _consider_coalition(game,rng):
+    if game.get("coalition"): return
+    alive=[x for x in game["nations"] if x["alive"]]; player=nation(game,game["player"])
+    rivals=[x for x in alive if x["id"]!=player["id"]]
+    average=sum(x["territory"] for x in rivals)/max(1,len(rivals))
+    if player["territory"]<6 or player["territory"]<average*2.2: return
+    candidates=sorted(rivals,key=lambda x:(x["purpose"] in {"生存","外交","守備"},strength(x)),reverse=True)[:3]
+    if len(candidates)<2 or rng.random()>.45: return
+    ids=[x["id"] for x in candidates]
+    game["coalition"]={"target":player["id"],"members":ids,"formed_turn":game["turn"],"name":"合従軍"}
+    for item in candidates:
+        relation(game,item["id"],player["id"]).update(status="war",trust=0)
+    for index,left in enumerate(ids):
+        for right in ids[index+1:]:
+            relation(game,left,right).update(status="alliance",trust=80)
+    names="・".join(x["name"] for x in candidates)
+    game["log"]=[f"急拡大を恐れた{names}が合従軍を結成した！"]+game.get("log",[])
 
 def _sync(game):
     for item in game["nations"]:
