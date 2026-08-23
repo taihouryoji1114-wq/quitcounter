@@ -14,7 +14,7 @@ def daiou_page():
     if not require_app_access('daiou'): return
     Theme.page('大王',app_name='daiou')
     user_id=selected_user_id(); games=data.data.setdefault('daiou',{}).setdefault('profiles',{})
-    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"view":"home"}; data.save()
+    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"view":"home","event":None}; data.save()
 
     def save(): games[user_id]=game; data.save()
 
@@ -22,6 +22,7 @@ def daiou_page():
         if not state["selected"]: ui.notify('先に金色の自国領を選んでください',type='warning'); return
         try:
             message=perform_map_action(game,action,state["selected"],target); save(); ui.notify(message,type='positive')
+            state['event']={'kind':'battle' if '戦力' in message else ('occupy' if '領土' in message or '野営' in message else 'order'),'message':message}
             current=map_cell(game,state["selected"])
             if current["owner"]!=game["player"] and (current.get('claim') or {}).get('owner')!=game['player']: state["selected"]=None
             render.refresh()
@@ -38,7 +39,10 @@ def daiou_page():
         state['view']='game'; render.refresh()
 
     def return_home():
-        state.update(view='home',selected=None); save(); render.refresh()
+        state.update(view='home',selected=None,event=None); save(); render.refresh()
+
+    def dismiss_event():
+        state['event']=None; render.refresh()
 
     def new_game():
         replacement=initial_game(); game.clear(); game.update(replacement)
@@ -75,6 +79,15 @@ def daiou_page():
             with ui.element('div').classes('realm-grid'):
                 for label,value in (("国力",strength(player)),("領土",player['territory']),("軍資金",player['wealth']),("兵力",sum(x['troops'] for x in game['map'] if x['owner']==game['player']))):
                     with ui.element('div').classes('realm-stat'): ui.label(label); ui.label(str(value)).classes('realm-value')
+            fronts=[]
+            for cell in game['map']:
+                if not cell['owner']: continue
+                if any(x['owner'] not in {None,cell['owner']} for x in game['map'] if abs(x['row']-cell['row'])+abs(x['col']-cell['col'])==1): fronts.append(cell)
+            camps=[x for x in game['map'] if x.get('claim')]
+            with ui.element('section').classes('war-status'):
+                ui.label('戦況').classes('war-status-title')
+                ui.label(f"国境の緊張 {len(fronts)}か所").classes('war-status-item danger' if fronts else 'war-status-item')
+                ui.label(f"領土化中 {len(camps)}陣").classes('war-status-item')
             ui.label('天下盤').classes('daiou-heading'); ui.label('金色の自国領を選び、隣の土地をタップして進みます').classes('map-guide')
             with ui.element('div').classes('world-scroll'):
                 with ui.element('div').classes('world-map'):
@@ -94,6 +107,10 @@ def daiou_page():
                             if cell['owner']:
                                 ui.label(nation(game,cell['owner'])['name'][:1]).classes('owner-mark')
                             if cell['owner'] or cell.get('claim'): ui.label(f"⚔ {cell['troops']}").classes('troop-mark')
+                            if cell['owner'] or cell.get('claim'):
+                                flag_owner=cell['owner'] or cell['claim']['owner']
+                                ui.label('⚑').classes(f"army-flag flag-{flag_owner}")
+                                ui.label('♟♟♟').classes('army-rank')
             with ui.element('section').classes('command-panel'):
                 if selected:
                     claim=selected.get('claim') or {}
@@ -123,6 +140,13 @@ def daiou_page():
                         ui.label(f"{intent}　領土 {item['territory']}").classes('nation-detail')
             with ui.expansion('国史',icon='history').classes('nation-box w-full'):
                 for line in game.get('log',[]): ui.label(line).classes('history-line')
+            if state.get('event'):
+                event=state['event']
+                with ui.element('div').classes(f"battle-event {event['kind']}").on('click',lambda _:dismiss_event()):
+                    ui.label('⚔' if event['kind']=='battle' else ('旗' if event['kind']=='occupy' else '令')).classes('battle-event-mark')
+                    ui.label('合戦報' if event['kind']=='battle' else ('領土報' if event['kind']=='occupy' else '軍令')).classes('battle-event-title')
+                    ui.label(event['message']).classes('battle-event-message')
+                    ui.label('タップして閉じる').classes('battle-event-close')
         ui.add_css(DAIOU_CSS+DAIOU_BATTLE_CSS)
         ui.run_javascript(DAIOU_MAP_MEMORY_SCRIPT)
     render()
@@ -148,6 +172,9 @@ DAIOU_BATTLE_CSS='''
 .occupation-progress{display:flex;gap:8px;margin:10px 0}.occupation-seal{display:block;width:26px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);border:1px solid rgba(240,201,111,.35)}
 .occupation-seal.done{background:#EFCB78;box-shadow:0 0 10px rgba(239,203,120,.5)}.occupy-button{width:100%;min-height:44px!important;background:linear-gradient(135deg,#B98332,#F0CE78)!important;color:#152018!important;font-weight:950!important;border-radius:13px!important}
 @keyframes battlePulse{50%{transform:scale(1.24);filter:drop-shadow(0 0 10px #FF4D35)}}
+.war-status{display:flex;align-items:center;gap:7px;margin:0 0 9px;padding:9px 11px;border-radius:13px;background:linear-gradient(90deg,rgba(118,30,24,.72),rgba(25,39,31,.85));border:1px solid rgba(238,187,92,.24)}.war-status-title{font-family:serif;font-size:12px;font-weight:950;color:#FFD98A;margin-right:auto}.war-status-item{padding:4px 7px;border-radius:99px;background:rgba(255,255,255,.08);font-size:8px;font-weight:900}.war-status-item.danger{color:#FFD2A0;box-shadow:inset 0 0 0 1px rgba(255,102,70,.35)}
+.army-flag{position:absolute;left:7px;top:17px;font-size:17px;z-index:2;color:#F8D77E;text-shadow:0 2px 3px #000}.army-rank{position:absolute;left:20px;top:29px;font-size:7px;letter-spacing:-2px;color:#F3E4C5;text-shadow:0 1px 2px #000;opacity:.88}.frontline{animation:frontGlow 1.7s ease-in-out infinite}.frontline .army-rank{color:#FFD7A0}.battle-event{position:fixed;z-index:9999;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px;text-align:center;background:radial-gradient(circle,rgba(104,25,18,.94),rgba(3,7,8,.96) 62%);animation:eventEnter .34s ease-out}.battle-event.occupy{background:radial-gradient(circle,rgba(82,66,20,.94),rgba(3,9,8,.96) 62%)}.battle-event.order{background:radial-gradient(circle,rgba(24,68,52,.94),rgba(3,9,8,.96) 62%)}.battle-event-mark{font-family:serif;font-size:84px;line-height:1;color:#FFD071;filter:drop-shadow(0 0 20px rgba(255,86,45,.75));animation:markStrike .55s ease-out}.battle-event-title{margin-top:14px;font-family:serif;font-size:27px;font-weight:950;letter-spacing:.28em;color:#FFE6A9}.battle-event-message{max-width:340px;margin-top:16px;font-size:13px;font-weight:900;line-height:1.8;color:#FFF5DC}.battle-event-close{margin-top:24px;font-size:9px;opacity:.55}@keyframes frontGlow{50%{filter:brightness(1.16)}}@keyframes eventEnter{from{opacity:0;transform:scale(1.08)}}@keyframes markStrike{0%{transform:scale(2) rotate(-10deg);opacity:0}65%{transform:scale(.88) rotate(3deg)}100%{transform:scale(1)}}
+@media(min-width:430px){.world-map{grid-template-columns:repeat(8,76px)!important;grid-template-rows:repeat(6,76px)!important}.map-cell{width:76px!important;height:76px!important}.army-flag{font-size:21px}.army-rank{font-size:9px;top:34px}}
 '''
 
 DAIOU_CSS='''
