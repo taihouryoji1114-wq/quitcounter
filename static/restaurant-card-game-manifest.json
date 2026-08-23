@@ -1,9 +1,0 @@
-{
-  "name": "一生懸命！飲食店経営",
-  "short_name": "飲食店経営",
-  "start_url": "/restaurant-card-game",
-  "display": "standalone",
-  "background_color": "#100C08",
-  "theme_color": "#17100A",
-  "icons": [{"src": "/static/restaurant_card_game_icon.png", "sizes": "1024x1024", "type": "image/png"}]
-}

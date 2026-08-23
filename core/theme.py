@@ -22,14 +22,14 @@ class Theme:
             manifest = "/static/gunryakugoma-manifest.json"
             icon = "/static/gunryakugoma_icon.png"
             theme_color = "#17120D"
-        elif app_name == "restaurant-card-game":
-            manifest = "/static/restaurant-card-game-manifest.json"
-            icon = "/static/restaurant_card_game_icon.png"
-            theme_color = "#17100A"
         elif app_name == "chankocchi":
             manifest = "/static/chankocchi-manifest.json"
             icon = "/static/chankocchi_stage1.png"
             theme_color = "#8A5C3C"
+        elif app_name == "daiou":
+            manifest = "/static/manifest.json"
+            icon = "/static/habitory_icon.png"
+            theme_color = "#0B1820"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

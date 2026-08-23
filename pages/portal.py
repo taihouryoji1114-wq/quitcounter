@@ -75,14 +75,13 @@ def portal():
 
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/restaurant-card-game")):
+        ).on("click", lambda _: ui.navigate.to("/daiou")):
             with ui.row().classes("w-full items-center no-wrap"):
-                ui.image("/static/restaurant_card_game_icon.png").classes(
-                    "w-14 h-14 rounded-xl q-mr-md"
-                )
+                with ui.element("div").classes("w-14 h-14 rounded-xl q-mr-md bg-blue-grey-10 text-amber-3 flex items-center justify-center"):
+                    ui.label("王").classes("text-3xl font-black")
                 with ui.column().classes("gap-0"):
-                    ui.label("一生懸命！飲食店経営").classes("text-xl font-bold")
-                    ui.label("人を育て、店を伸ばす経営カードゲーム").classes(
+                    ui.label("大王").classes("text-xl font-bold")
+                    ui.label("十国の思惑を読み、自分の国を治める").classes(
                         "text-grey-7 q-mt-xs"
                     )
                 ui.space()

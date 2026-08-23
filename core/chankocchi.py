@@ -6,6 +6,14 @@ from copy import deepcopy
 from datetime import datetime
 
 
+FOODS = {
+    "chanko": {"label": "ちゃんこ", "icon": "🍲", "amount": 34, "speech": "ちゃんこ、もっとちょうだい"},
+    "onigiri": {"label": "おにぎり", "icon": "🍙", "amount": 24, "speech": "おにぎり、おいしい"},
+    "fish": {"label": "おさかな", "icon": "🐟", "amount": 28, "speech": "おさかな、また食べたい"},
+    "snack": {"label": "おやつ", "icon": "🍡", "amount": 16, "speech": "もう一個ほしい"},
+}
+
+
 STAGES = (
     {"level": 1, "name": "ちびっこ期", "threshold": 0},
     {"level": 2, "name": "成長期", "threshold": 6},
@@ -18,10 +26,8 @@ ACTIONS = {
              "trait": "food", "speech": "おいしい！ また一緒に食べようね"},
     "play": {"label": "あそぶ", "meter": "joy", "amount": 26, "affection": 2,
              "trait": "play", "speech": "もっと遊びたい！"},
-    "bath": {"label": "きれいにする", "meter": "cleanliness", "amount": 30, "affection": 1,
-             "trait": "bath", "speech": "すっきりしたよ。ありがとう！"},
-    "rest": {"label": "休ませる", "meter": "energy", "amount": 32, "affection": 1,
-             "trait": "rest", "speech": "少し休んだら元気になったよ"},
+    "bath": {"label": "お風呂", "meter": "cleanliness", "amount": 30, "affection": 1,
+             "trait": "bath", "speech": "ぽかぽか。まだ出たくない"},
 }
 
 
@@ -35,7 +41,7 @@ def initial_profile(now=None):
         "care_points": 0,
         "affection": 0,
         "coins": 30,
-        "meters": {"hunger": 72, "cleanliness": 72, "energy": 72, "joy": 72},
+        "meters": {"hunger": 72, "cleanliness": 72, "joy": 72},
         "traits": {"food": 0, "play": 0, "bath": 0, "rest": 0, "work": 0},
         "active_dates": [],
         "daily_actions": {},
@@ -45,6 +51,7 @@ def initial_profile(now=None):
         "history": [],
         "last_speech": "はじめまして。今日から一緒だね！",
         "updated_at": stamp,
+        "last_life_tick": stamp,
     }
 
 
@@ -109,6 +116,47 @@ def care(profile, action, business_date, now=None):
     profile["last_speech"] = (f"{rule['speech']} 進化したよ！" if evolved else rule["speech"])
     profile["updated_at"] = (now or datetime.now()).isoformat(timespec="seconds")
     return {"gained": gained, "evolved": evolved, "speech": profile["last_speech"]}
+
+
+def feed(profile, food, business_date, now=None):
+    if food not in FOODS:
+        raise ValueError("ごはんを選んでください。")
+    result = care(profile, "meal", business_date, now)
+    profile["meters"]["hunger"] = min(
+        100, int(profile["meters"].get("hunger", 0)) - ACTIONS["meal"]["amount"]
+        + FOODS[food]["amount"])
+    profile["last_food"] = food
+    profile["last_speech"] = FOODS[food]["speech"]
+    result["speech"] = profile["last_speech"]
+    return result
+
+
+def apply_life_tick(profile, now=None):
+    """Let needs change while the app is closed without using background workers."""
+    now = now or datetime.now()
+    normalize_profile(profile, now)
+    try:
+        previous = datetime.fromisoformat(profile.get("last_life_tick", ""))
+    except ValueError:
+        previous = now
+    hours = max(0, min(72, int((now - previous).total_seconds() // 3600)))
+    if hours:
+        profile["meters"]["hunger"] = max(0, int(profile["meters"].get("hunger", 70)) - hours * 3)
+        profile["meters"]["joy"] = max(0, int(profile["meters"].get("joy", 70)) - hours * 2)
+        profile["meters"]["cleanliness"] = max(0, int(profile["meters"].get("cleanliness", 70)) - hours)
+        profile["last_life_tick"] = now.isoformat(timespec="seconds")
+    return profile
+
+
+def current_wish(profile):
+    meters = profile.get("meters", {})
+    if int(meters.get("hunger", 100)) < 36:
+        return "お腹すいた"
+    if int(meters.get("joy", 100)) < 36:
+        return "あそぼ"
+    if int(meters.get("cleanliness", 100)) < 28:
+        return "お風呂入りたい"
+    return profile.get("last_speech") or "なにする？"
 
 
 def claim_store_reward(profile, business_date, now=None):

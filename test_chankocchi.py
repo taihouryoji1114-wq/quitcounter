@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from core.chankocchi import (affection_label, can_depart, care,
+from core.chankocchi import (affection_label, can_depart, care, feed,
                              claim_store_reward, has_store_activity, initial_profile,
                              start_next_generation)
 
@@ -19,9 +19,9 @@ def test_care_rewards_only_once_per_action_and_day():
 
 def test_evolution_and_egg_are_based_on_active_care_days():
     profile = initial_profile()
-    for day in range(1, 10):
+    for day in range(1, 13):
         date = f"2026-08-{day:02d}"
-        for action in ("meal", "play", "bath", "rest"):
+        for action in ("meal", "play", "bath"):
             care(profile, action, date)
     assert profile["stage"] == 4
     assert profile["egg_ready"] is True
@@ -56,3 +56,11 @@ def test_store_activity_detects_completed_shared_checklist():
 def test_affection_labels():
     assert affection_label(0) == "まだ少し緊張"
     assert affection_label(30) == "だいすき"
+
+
+def test_food_choice_is_saved_and_changes_hunger():
+    profile = initial_profile()
+    profile["meters"]["hunger"] = 10
+    feed(profile, "fish", "2026-08-23")
+    assert profile["last_food"] == "fish"
+    assert profile["meters"]["hunger"] == 38
