@@ -1,2 +1,3 @@
 nicegui
 qrcode[pil]
+python-chess

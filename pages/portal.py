@@ -90,6 +90,21 @@ def portal():
 
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/chess-coach")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.image("/static/chess_coach_icon.svg").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("CHESS MENTOR").classes("text-xl font-bold")
+                    ui.label("一手の意味を学ぶ指導対局").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/store-ops")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/store_ops_chanko_icon_v2.png").classes(

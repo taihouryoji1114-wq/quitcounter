@@ -37,6 +37,7 @@ import pages.workout
 import pages.gunryakugoma
 import pages.chankocchi
 import pages.daiou
+import pages.chess_coach
 import pages.system_status
 
 ui.run(

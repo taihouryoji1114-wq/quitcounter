@@ -30,6 +30,10 @@ class Theme:
             manifest = "/static/daiou-manifest.json"
             icon = "/static/daiou_icon.png"
             theme_color = "#0B1820"
+        elif app_name == "chess_coach":
+            manifest = "/static/chess-coach-manifest.json"
+            icon = "/static/chess_coach_icon.svg"
+            theme_color = "#080B10"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"
