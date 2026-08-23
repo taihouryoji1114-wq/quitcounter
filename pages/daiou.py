@@ -2,9 +2,10 @@ from nicegui import ui
 
 from core.auth import require_app_access, selected_user_id
 from core.daiou import (adjacent_cells, derived_identity, diplomatic_label, end_alliance,
-                         initial_game, map_cell, map_viewbox, nation, normalize_game,
+                         end_turn, initial_game, map_cell, map_viewbox, nation, normalize_game,
                          perform_map_action, propose_alliance, relation,
-                         region_shape, request_reinforcements, strength)
+                         region_income, region_shape, request_reinforcements, strength,
+                         terrain_effect)
 from core.data import data
 from core.theme import Theme
 
@@ -16,15 +17,18 @@ def daiou_page():
     if not require_app_access('daiou'): return
     Theme.page('大王',app_name='daiou')
     user_id=selected_user_id(); games=data.data.setdefault('daiou',{}).setdefault('profiles',{})
-    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"view":"home","event":None,"tactic":"direct"}; data.save()
+    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"inspect":None,"view":"home","event":None,"tactic":"direct","march":50,"last_move":None}; data.save()
 
     def save(): games[user_id]=game; data.save()
 
     def act(action,target=None):
         if not state["selected"]: ui.notify('先に金色の自国領を選んでください',type='warning'); return
         try:
-            message=perform_map_action(game,action,state["selected"],target,tactic=state['tactic']); save(); ui.notify(message,type='positive')
-            state['event']={'kind':'battle' if '戦力' in message else ('occupy' if '領土' in message or '野営' in message else 'order'),'message':message}
+            source=map_cell(game,state['selected'])
+            march=max(2,min(source['troops']-1,round(source['troops']*state['march']/100))) if target else None
+            message=perform_map_action(game,action,state["selected"],target,tactic=state['tactic'],march_troops=march); save(); ui.notify(message,type='positive')
+            state['last_move']=(state['selected'],target) if target else None
+            state['event']={'kind':'battle','message':message} if '戦力' in message else None
             current=map_cell(game,state["selected"])
             if current["owner"]!=game["player"] and (current.get('claim') or {}).get('owner')!=game['player']: state["selected"]=None
             render.refresh()
@@ -33,9 +37,10 @@ def daiou_page():
     def select_cell(cell_id):
         cell=map_cell(game,cell_id)
         if cell["owner"]==game["player"] or (cell.get('claim') or {}).get('owner')==game['player']:
-            state["selected"]=cell_id; render.refresh()
+            state.update(selected=cell_id,inspect=cell_id); render.refresh()
         elif state["selected"]: act('advance',cell_id)
-        else: ui.notify('金色の自国領から選びます',type='info')
+        else:
+            state['inspect']=cell_id; render.refresh()
 
     def select_map_event(event):
         payload=event.args
@@ -53,6 +58,13 @@ def daiou_page():
 
     def choose_tactic(tactic):
         state['tactic']=tactic; render.refresh()
+
+    def choose_march(percent):
+        state['march']=percent; render.refresh()
+
+    def finish_turn():
+        message=end_turn(game); state.update(selected=None,inspect=None,last_move=None)
+        state['event']={'kind':'order','message':message}; save(); render.refresh()
 
     def negotiate(target_id,kind='propose'):
         try:
@@ -76,6 +88,7 @@ def daiou_page():
     @ui.refreshable
     def render():
         player=nation(game,game['player']); selected=map_cell(game,state["selected"]) if state["selected"] else None
+        inspected=map_cell(game,state['inspect']) if state.get('inspect') else None
         with ui.element('main').classes('daiou-app'):
             if state['view']=='home':
                 with ui.element('section').classes('daiou-home'):
@@ -97,6 +110,11 @@ def daiou_page():
             with ui.element('div').classes('realm-grid'):
                 for label,value in (("国力",strength(player)),("領土",player['territory']),("軍資金",player['wealth']),("兵力",sum(x['troops'] for x in game['map'] if x['owner']==game['player']))):
                     with ui.element('div').classes('realm-stat'): ui.label(label); ui.label(str(value)).classes('realm-value')
+            with ui.element('section').classes('command-turn-bar'):
+                ui.label('今季の軍令').classes('command-turn-title')
+                with ui.element('div').classes('command-seals'):
+                    for index in range(3): ui.element('span').classes('command-seal'+(' ready' if index<game.get('commands_left',3) else ' used'))
+                ui.button('季節を進める',icon='hourglass_bottom',on_click=finish_turn).props('unelevated no-caps').classes('end-turn-button')
             fronts=[]
             for cell in game['map']:
                 if not cell['owner']: continue
@@ -121,10 +139,19 @@ def daiou_page():
                     if cell['id']==state['selected']: classes+=' selected'
                     shape=region_shape(cell['id'])
                     svg.append(f'<path d="{shape["path"]}" vector-effect="non-scaling-stroke" class="{classes}" data-region="{cell["id"]}" aria-label="{cell["name"]}"><title>{cell["name"]}</title></path>')
+                    if cell.get('structure'):
+                        structure={'capital':'城','town':'町','fort':'砦'}[cell['structure']]
+                        svg.append(f'<text x="{shape["cx"]}" y="{shape["cy"]-13}" text-anchor="middle" class="region-structure">{structure}</text>')
                     if cell['owner'] or cell.get('claim'):
                         marker_owner=cell['owner'] or cell['claim']['owner']
-                        svg.append(f'<circle cx="{shape["cx"]}" cy="{shape["cy"]}" r="10" class="region-army owner-{marker_owner}"/>')
-                        svg.append(f'<text x="{shape["cx"]}" y="{shape["cy"]+3.5}" text-anchor="middle" class="region-troops">{cell["troops"]}</text>')
+                        svg.append(f'<circle cx="{shape["cx"]}" cy="{shape["cy"]}" r="11" class="region-army owner-{marker_owner}"/>')
+                        svg.append(f'<text x="{shape["cx"]-5}" y="{shape["cy"]+4}" text-anchor="middle" class="region-piece">♟</text>')
+                        svg.append(f'<text x="{shape["cx"]+5}" y="{shape["cy"]+3.5}" text-anchor="middle" class="region-troops">{cell["troops"]}</text>')
+                        owner_name=nation(game,marker_owner)['name']
+                        svg.append(f'<text x="{shape["cx"]}" y="{shape["cy"]+18}" text-anchor="middle" class="region-owner-name">{owner_name}</text>')
+                if state.get('last_move') and state['last_move'][1]:
+                    start=region_shape(state['last_move'][0]); finish=region_shape(state['last_move'][1])
+                    svg.append(f'<circle r="6" class="marching-unit"><animate attributeName="cx" from="{start["cx"]}" to="{finish["cx"]}" dur=".9s" fill="freeze"/><animate attributeName="cy" from="{start["cy"]}" to="{finish["cy"]}" dur=".9s" fill="freeze"/></circle>')
                 markup=(f'<div class="tokyo-map-wrap" data-daiou-map><svg viewBox="{map_viewbox()}" role="img" '
                         f'aria-label="東京都の区市町村地図" class="tokyo-map">{"".join(svg)}</svg></div>')
                 map_html=ui.html(markup,sanitize=False)
@@ -142,6 +169,11 @@ def daiou_page():
             ui.link('地図境界：国土交通省 国土数値情報（2026年）',
                     'https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html',
                     new_tab=True).classes('map-source')
+            if inspected:
+                inspect_owner=nation(game,inspected['owner'])['name'] if inspected.get('owner') else '未領有地'
+                with ui.element('section').classes('region-intel'):
+                    ui.label(f"{inspected['name']}　｜　{inspect_owner}").classes('region-intel-title')
+                    ui.label(f"季節収入 +{region_income(inspected)}　・　{terrain_effect(inspected)}　・　兵 {inspected['troops']}").classes('region-intel-copy')
             with ui.element('section').classes('command-panel'):
                 if selected:
                     claim=selected.get('claim') or {}
@@ -156,6 +188,10 @@ def daiou_page():
                         owner=nation(game,selected['owner'])
                         ui.label(f"選択中：{selected['name']}（{owner['name']}）　兵 {selected['troops']}").classes('selected-title')
                         ui.label('隣の地域を押すと、軍が進みます').classes('selected-help')
+                        with ui.element('div').classes('march-picker'):
+                            ui.label('派遣兵力').classes('march-label')
+                            for percent in (25,50,75):
+                                ui.button(f'{percent}%',on_click=lambda _,value=percent:choose_march(value)).props('flat dense no-caps').classes('march-choice'+(' active' if state['march']==percent else ''))
                         with ui.element('div').classes('tactic-picker'):
                             for key,label,icon in (('direct','正面','⚔'),('ambush','伏兵','♣'),('pincer','挟撃','⇉')):
                                 ui.button(f'{icon} {label}',on_click=lambda _,value=key:choose_tactic(value)).props('flat dense no-caps').classes('tactic-choice'+(' active' if state['tactic']==key else ''))
@@ -166,7 +202,7 @@ def daiou_page():
                             ui.button('隣国と交易',icon='handshake',on_click=lambda:act('trade')).props('flat no-caps')
                 else: ui.label('まず金色の自国領をタップ').classes('empty-command')
             with ui.expansion('十国の現在',icon='public').classes('nation-box w-full'):
-                for item in sorted(game['nations'],key=strength,reverse=True):
+                for item in sorted((x for x in game['nations'] if x['alive']),key=strength,reverse=True):
                     with ui.element('div').classes('nation-row'+(' player' if item['id']==game['player'] else '')):
                         ui.label(('あなた・' if item['id']==game['player'] else '')+item['name']).classes('font-black grow')
                         action=max(item.get('actions',{}),key=item.get('actions',{}).get)
@@ -222,6 +258,7 @@ DAIOU_BATTLE_CSS='''
 @media(min-width:430px){.world-map{grid-template-columns:repeat(var(--map-cols),76px)!important;grid-template-rows:repeat(var(--map-rows),76px)!important}.map-cell{width:76px!important;height:76px!important}.army-flag{font-size:21px}.army-rank{font-size:9px;top:34px}}
 @media(max-width:520px){.nation-row{flex-wrap:wrap;gap:4px}.nation-row>.grow{min-width:42%}.nation-detail{margin-left:auto}.diplomacy-button{margin-left:auto!important}}
 .map-source{display:block;margin:4px 4px 10px;color:#A9B5AA!important;font-size:8px;text-decoration:none!important;opacity:.7}
+.command-turn-bar{display:flex;align-items:center;gap:10px;margin:-5px 0 12px;padding:10px 12px;border-radius:16px;background:rgba(6,17,17,.78);border:1px solid rgba(239,203,120,.25)}.command-turn-title{font-size:10px;font-weight:950;color:#EBCB81}.command-seals{display:flex;gap:5px;margin-right:auto}.command-seal{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,224,145,.45)}.command-seal.ready{background:#E9BD58;box-shadow:0 0 9px rgba(233,189,88,.5)}.command-seal.used{background:#29322F}.end-turn-button{min-height:34px!important;padding:0 11px!important;border-radius:10px!important;background:linear-gradient(135deg,#8C682E,#E3B956)!important;color:#101A17!important;font-size:9px!important;font-weight:950!important}.region-intel{margin:0 0 8px;padding:11px 13px;border-radius:14px;background:linear-gradient(110deg,rgba(39,61,51,.95),rgba(25,34,31,.95));border-left:4px solid #D8B25D}.region-intel-title{font-size:12px;font-weight:950;color:#F6D98F}.region-intel-copy{margin-top:3px;font-size:9px;color:#D1D8CF}.march-picker{display:flex;align-items:center;gap:5px;margin-top:8px}.march-label{margin-right:auto;font-size:9px;font-weight:900;color:#D9C9A4}.march-choice{min-height:29px!important;padding:0 9px!important;border-radius:9px!important;background:rgba(255,255,255,.06)!important;color:#D8CFBB!important;font-size:9px!important}.march-choice.active{background:#D7AE54!important;color:#142019!important;font-weight:950!important}.region-structure{pointer-events:none;fill:#FFE6A0;font-size:9px;font-weight:950;paint-order:stroke;stroke:#1A1710;stroke-width:2px}.region-piece{pointer-events:none;fill:#FFF0C4;font-size:12px;font-weight:950;paint-order:stroke;stroke:#111;stroke-width:1.3px}.region-owner-name{pointer-events:none;fill:#FFF0C4;font-size:6px;font-weight:950;paint-order:stroke;stroke:#111;stroke-width:1.3px}.marching-unit{pointer-events:none;fill:#FFE57C;stroke:#FFF5CE;stroke-width:2;filter:drop-shadow(0 0 8px #FFD159)}
 '''
 
 DAIOU_CSS='''

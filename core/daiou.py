@@ -7,8 +7,9 @@ import random
 
 POLICIES={"prosper":("富国","国力と収入を伸ばす",2,0,1),"train":("訓練","兵を鍛える",0,3,0),"guard":("守備","守りを整える",0,1,3),"trade":("交易","資金を得る",3,0,1)}
 NATION_SEEDS=(("暁国","均衡"),("北嶺","守備"),("蒼海","交易"),("紅蓮","拡大"),("白峰","富国"),("翠野","生存"),("紫雲","機会"),("金砂","交易"),("黒鉄","軍備"),("月影","外交"))
-MAP_VERSION=3
+MAP_VERSION=4
 MAP_KIND="tokyo_mainland"
+COMMANDS_PER_TURN=3
 _MAP_DATA=json.loads((Path(__file__).resolve().parents[1]/"static"/"daiou_tokyo_map.json").read_text())
 _REGIONS={item["id"]:item for item in _MAP_DATA["regions"]}
 # The player begins in 葛飾区.  The other powers are spread through the 23
@@ -21,9 +22,11 @@ def _initial_map():
     cells=[]
     for region in _MAP_DATA["regions"]:
         owner=CAPITALS.get(region["id"])
+        value=3 if owner else 1+(sum(ord(ch) for ch in region["name"])%3)
         cells.append({"id":region["id"],"name":region["name"],"terrain":region["terrain"],
                       "neighbors":region["neighbors"],"owner":owner,
-                      "structure":"capital" if owner else None,"troops":8 if owner else 0})
+                      "structure":"capital" if owner else None,"troops":8 if owner else 0,
+                      "value":value})
     return cells
 
 def map_viewbox(): return _MAP_DATA["viewBox"]
@@ -33,7 +36,10 @@ def initial_game(now=None):
     now=now or datetime.now(); nations=[]
     for i,(name,purpose) in enumerate(NATION_SEEDS):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
-    return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"support_history":{},"log":["葛飾の地から、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
+    return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","commands_left":COMMANDS_PER_TURN,
+            "player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,
+            "support_history":{},"log":["葛飾の地から、あなたの治世が始まった。"],
+            "created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
     previous_map_kind=game.get("map_kind")
@@ -54,11 +60,13 @@ def normalize_game(game):
         cell.setdefault("name",region.get("name",cell["id"]))
         cell.setdefault("neighbors",region.get("neighbors",[]))
         cell.setdefault("claim", None)
+        cell.setdefault("value", 1+(sum(ord(ch) for ch in cell.get("name",cell["id"]))%3))
         # Older saves only recorded a scout marker. Treat it as a forward camp
         # so the save can continue under the explicit occupation flow.
         if cell.get("claim"):
             cell["claim"].setdefault("progress", 0)
             cell["claim"].setdefault("started_turn", max(1, game.get("turn", 1)-1))
+            cell["claim"].setdefault("last_progress_turn", 0)
             cell["troops"] = max(2, int(cell.get("troops", 0)))
     _sync(game); return game
 
@@ -147,8 +155,23 @@ def _tactical_attack_bonus(game,source,target,tactic,pid):
         return 3+(fronts-2)*2,labels[tactic]
     return 0,labels[tactic]
 
-def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,tactic="direct"):
+def region_income(cell):
+    """Seasonal income makes some land worth fighting for."""
+    return int(cell.get("value",1))+(2 if cell.get("structure") in {"town","capital"} else 0)
+
+def terrain_effect(cell):
+    return {"forest":"伏兵向き","hill":"守備 +2","river":"守備 +1","plain":"進軍向き"}.get(cell.get("terrain"),"平地")
+
+def _spend_command(game,message,now):
+    game["commands_left"]=max(0,int(game.get("commands_left",COMMANDS_PER_TURN))-1)
+    _sync(game); game["log"]=([message]+game.get("log",[]))[:30]
+    game["updated_at"]=(now or datetime.now()).isoformat(timespec="seconds")
+    return message
+
+def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,tactic="direct",march_troops=None):
     normalize_game(game); pid=game["player"]; player=nation(game,pid); source=map_cell(game,source_id)
+    if int(game.get("commands_left",COMMANDS_PER_TURN))<=0:
+        raise ValueError("今季の軍令は使い切りました。『季節を進める』を押してください。")
     is_player_camp=source["owner"] is None and (source.get("claim") or {}).get("owner")==pid
     if source["owner"]!=pid and not (action=="occupy" and is_player_camp):
         raise ValueError("自分の領土を選んでください。")
@@ -158,7 +181,9 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
         target=map_cell(game,target_id)
         if target not in adjacent_cells(game,source): raise ValueError("隣の地域へだけ進めます。")
         if source["troops"]<3: raise ValueError("この地域には進軍できる兵が足りません。")
-        moving=max(2,source["troops"]//2)
+        moving=max(2,source["troops"]//2) if march_troops is None else int(march_troops)
+        moving=min(moving,source["troops"]-1)
+        if moving<2: raise ValueError("進軍には2以上の兵が必要です。")
         if target["owner"] is None:
             claim = target.get("claim") or {}
             if claim.get("owner") == pid:
@@ -174,7 +199,7 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
                 else:
                     target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
                     message=f"戦力 {attack} 対 {defence}。{defender['name']}の野営地を崩せず退いた。"
-                _advance_world(game,rng); _sync(game); game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=(now or datetime.now()).isoformat(timespec="seconds"); return message
+                return _spend_command(game,message,now)
             if player["wealth"]<2: raise ValueError("進出準備には軍資金が2必要です。")
             player["wealth"]-=2; source["troops"]-=moving
             target["troops"]=moving
@@ -186,9 +211,15 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
         else:
             defender=nation(game,target["owner"])
             if relation(game,pid,defender["id"])["status"]=="alliance":
-                raise ValueError(f"{defender['name']}は同盟国です。先に同盟を破棄する必要があります。")
+                source["troops"]-=moving; target["troops"]+=moving
+                player["actions"]["defend"]+=1
+                relation(game,pid,defender["id"])["trust"]=min(100,relation(game,pid,defender["id"])["trust"]+3)
+                message=f"{defender['name']}の{target['name']}へ援軍{moving}を派遣した。"
+                return _spend_command(game,message,now)
             bonus,tactic_label=_tactical_attack_bonus(game,source,target,tactic,pid)
-            attack=moving+bonus+rng.randint(0,3); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
+            overreach=max(0,(player.get("territory",1)-4)//3)
+            terrain_defence={"hill":2,"river":1}.get(target.get("terrain"),0)
+            attack=max(1,moving+bonus-overreach+rng.randint(0,3)); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+terrain_defence+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
             relation(game,pid,defender["id"])["status"]="war"
             if attack>defence:
                 defender["morale"]=max(15,defender["morale"]-5)
@@ -204,7 +235,10 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             raise ValueError("自国の先遣隊がいる中立地を選んでください。")
         if game["turn"]<=claim.get("started_turn",0):
             raise ValueError("到着したターンには領土化できません。次のターンまで守ってください。")
+        if claim.get("last_progress_turn")==game["turn"]:
+            raise ValueError("この季節の領土化は進めました。次の季節まで守ってください。")
         claim["progress"]=int(claim.get("progress",0))+1
+        claim["last_progress_turn"]=game["turn"]
         if claim["progress"]>=2:
             source.update(owner=pid,claim=None)
             player["actions"]["expand"]+=1
@@ -226,12 +260,31 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
         if player["wealth"]<5: raise ValueError("徴兵には軍資金が5必要です。")
         player["wealth"]-=5; source["troops"]+=4; player["army"]+=4; message="兵を4集め、この地域へ置いた。"
     else: raise ValueError("行動を選んでください。")
-    _advance_world(game,rng); _sync(game); game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=(now or datetime.now()).isoformat(timespec="seconds"); return message
+    return _spend_command(game,message,now)
+
+def end_turn(game,now=None,seed=None):
+    """Resolve every rival after the player has finished planning the season."""
+    normalize_game(game)
+    old_turn=game["turn"]
+    rng=random.Random(seed if seed is not None else old_turn*65537)
+    _advance_world(game,rng)
+    game["commands_left"]=COMMANDS_PER_TURN
+    _sync(game)
+    message=f"第{old_turn}季の軍議を終え、諸国が動いた。第{game['turn']}季・{game['season']}へ。"
+    game["log"]=([message]+game.get("log",[]))[:30]
+    game["updated_at"]=(now or datetime.now()).isoformat(timespec="seconds")
+    return message
 
 def _advance_world(game,rng):
-    player=nation(game,game["player"]); owned=[x for x in game["map"] if x["owner"]==player["id"]]; player["wealth"]+=len(owned)+sum(2 for x in owned if x["structure"]=="town")
+    player=nation(game,game["player"]); owned=[x for x in game["map"] if x["owner"]==player["id"]]
+    player["wealth"]+=sum(region_income(x) for x in owned)-sum(x["troops"] for x in owned)//30
     for cpu in game["nations"]:
-        if cpu["id"]!=player["id"] and cpu["alive"]: _cpu_turn(game,cpu,rng)
+        if cpu["id"]==player["id"] or not cpu["alive"]: continue
+        cpu_owned=[x for x in game["map"] if x["owner"]==cpu["id"]]
+        cpu["wealth"]+=sum(region_income(x) for x in cpu_owned)-sum(x["troops"] for x in cpu_owned)//30
+        orders=3 if cpu["purpose"] in {"拡大","軍備","機会"} else 2
+        for _ in range(orders):
+            if cpu["alive"]: _cpu_turn(game,cpu,rng)
     _consider_coalition(game,rng)
     _coalition_muster(game)
     game["turn"]+=1; game["season"]=("春","夏","秋","冬")[(game["turn"]-1)%4]
@@ -240,13 +293,14 @@ def _cpu_turn(game,cpu,rng):
     camps=[x for x in game["map"] if x.get("owner") is None and (x.get("claim") or {}).get("owner")==cpu["id"]]
     if camps:
         camp=rng.choice(camps); claim=camp["claim"]
+        if game["turn"]<=claim.get("started_turn",0) or claim.get("last_progress_turn")==game["turn"]: return
         claim["progress"]=int(claim.get("progress",0))+1
+        claim["last_progress_turn"]=game["turn"]
         if claim["progress"]>=2:
             camp.update(owner=cpu["id"],claim=None); cpu["actions"]["expand"]+=1
         return
     owned=[x for x in game["map"] if x["owner"]==cpu["id"]]
     if not owned: cpu["alive"]=False; return
-    cpu["wealth"]+=len(owned)+sum(2 for x in owned if x["structure"]=="town")
     frontier=[(a,b) for a in owned for b in adjacent_cells(game,a) if b["owner"]!=cpu["id"] and (b["owner"] is None or relation(game,cpu["id"],b["owner"])["status"]!="alliance")]
     coalition=game.get("coalition") or {}
     if cpu["id"] in coalition.get("members",[]):

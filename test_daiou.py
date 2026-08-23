@@ -1,5 +1,5 @@
 from core.daiou import (apply_policy, derived_identity, diplomatic_label,
-                         initial_game, map_cell, nation, normalize_game,
+                         end_turn, initial_game, map_cell, nation, normalize_game,
                          perform_map_action, relation, request_reinforcements,
                          strength)
 
@@ -28,7 +28,7 @@ def test_old_grid_world_is_kept_as_recovery_snapshot():
     normalize_game(game)
     assert len(game["map"]) == 53
     assert game["legacy_grid_map"][0]["troops"] == 19
-    assert game["version"] == 3
+    assert game["version"] == 4
 
 
 def test_large_country_has_cohesion_cost():
@@ -45,14 +45,16 @@ def test_map_advance_requires_two_explicit_occupation_turns():
     assert map_cell(game, "13121")["claim"]["owner"] == "n0"
     assert map_cell(game, "13121")["troops"] > 0
 
+    end_turn(game, seed=2)
     perform_map_action(game, "occupy", "13121", seed=2)
     assert map_cell(game, "13121")["owner"] is None
     assert map_cell(game, "13121")["claim"]["progress"] == 1
 
+    end_turn(game, seed=2)
     perform_map_action(game, "occupy", "13121", seed=2)
     assert map_cell(game, "13121")["owner"] == "n0"
     assert nation(game, "n0")["territory"] == 2
-    assert game["turn"] == 4
+    assert game["turn"] == 3
 
 
 def test_country_identity_is_created_by_actions():
@@ -73,20 +75,46 @@ def test_old_save_receives_diplomacy_without_losing_progress():
     assert game["coalition"] is None
 
 
-def test_alliance_blocks_friendly_fire():
+def test_alliance_receives_troops_without_friendly_fire():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
     source = map_cell(game, "13122")
     target = map_cell(game, "13121")
     target.update(owner="n1", troops=2)
     before = source["troops"]
-    try:
-        perform_map_action(game, "advance", source["id"], target["id"], seed=3)
-        assert False, "同盟国を攻撃できてしまった"
-    except ValueError as error:
-        assert "同盟国" in str(error)
-    assert source["troops"] == before
+    message = perform_map_action(game, "advance", source["id"], target["id"], seed=3, march_troops=3)
+    assert "援軍3" in message
+    assert source["troops"] == before - 3
+    assert target["troops"] == 5
     assert diplomatic_label(game, "n0", "n1") == "同盟"
+
+
+def test_three_orders_are_planned_before_the_world_moves():
+    game = initial_game()
+    start_turn = game["turn"]
+    perform_map_action(game, "recruit", "13122")
+    perform_map_action(game, "recruit", "13122")
+    perform_map_action(game, "recruit", "13122")
+    assert game["turn"] == start_turn
+    assert game["commands_left"] == 0
+    try:
+        perform_map_action(game, "recruit", "13122")
+        assert False, "軍令上限を超えて行動できてしまった"
+    except ValueError as error:
+        assert "使い切りました" in str(error)
+    end_turn(game, seed=1)
+    assert game["turn"] == start_turn + 1
+    assert game["commands_left"] == 3
+
+
+def test_player_can_choose_exact_marching_troops_between_own_regions():
+    game = initial_game()
+    target = map_cell(game, "13121")
+    target.update(owner="n0", troops=2, claim=None)
+    source = map_cell(game, "13122")
+    perform_map_action(game, "advance", source["id"], target["id"], march_troops=3)
+    assert source["troops"] == 5
+    assert target["troops"] == 5
 
 
 def test_allied_reinforcements_reach_weakest_threatened_border():
