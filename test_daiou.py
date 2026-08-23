@@ -1,6 +1,7 @@
 from core.daiou import (apply_policy, derived_identity, diplomatic_label,
                          initial_game, map_cell, nation, normalize_game,
-                         perform_map_action, relation, strength)
+                         perform_map_action, relation, request_reinforcements,
+                         strength)
 
 
 def test_policy_advances_turn_and_is_deterministic_with_seed():
@@ -66,3 +67,28 @@ def test_alliance_blocks_friendly_fire():
         assert "同盟国" in str(error)
     assert source["troops"] == before
     assert diplomatic_label(game, "n0", "n1") == "同盟"
+
+
+def test_allied_reinforcements_reach_weakest_threatened_border():
+    game = initial_game()
+    relation(game, "n0", "n1").update(status="alliance", trust=80)
+    border = map_cell(game, "r0c0")
+    enemy = map_cell(game, "r0c1")
+    enemy.update(owner="n2", troops=6)
+    before = border["troops"]
+    message = request_reinforcements(game, "n1", seed=1)
+    assert border["troops"] > before
+    assert "援軍" in message
+    assert game["support_history"]["n1"] == game["turn"]
+
+
+def test_allied_reinforcements_have_a_cooldown():
+    game = initial_game()
+    relation(game, "n0", "n1").update(status="alliance", trust=80)
+    map_cell(game, "r0c1").update(owner="n2", troops=6)
+    request_reinforcements(game, "n1", seed=1)
+    try:
+        request_reinforcements(game, "n1", seed=1)
+        assert False, "同じターンに援軍を連続要請できてしまった"
+    except ValueError as error:
+        assert "再編中" in str(error)

@@ -21,7 +21,7 @@ def initial_game(now=None):
     now=now or datetime.now(); nations=[]
     for i,(name,purpose) in enumerate(NATION_SEEDS):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
-    return {"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
+    return {"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"support_history":{},"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
     default=initial_game()
@@ -75,6 +75,29 @@ def end_alliance(game,target_id):
     if rel["status"] not in {"alliance","pact"}: raise ValueError("破棄できる協定がありません。")
     rel.update(status="neutral",trust=max(0,rel["trust"]-25)); target=nation(game,target_id)
     message=f"{target['name']}との協定を破棄した。信用が低下した。"; game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=datetime.now().isoformat(timespec="seconds")
+    return message
+
+def request_reinforcements(game,target_id,seed=None):
+    """Ask an ally to reinforce the player's weakest border territory."""
+    normalize_game(game); pid=game["player"]
+    ally=nation(game,target_id); rel=relation(game,pid,target_id)
+    if rel["status"]!="alliance": raise ValueError("援軍を頼めるのは同盟国だけです。")
+    last=int(game.setdefault("support_history",{}).get(target_id,-99))
+    if game["turn"]-last<4: raise ValueError(f"{ally['name']}の軍は再編中です。あと{4-(game['turn']-last)}ターン待ってください。")
+    borders=[]
+    for cell in game["map"]:
+        if cell["owner"]!=pid: continue
+        enemies=[x for x in adjacent_cells(game,cell) if x.get("owner") not in {None,pid,target_id}]
+        enemy_camps=[x for x in adjacent_cells(game,cell) if (x.get("claim") or {}).get("owner") not in {None,pid,target_id}]
+        if enemies or enemy_camps: borders.append(cell)
+    if not borders: raise ValueError("援軍を置くほど緊迫した国境がありません。")
+    target=min(borders,key=lambda x:x["troops"])
+    rng=random.Random(seed if seed is not None else game["turn"]*811+int(target_id[1:]))
+    troops=2+rng.randint(0,2); target["troops"]+=troops; ally["wealth"]=max(0,ally["wealth"]-2)
+    game["support_history"][target_id]=game["turn"]
+    rel["trust"]=min(100,rel["trust"]+4)
+    message=f"{ally['name']}の援軍{troops}が、国境の{target['id']}へ到着した。"
+    game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=datetime.now().isoformat(timespec="seconds")
     return message
 
 def strength(item):
@@ -170,6 +193,7 @@ def _advance_world(game,rng):
     for cpu in game["nations"]:
         if cpu["id"]!=player["id"] and cpu["alive"]: _cpu_turn(game,cpu,rng)
     _consider_coalition(game,rng)
+    _coalition_muster(game)
     game["turn"]+=1; game["season"]=("春","夏","秋","冬")[(game["turn"]-1)%4]
 
 def _cpu_turn(game,cpu,rng):
@@ -224,6 +248,20 @@ def _consider_coalition(game,rng):
             relation(game,left,right).update(status="alliance",trust=80)
     names="・".join(x["name"] for x in candidates)
     game["log"]=[f"急拡大を恐れた{names}が合従軍を結成した！"]+game.get("log",[])
+
+def _coalition_muster(game):
+    """Periodically gather coalition troops on borders facing the target."""
+    coalition=game.get("coalition") or {}
+    if not coalition or game["turn"]<=coalition.get("formed_turn",game["turn"]): return
+    if (game["turn"]-coalition["formed_turn"])%3: return
+    target_id=coalition["target"]; gathered=[]
+    for member_id in coalition.get("members",[]):
+        member=nation(game,member_id)
+        borders=[cell for cell in game["map"] if cell["owner"]==member_id and any(x.get("owner")==target_id for x in adjacent_cells(game,cell))]
+        if not borders: continue
+        cell=min(borders,key=lambda x:x["troops"]); cell["troops"]+=2; gathered.append(member["name"])
+    if gathered:
+        game["log"]=[f"合従軍が国境へ集結。{'・'.join(gathered)}が兵を進めた。"]+game.get("log",[])
 
 def _sync(game):
     for item in game["nations"]:
