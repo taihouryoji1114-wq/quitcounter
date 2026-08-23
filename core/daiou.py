@@ -109,7 +109,19 @@ def derived_identity(item):
     if not actions or max(actions.values(),default=0)<2: return "まだ定まっていない"
     return labels[max(actions,key=actions.get)]
 
-def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
+def _tactical_attack_bonus(game,source,target,tactic,pid):
+    labels={"direct":"正面攻撃","ambush":"伏兵","pincer":"挟撃"}
+    if tactic not in labels: raise ValueError("戦い方を選んでください。")
+    if tactic=="ambush":
+        if source.get("terrain")!="forest": raise ValueError("伏兵は森からのみ仕掛けられます。")
+        return 4,labels[tactic]
+    if tactic=="pincer":
+        fronts=sum(cell.get("owner")==pid for cell in adjacent_cells(game,target))
+        if fronts<2: raise ValueError("挟撃には、敵地へ接する自国領が2か所以上必要です。")
+        return 3+(fronts-2)*2,labels[tactic]
+    return 0,labels[tactic]
+
+def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,tactic="direct"):
     normalize_game(game); pid=game["player"]; player=nation(game,pid); source=map_cell(game,source_id)
     is_player_camp=source["owner"] is None and (source.get("claim") or {}).get("owner")==pid
     if source["owner"]!=pid and not (action=="occupy" and is_player_camp):
@@ -146,18 +158,20 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
         elif target["owner"]==pid:
             source["troops"]-=moving; target["troops"]+=moving; player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
         else:
-            defender=nation(game,target["owner"]); attack=moving+rng.randint(0,3); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
+            defender=nation(game,target["owner"])
             if relation(game,pid,defender["id"])["status"]=="alliance":
-                source["troops"]+=moving
                 raise ValueError(f"{defender['name']}は同盟国です。先に同盟を破棄する必要があります。")
+            bonus,tactic_label=_tactical_attack_bonus(game,source,target,tactic,pid)
+            attack=moving+bonus+rng.randint(0,3); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
             relation(game,pid,defender["id"])["status"]="war"
             if attack>defence:
                 defender["morale"]=max(15,defender["morale"]-5)
                 target.update(owner=pid,troops=max(2,attack-defence),claim=None)
-                message=f"戦力 {attack} 対 {defence}。{defender['name']}に勝ち、地域を奪った。"
+                message=f"{tactic_label}！ 戦力 {attack} 対 {defence}。{defender['name']}に勝ち、地域を奪った。"
             else:
                 target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
-                message=f"戦力 {attack} 対 {defence}。{defender['name']}の守りを崩せず、兵を退いた。"
+                if tactic=="ambush": player["morale"]=max(15,player["morale"]-2)
+                message=f"{tactic_label}。戦力 {attack} 対 {defence}。{defender['name']}の守りを崩せず、兵を退いた。"
     elif action=="occupy":
         claim=source.get("claim") or {}
         if source["owner"] is not None or claim.get("owner")!=pid:

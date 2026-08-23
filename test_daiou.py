@@ -92,3 +92,22 @@ def test_allied_reinforcements_have_a_cooldown():
         assert False, "同じターンに援軍を連続要請できてしまった"
     except ValueError as error:
         assert "再編中" in str(error)
+
+
+def test_ambush_requires_a_forest_source_and_is_reported():
+    game = initial_game()
+    source = map_cell(game, "r0c0")
+    source["terrain"] = "forest"
+    map_cell(game, "r0c1").update(owner="n2", troops=2)
+    message = perform_map_action(game, "advance", "r0c0", "r0c1", seed=1, tactic="ambush")
+    assert "伏兵" in message
+
+
+def test_pincer_requires_two_friendly_fronts():
+    game = initial_game()
+    target = map_cell(game, "r0c1")
+    target.update(owner="n2", troops=2)
+    second_front = map_cell(game, "r1c1")
+    second_front.update(owner="n0", troops=4)
+    message = perform_map_action(game, "advance", "r0c0", "r0c1", seed=1, tactic="pincer")
+    assert "挟撃" in message

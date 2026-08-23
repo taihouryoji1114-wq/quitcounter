@@ -16,14 +16,14 @@ def daiou_page():
     if not require_app_access('daiou'): return
     Theme.page('大王',app_name='daiou')
     user_id=selected_user_id(); games=data.data.setdefault('daiou',{}).setdefault('profiles',{})
-    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"view":"home","event":None}; data.save()
+    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"view":"home","event":None,"tactic":"direct"}; data.save()
 
     def save(): games[user_id]=game; data.save()
 
     def act(action,target=None):
         if not state["selected"]: ui.notify('先に金色の自国領を選んでください',type='warning'); return
         try:
-            message=perform_map_action(game,action,state["selected"],target); save(); ui.notify(message,type='positive')
+            message=perform_map_action(game,action,state["selected"],target,tactic=state['tactic']); save(); ui.notify(message,type='positive')
             state['event']={'kind':'battle' if '戦力' in message else ('occupy' if '領土' in message or '野営' in message else 'order'),'message':message}
             current=map_cell(game,state["selected"])
             if current["owner"]!=game["player"] and (current.get('claim') or {}).get('owner')!=game['player']: state["selected"]=None
@@ -45,6 +45,9 @@ def daiou_page():
 
     def dismiss_event():
         state['event']=None; render.refresh()
+
+    def choose_tactic(tactic):
+        state['tactic']=tactic; render.refresh()
 
     def negotiate(target_id,kind='propose'):
         try:
@@ -139,6 +142,9 @@ def daiou_page():
                         owner=nation(game,selected['owner'])
                         ui.label(f"選択中：{owner['name']} {selected['id']}　兵 {selected['troops']}").classes('selected-title')
                         ui.label('隣の地域を押すと、軍が進みます').classes('selected-help')
+                        with ui.element('div').classes('tactic-picker'):
+                            for key,label,icon in (('direct','正面','⚔'),('ambush','伏兵','♣'),('pincer','挟撃','⇉')):
+                                ui.button(f'{icon} {label}',on_click=lambda _,value=key:choose_tactic(value)).props('flat dense no-caps').classes('tactic-choice'+(' active' if state['tactic']==key else ''))
                         with ui.element('div').classes('command-grid'):
                             ui.button('兵を集める 5',icon='groups',on_click=lambda:act('recruit')).props('flat no-caps')
                             ui.button('町を築く 10',icon='holiday_village',on_click=lambda:act('town')).props('flat no-caps')
@@ -198,6 +204,7 @@ DAIOU_BATTLE_CSS='''
 .army-flag{position:absolute;left:7px;top:17px;font-size:17px;z-index:2;color:#F8D77E;text-shadow:0 2px 3px #000}.army-rank{position:absolute;left:20px;top:29px;font-size:7px;letter-spacing:-2px;color:#F3E4C5;text-shadow:0 1px 2px #000;opacity:.88}.frontline{animation:frontGlow 1.7s ease-in-out infinite}.frontline .army-rank{color:#FFD7A0}.battle-event{position:fixed;z-index:9999;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px;text-align:center;background:radial-gradient(circle,rgba(104,25,18,.94),rgba(3,7,8,.96) 62%);animation:eventEnter .34s ease-out}.battle-event.occupy{background:radial-gradient(circle,rgba(82,66,20,.94),rgba(3,9,8,.96) 62%)}.battle-event.order{background:radial-gradient(circle,rgba(24,68,52,.94),rgba(3,9,8,.96) 62%)}.battle-event-mark{font-family:serif;font-size:84px;line-height:1;color:#FFD071;filter:drop-shadow(0 0 20px rgba(255,86,45,.75));animation:markStrike .55s ease-out}.battle-event-title{margin-top:14px;font-family:serif;font-size:27px;font-weight:950;letter-spacing:.28em;color:#FFE6A9}.battle-event-message{max-width:340px;margin-top:16px;font-size:13px;font-weight:900;line-height:1.8;color:#FFF5DC}.battle-event-close{margin-top:24px;font-size:9px;opacity:.55}@keyframes frontGlow{50%{filter:brightness(1.16)}}@keyframes eventEnter{from{opacity:0;transform:scale(1.08)}}@keyframes markStrike{0%{transform:scale(2) rotate(-10deg);opacity:0}65%{transform:scale(.88) rotate(3deg)}100%{transform:scale(1)}}
 .coalition-alert{margin:0 0 10px;padding:12px 14px;border-radius:15px;background:linear-gradient(115deg,rgba(128,24,20,.9),rgba(62,25,24,.78));border:1px solid rgba(255,194,96,.42);box-shadow:0 8px 24px rgba(0,0,0,.22)}.coalition-title{font-family:serif;font-size:15px;font-weight:950;color:#FFD985}.coalition-copy{margin-top:3px;font-size:9px;font-weight:800;color:#F8E4C7}.relation-chip{margin-left:7px;padding:3px 7px;border-radius:999px;font-size:8px;font-weight:950;white-space:nowrap;background:rgba(255,255,255,.08)}.relation-chip.alliance{color:#91E8CA;background:rgba(33,130,104,.25)}.relation-chip.war{color:#FFB09F;background:rgba(176,43,34,.28)}.relation-chip.pact{color:#A9D7F3;background:rgba(48,111,154,.28)}.relation-chip.neutral{color:#C8C6BD}.diplomacy-button{margin-left:4px!important;min-height:28px!important;padding:0 7px!important;border-radius:9px!important;color:#EFD492!important;background:rgba(239,212,146,.09)!important;font-size:8px!important;font-weight:900!important}.diplomacy-button.danger{color:#FFAAA0!important;background:rgba(175,48,40,.16)!important}
 .diplomacy-button.support{color:#9DE7D0!important;background:rgba(36,137,107,.18)!important}
+.tactic-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:9px}.tactic-choice{min-height:34px!important;border-radius:10px!important;color:#D8CFBB!important;background:rgba(255,255,255,.055)!important;font-size:9px!important;font-weight:900!important}.tactic-choice.active{color:#152018!important;background:linear-gradient(135deg,#B9893A,#F0D07B)!important;box-shadow:0 5px 13px rgba(0,0,0,.18)}
 @media(min-width:430px){.world-map{grid-template-columns:repeat(8,76px)!important;grid-template-rows:repeat(6,76px)!important}.map-cell{width:76px!important;height:76px!important}.army-flag{font-size:21px}.army-rank{font-size:9px;top:34px}}
 @media(max-width:520px){.nation-row{flex-wrap:wrap;gap:4px}.nation-row>.grow{min-width:42%}.nation-detail{margin-left:auto}.diplomacy-button{margin-left:auto!important}}
 '''
