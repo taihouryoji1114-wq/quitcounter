@@ -122,6 +122,40 @@ def candidate_moves(board, count=3):
     return [_move_text(move) for _, move in scored[:count]]
 
 
+def _ranked_moves(board):
+    """Return legal moves ordered for the side to move, with one reply considered."""
+    ranked=[]
+    for move in board.legal_moves:
+        board.push(move)
+        value=_minimax(board,1,-math.inf,math.inf)
+        board.pop()
+        ranked.append((value,move))
+    ranked.sort(key=lambda item:item[0],reverse=board.turn)
+    return [move for _,move in ranked]
+
+
+def explore_plans(board, count=3, plies=5):
+    """Build compact, non-destructive principal variations for research mode."""
+    plans=[]
+    for first in _ranked_moves(board)[:count]:
+        branch=board.copy(); first_before=branch.copy()
+        reasons,cautions=explain_move(first_before,first)
+        first_san=first_before.san(first); branch.push(first)
+        line=[first_san]
+        for _ in range(max(0,plies-1)):
+            ranked=_ranked_moves(branch)
+            if not ranked: break
+            reply=ranked[0]; line.append(branch.san(reply)); branch.push(reply)
+        change=_score(branch)-_score(board)
+        benefit=change if board.turn else -change
+        verdict="狙いが通れば有力" if benefit>90 else ("相手に正確に返されると苦しい" if benefit<-90 else "十分に検討できる計画")
+        plans.append({"move":_move_text(first),"san":first_san,"uci":first.uci(),
+            "idea":" / ".join(reasons),"risk":" / ".join(cautions),
+            "line":" → ".join(line),"verdict":verdict,
+            "note":"この手順は代表例です。相手の応手が変われば、別の狙いへ切り替える必要があります。"})
+    return plans
+
+
 def play_user_move(game, source, target, seed=None):
     board = board_from(game)
     if not board.turn: raise ValueError("相手の手番です。")
