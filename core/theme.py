@@ -26,6 +26,10 @@ class Theme:
             manifest = "/static/restaurant-card-game-manifest.json"
             icon = "/static/restaurant_card_game_icon.png"
             theme_color = "#17100A"
+        elif app_name == "chankocchi":
+            manifest = "/static/chankocchi-manifest.json"
+            icon = "/static/chankocchi_stage1.png"
+            theme_color = "#8A5C3C"
         else:
             manifest = "/static/manifest.json"
             icon = "/static/habitory_icon.png"

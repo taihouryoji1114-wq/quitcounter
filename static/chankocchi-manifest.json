@@ -1,0 +1,9 @@
+{
+  "name": "ちゃんこっち",
+  "short_name": "ちゃんこっち",
+  "start_url": "/chankocchi",
+  "display": "standalone",
+  "background_color": "#FFF8E8",
+  "theme_color": "#8A5C3C",
+  "icons": [{"src": "/static/chankocchi_stage1.png", "sizes": "any", "type": "image/png"}]
+}

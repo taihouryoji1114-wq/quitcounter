@@ -30,6 +30,21 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/chankocchi")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.image("/static/chankocchi_stage1.png").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("ちゃんこっち").classes("text-xl font-bold")
+                    ui.label("お世話して、命と世代を育てる").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("chevron_right").classes("text-2xl text-grey-7")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/habitory")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/habitory_icon.png").classes(

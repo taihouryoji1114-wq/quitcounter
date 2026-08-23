@@ -80,3 +80,9 @@ def gunryakugoma_login():
 def restaurant_card_game_login():
     login_screen("restaurant_card_game", "一生懸命！飲食店経営", "/restaurant-card-game",
                  "人を育て、店を伸ばす経営カードゲーム", app_name="restaurant-card-game")
+
+
+@ui.page("/chankocchi/login")
+def chankocchi_login():
+    login_screen("chankocchi", "ちゃんこっち", "/chankocchi",
+                 "今日も一緒に暮らそう", app_name="chankocchi")

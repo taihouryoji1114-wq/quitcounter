@@ -36,6 +36,7 @@ import pages.settings
 import pages.workout
 import pages.gunryakugoma
 import pages.restaurant_card_game
+import pages.chankocchi
 import pages.system_status
 
 ui.run(
