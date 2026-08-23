@@ -77,8 +77,9 @@ def portal():
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/daiou")):
             with ui.row().classes("w-full items-center no-wrap"):
-                with ui.element("div").classes("w-14 h-14 rounded-xl q-mr-md bg-blue-grey-10 text-amber-3 flex items-center justify-center"):
-                    ui.label("王").classes("text-3xl font-black")
+                ui.image("/static/daiou_icon.png").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
                 with ui.column().classes("gap-0"):
                     ui.label("大王").classes("text-xl font-bold")
                     ui.label("十国の思惑を読み、自分の国を治める").classes(

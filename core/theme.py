@@ -27,8 +27,8 @@ class Theme:
             icon = "/static/chankocchi_stage1.png"
             theme_color = "#8A5C3C"
         elif app_name == "daiou":
-            manifest = "/static/manifest.json"
-            icon = "/static/habitory_icon.png"
+            manifest = "/static/daiou-manifest.json"
+            icon = "/static/daiou_icon.png"
             theme_color = "#0B1820"
         else:
             manifest = "/static/manifest.json"

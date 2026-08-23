@@ -1,0 +1,17 @@
+{
+  "name": "大王",
+  "short_name": "大王",
+  "description": "十国の思惑を読み、自分の国を治める戦略ゲーム",
+  "start_url": "/daiou",
+  "scope": "/daiou",
+  "display": "standalone",
+  "background_color": "#0B1820",
+  "theme_color": "#0B1820",
+  "icons": [
+    {
+      "src": "/static/daiou_icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
