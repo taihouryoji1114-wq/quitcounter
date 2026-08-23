@@ -14,7 +14,7 @@ def daiou_page():
     if not require_app_access('daiou'): return
     Theme.page('大王',app_name='daiou')
     user_id=selected_user_id(); games=data.data.setdefault('daiou',{}).setdefault('profiles',{})
-    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None}; data.save()
+    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"view":"home"}; data.save()
 
     def save(): games[user_id]=game; data.save()
 
@@ -33,11 +33,41 @@ def daiou_page():
         elif state["selected"]: act('advance',cell_id)
         else: ui.notify('金色の自国領から選びます',type='info')
 
+    def continue_game():
+        state['view']='game'; render.refresh()
+
+    def return_home():
+        state.update(view='home',selected=None); save(); render.refresh()
+
+    def new_game():
+        replacement=initial_game(); game.clear(); game.update(replacement)
+        state.update(view='game',selected=None); save(); new_game_dialog.close(); render.refresh()
+
+    with ui.dialog() as new_game_dialog, ui.card().classes('new-game-dialog'):
+        ui.label('新しく国を興しますか？').classes('text-xl font-black')
+        ui.label('現在の続きは消えて、最初の状態に戻ります。').classes('text-sm text-grey-7')
+        with ui.row().classes('w-full justify-end q-mt-md'):
+            ui.button('やめる',on_click=new_game_dialog.close).props('flat no-caps')
+            ui.button('新しく始める',on_click=new_game).props('unelevated no-caps color=negative')
+
     @ui.refreshable
     def render():
         player=nation(game,game['player']); selected=map_cell(game,state["selected"]) if state["selected"] else None
         with ui.element('main').classes('daiou-app'):
+            if state['view']=='home':
+                with ui.element('section').classes('daiou-home'):
+                    ui.image('/static/daiou_icon.png').classes('daiou-home-icon')
+                    ui.label('大 王').classes('daiou-home-title')
+                    ui.label('十国の思惑を読み、己の国を治めよ').classes('daiou-home-copy')
+                    with ui.element('div').classes('home-status'):
+                        ui.label(f"第{game['turn']}季・{game['season']}").classes('home-turn')
+                        ui.label(f"{player['name']}　領土 {player['territory']}　兵力 {sum(x['troops'] for x in game['map'] if x['owner']==game['player'])}").classes('home-realm')
+                    ui.button('続きから',icon='play_arrow',on_click=continue_game).props('unelevated no-caps').classes('continue-button')
+                    ui.button('新しく始める',on_click=new_game_dialog.open).props('flat no-caps').classes('new-button')
+                ui.add_css(DAIOU_CSS)
+                return
             with ui.element('section').classes('daiou-hero'):
+                ui.button(icon='home',on_click=return_home).props('flat round aria-label="大王ホームへ戻る"').classes('battle-home-button')
                 ui.label('大 王').classes('daiou-title'); ui.label('選んだ方針ではなく、積み重ねた行動が国を作る。').classes('daiou-copy')
                 ui.label(f"第{game['turn']}季・{game['season']}").classes('turn-chip')
                 ui.label(f"国の姿：{derived_identity(player)}").classes('identity-chip')
@@ -98,5 +128,6 @@ DAIOU_MAP_MEMORY_SCRIPT = r'''
 '''
 
 DAIOU_CSS='''
+body{background:#071015!important}.daiou-home{min-height:calc(100vh - 84px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 20px;border-radius:30px;background:radial-gradient(circle at 50% 28%,rgba(212,166,75,.20),transparent 28%),linear-gradient(160deg,#152A24,#080F13 68%);border:1px solid rgba(226,184,96,.30);overflow:hidden}.daiou-home-icon{width:132px!important;height:132px!important;border-radius:29px;box-shadow:0 22px 60px rgba(0,0,0,.48),0 0 0 1px rgba(242,203,112,.38)}.daiou-home-title{margin-top:25px;font-family:serif;font-size:49px;font-weight:950;letter-spacing:.22em;color:#FFE5A0}.daiou-home-copy{margin-top:4px;font-size:11px;font-weight:800;color:#CFC5AC}.home-status{width:min(100%,360px);margin:32px 0 17px;padding:17px;border-radius:18px;background:rgba(255,255,255,.065);border:1px solid rgba(255,255,255,.08)}.home-turn{font-size:12px;font-weight:950;color:#EFCB78}.home-realm{margin-top:5px;font-size:10px;color:#D8D9D0}.continue-button{width:min(100%,360px);min-height:57px!important;border-radius:17px!important;background:linear-gradient(135deg,#C49340,#F0CE78)!important;color:#182019!important;font-size:16px!important;font-weight:950!important}.new-button{margin-top:8px;color:#B9B5A9!important}.new-game-dialog{width:min(92vw,430px)!important;padding:22px!important;border-radius:24px!important}.battle-home-button{position:absolute!important;z-index:5;left:14px;top:14px;color:#FFF0C5!important;background:rgba(3,10,12,.48)!important}
 body{background:#071015!important}.daiou-app{width:min(100%,760px);min-height:100vh;margin:auto;padding:14px 14px 56px;color:#F5EBD2;background:radial-gradient(circle at 90% 0,#334B3C 0,transparent 27%),linear-gradient(180deg,#0B1820,#10130F)}.daiou-hero{position:relative;min-height:190px;padding:30px 22px;border-radius:28px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;background:linear-gradient(155deg,rgba(3,10,14,.1),rgba(3,8,7,.86)),radial-gradient(circle at 50% 20%,#B8863A,#26372D 48%,#0A1012 76%);border:1px solid rgba(226,184,96,.35)}.daiou-hero:before{content:'王';position:absolute;right:16px;top:-35px;font-size:175px;font-family:serif;font-weight:900;color:rgba(255,224,153,.11)}.daiou-title{font-family:serif;font-size:44px;font-weight:950;letter-spacing:.2em;color:#FFE5A0}.daiou-copy{font-size:10px;font-weight:800;opacity:.78}.turn-chip,.identity-chip{position:absolute;top:15px;padding:7px 10px;border-radius:999px;background:rgba(4,12,12,.64);font-size:9px;font-weight:900}.turn-chip{left:15px}.identity-chip{right:15px;color:#F0C96F}.realm-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:11px 0 16px}.realm-stat{padding:10px 8px;border-radius:14px;background:rgba(255,255,255,.07);font-size:8px;color:#B8C3B8}.realm-value{font-size:18px;font-weight:950;color:#FFF1C7}.daiou-heading{margin:9px 2px 2px;font-size:18px;font-weight:950}.map-guide{font-size:9px;opacity:.68;margin:0 2px 8px}.world-scroll{width:100%;overflow:auto;padding:5px 0 10px;scrollbar-width:thin;overscroll-behavior:contain}.world-map{display:grid;grid-template-columns:repeat(8,62px);grid-template-rows:repeat(6,62px);gap:4px;width:max-content;padding:8px;border-radius:18px;background:#06100E;border:1px solid rgba(240,201,111,.22)}.map-cell{position:relative;width:62px;height:62px;border:0;border-radius:12px;color:#EDE4CE;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);transition:.16s transform,.16s box-shadow}.map-cell:active{transform:scale(.94)}.terrain-plain{background:#405C3D}.terrain-forest{background:#173D2B}.terrain-hill{background:#69563B}.terrain-river{background:linear-gradient(135deg,#315D70,#4B7B88)}.neutral{filter:saturate(.55) brightness(.72)}.owner-n0{box-shadow:inset 0 0 0 3px #F5CA69,0 0 13px rgba(245,202,105,.18)}.owner-n1{box-shadow:inset 0 0 0 3px #A8C7E8}.owner-n2{box-shadow:inset 0 0 0 3px #6DB8B2}.owner-n3{box-shadow:inset 0 0 0 3px #D86661}.owner-n4{box-shadow:inset 0 0 0 3px #E9E5D1}.owner-n5{box-shadow:inset 0 0 0 3px #82B66F}.owner-n6{box-shadow:inset 0 0 0 3px #A889C4}.owner-n7{box-shadow:inset 0 0 0 3px #CF9D5C}.owner-n8{box-shadow:inset 0 0 0 3px #62676C}.owner-n9{box-shadow:inset 0 0 0 3px #B1A9D8}.map-cell.selected{box-shadow:inset 0 0 0 4px #FFF,0 0 18px #FFD36E;transform:translateY(-3px)}.terrain-mark{position:absolute;left:7px;top:5px;font-size:15px;opacity:.42}.structure-mark{position:absolute;right:6px;top:5px;font-size:10px;font-weight:950;color:#FFF1B9}.owner-mark{position:absolute;right:6px;bottom:5px;font-size:8px;font-weight:950;opacity:.82}.claim-mark{position:absolute;left:24px;top:20px;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#F2D28A;color:#182018;font-size:9px;font-weight:950;box-shadow:0 0 0 2px rgba(0,0,0,.3)}.troop-mark{position:absolute;left:7px;bottom:5px;padding:2px 6px;border-radius:999px;background:rgba(2,7,7,.72);font-size:10px;font-weight:950}.command-panel{min-height:96px;margin-top:2px;padding:13px;border-radius:18px;background:linear-gradient(145deg,#21362D,#16231E);border:1px solid rgba(220,176,88,.22)}.selected-title{font-size:13px;font-weight:950;color:#F0C96F}.selected-help{font-size:8px;opacity:.65}.command-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:8px}.command-grid .q-btn{background:rgba(255,255,255,.07)!important;color:#F7E8C5!important;font-size:10px!important}.empty-command{text-align:center;padding:24px;font-weight:900;opacity:.6}.nation-box{margin-top:10px;border-radius:16px!important;background:rgba(255,255,255,.06)!important}.nation-row{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}.nation-row.player{color:#F0C96F}.nation-detail{font-size:9px;opacity:.72}.history-line{padding:8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:10px}@media(max-width:390px){.realm-grid{grid-template-columns:repeat(2,1fr)}.world-map{grid-template-columns:repeat(8,58px);grid-template-rows:repeat(6,58px)}.map-cell{width:58px;height:58px}}
 '''
