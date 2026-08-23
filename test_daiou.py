@@ -142,13 +142,46 @@ def test_allied_reinforcements_have_a_cooldown():
         assert "再編中" in str(error)
 
 
-def test_ambush_requires_a_forest_source_and_is_reported():
+def test_ambush_has_been_removed():
     game = initial_game()
     source = map_cell(game, "13122")
     source["terrain"] = "forest"
     map_cell(game, "13121").update(owner="n2", troops=2)
-    message = perform_map_action(game, "advance", "13122", "13121", seed=1, tactic="ambush")
-    assert "伏兵" in message
+    try:
+        perform_map_action(game, "advance", "13122", "13121", seed=1, tactic="ambush")
+        assert False, "廃止した伏兵を使用できてしまった"
+    except ValueError as error:
+        assert "戦い方" in str(error)
+
+
+def test_gather_concentrates_domestic_troops_and_leaves_garrisons():
+    game = initial_game()
+    destination = map_cell(game, "13122")
+    donor_a = map_cell(game, "13121")
+    donor_b = map_cell(game, "13123")
+    donor_a.update(owner="n0", troops=7, claim=None)
+    donor_b.update(owner="n0", troops=5, claim=None)
+    before = destination["troops"]
+    message = perform_map_action(game, "gather", destination["id"])
+    assert "兵8" in message
+    assert destination["troops"] == before + 8
+    assert donor_a["troops"] == 2
+    assert donor_b["troops"] == 2
+
+
+def test_capturing_a_capital_annexes_the_defeated_country():
+    game = initial_game()
+    source = map_cell(game, "13122")
+    capital = map_cell(game, "13121")
+    extra = map_cell(game, "13123")
+    capital.update(owner="n1", structure="capital", troops=1, claim=None)
+    extra.update(owner="n1", troops=6, claim=None)
+    source["troops"] = 40
+    message = perform_map_action(game, "advance", source["id"], capital["id"], seed=1, march_troops=35)
+    assert "本城" in message
+    assert capital["owner"] == "n0"
+    assert extra["owner"] == "n0"
+    assert nation(game, "n1")["alive"] is False
 
 
 def test_pincer_requires_two_friendly_fronts():

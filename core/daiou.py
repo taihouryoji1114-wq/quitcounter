@@ -144,11 +144,8 @@ def derived_identity(item):
     return labels[max(actions,key=actions.get)]
 
 def _tactical_attack_bonus(game,source,target,tactic,pid):
-    labels={"direct":"正面攻撃","ambush":"伏兵","pincer":"挟撃"}
+    labels={"direct":"正面攻撃","pincer":"挟撃"}
     if tactic not in labels: raise ValueError("戦い方を選んでください。")
-    if tactic=="ambush":
-        if source.get("terrain")!="forest": raise ValueError("伏兵は森からのみ仕掛けられます。")
-        return 4,labels[tactic]
     if tactic=="pincer":
         fronts=sum(cell.get("owner")==pid for cell in adjacent_cells(game,target))
         if fronts<2: raise ValueError("挟撃には、敵地へ接する自国領が2か所以上必要です。")
@@ -160,7 +157,19 @@ def region_income(cell):
     return int(cell.get("value",1))+(2 if cell.get("structure") in {"town","capital"} else 0)
 
 def terrain_effect(cell):
-    return {"forest":"伏兵向き","hill":"守備 +2","river":"守備 +1","plain":"進軍向き"}.get(cell.get("terrain"),"平地")
+    return {"forest":"守備 +1","hill":"守備 +2","river":"守備 +1","plain":"進軍向き"}.get(cell.get("terrain"),"平地")
+
+def _capital_surrender(game,winner_id,loser_id):
+    """Taking a capital ends that country and transfers its remaining realm."""
+    captured=0
+    for cell in game["map"]:
+        if cell.get("owner")==loser_id:
+            cell["owner"]=winner_id; cell["troops"]=max(1,cell.get("troops",0)//2); captured+=1
+        claim=cell.get("claim") or {}
+        if claim.get("owner")==loser_id:
+            cell["claim"]=None; cell["troops"]=0
+    loser=nation(game,loser_id); loser["alive"]=False; loser["territory"]=0
+    return captured
 
 def _spend_command(game,message,now):
     game["commands_left"]=max(0,int(game.get("commands_left",COMMANDS_PER_TURN))-1)
@@ -218,16 +227,20 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
                 return _spend_command(game,message,now)
             bonus,tactic_label=_tactical_attack_bonus(game,source,target,tactic,pid)
             overreach=max(0,(player.get("territory",1)-4)//3)
-            terrain_defence={"hill":2,"river":1}.get(target.get("terrain"),0)
-            attack=max(1,moving+bonus-overreach+rng.randint(0,3)); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+terrain_defence+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
+            terrain_defence={"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)
+            structure_defence={"fort":5,"capital":8}.get(target.get("structure"),0)
+            attack=max(1,moving+bonus-overreach+rng.randint(0,3)); defence=target["troops"]+structure_defence+terrain_defence+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
             relation(game,pid,defender["id"])["status"]="war"
             if attack>defence:
                 defender["morale"]=max(15,defender["morale"]-5)
+                was_capital=target.get("structure")=="capital"
                 target.update(owner=pid,troops=max(2,attack-defence),claim=None)
-                message=f"{tactic_label}！ 戦力 {attack} 対 {defence}。{defender['name']}に勝ち、地域を奪った。"
+                if was_capital:
+                    lands=_capital_surrender(game,pid,defender["id"])
+                    message=f"{tactic_label}！ 戦力 {attack} 対 {defence}。{defender['name']}の本城を落とし、残る{lands}地域が降伏した。"
+                else: message=f"{tactic_label}！ 戦力 {attack} 対 {defence}。{defender['name']}に勝ち、地域を奪った。"
             else:
                 target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
-                if tactic=="ambush": player["morale"]=max(15,player["morale"]-2)
                 message=f"{tactic_label}。戦力 {attack} 対 {defence}。{defender['name']}の守りを崩せず、兵を退いた。"
     elif action=="occupy":
         claim=source.get("claim") or {}
@@ -259,6 +272,15 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
     elif action=="recruit":
         if player["wealth"]<5: raise ValueError("徴兵には軍資金が5必要です。")
         player["wealth"]-=5; source["troops"]+=4; player["army"]+=4; message="兵を4集め、この地域へ置いた。"
+    elif action=="gather":
+        donors=[cell for cell in game["map"] if cell.get("owner")==pid and cell["id"]!=source["id"]]
+        gathered=0
+        for donor in donors:
+            sent=max(0,int(donor.get("troops",0))-2)
+            donor["troops"]-=sent; gathered+=sent
+        if gathered<=0: raise ValueError("他の領土に移動できる兵がいません。各地には守備兵2を残します。")
+        source["troops"]+=gathered; player["actions"]["defend"]+=1
+        message=f"国内へ集結命令を出し、{len(donors)}地域から兵{gathered}を{source['name']}へ集めた。"
     else: raise ValueError("行動を選んでください。")
     return _spend_command(game,message,now)
 
@@ -291,9 +313,9 @@ def _advance_world(game,rng):
 
 def _cpu_turn(game,cpu,rng):
     camps=[x for x in game["map"] if x.get("owner") is None and (x.get("claim") or {}).get("owner")==cpu["id"]]
-    if camps:
-        camp=rng.choice(camps); claim=camp["claim"]
-        if game["turn"]<=claim.get("started_turn",0) or claim.get("last_progress_turn")==game["turn"]: return
+    eligible_camps=[camp for camp in camps if game["turn"]>camp["claim"].get("started_turn",0) and camp["claim"].get("last_progress_turn")!=game["turn"]]
+    if eligible_camps:
+        camp=rng.choice(eligible_camps); claim=camp["claim"]
         claim["progress"]=int(claim.get("progress",0))+1
         claim["last_progress_turn"]=game["turn"]
         if claim["progress"]>=2:
@@ -306,7 +328,15 @@ def _cpu_turn(game,cpu,rng):
     if cpu["id"] in coalition.get("members",[]):
         coalition_frontier=[pair for pair in frontier if pair[1].get("owner")==coalition.get("target") or (pair[1].get("claim") or {}).get("owner")==coalition.get("target")]
         if coalition_frontier: frontier=coalition_frontier
-    if frontier and rng.random()<(0.46 if cpu["purpose"] in {"拡大","軍備","機会"} else 0.24):
+    threatened=[cell for cell in owned if any(x.get("owner") not in {None,cpu["id"]} for x in adjacent_cells(game,cell))]
+    if threatened and cpu["wealth"]>=5 and min(x["troops"] for x in threatened)<7 and rng.random()<.46:
+        cell=min(threatened,key=lambda x:x["troops"]); cpu["wealth"]-=5; cell["troops"]+=4; cpu["actions"]["defend"]+=1; return
+    if threatened and cpu["wealth"]>=8 and rng.random()<.16:
+        choices=[x for x in threatened if not x.get("structure")]
+        if choices:
+            cpu["wealth"]-=8; rng.choice(choices)["structure"]="fort"; cpu["actions"]["build"]+=1; return
+    advance_chance=.72 if cpu["purpose"] in {"拡大","軍備","機会"} else (.52 if cpu["purpose"] in {"均衡","守備","生存"} else .42)
+    if frontier and rng.random()<advance_chance:
         source,target=rng.choice(frontier)
         if source["troops"]>=4:
             moving=max(2,source["troops"]//2); source["troops"]-=moving
@@ -320,7 +350,15 @@ def _cpu_turn(game,cpu,rng):
                     target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
                     cpu["actions"]["battle"]+=1
                 else: target["troops"]=max(1,target["troops"]-max(1,moving//2))
-            elif moving+rng.randint(0,3)>target["troops"]+rng.randint(0,3): target.update(owner=cpu["id"],troops=max(2,moving-target["troops"])); cpu["actions"]["battle"]+=1
+            else:
+                defender_id=target["owner"]
+                defence=target["troops"]+{"fort":5,"capital":8}.get(target.get("structure"),0)+{"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)+rng.randint(0,3)
+                attack=moving+rng.randint(0,3)
+                if attack>defence:
+                    was_capital=target.get("structure")=="capital"
+                    target.update(owner=cpu["id"],troops=max(2,attack-defence),claim=None); cpu["actions"]["battle"]+=1
+                    if was_capital: _capital_surrender(game,cpu["id"],defender_id)
+                else: target["troops"]=max(1,defence-attack)
     elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1
     elif cpu["purpose"] in {"交易","富国","外交"}: cpu["wealth"]+=3; cpu["actions"]["trade"]+=1
     else: rng.choice(owned)["troops"]+=1
@@ -359,7 +397,8 @@ def _coalition_muster(game):
 
 def _sync(game):
     for item in game["nations"]:
-        item["territory"]=sum(x["owner"]==item["id"] for x in game["map"]); item["alive"]=item["territory"]>0
+        owned=[x for x in game["map"] if x["owner"]==item["id"]]
+        item["territory"]=len(owned); item["army"]=sum(x.get("troops",0) for x in owned); item["alive"]=item["territory"]>0
 
 def apply_policy(game,policy,now=None,seed=None):
     """Legacy helper. Policies are no longer shown to players."""
