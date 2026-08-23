@@ -28,6 +28,8 @@ def normalize_game(game):
     for key,value in default.items(): game.setdefault(key,deepcopy(value))
     if not game.get("map"): game["map"]=_initial_map()
     for i,item in enumerate(game["nations"]): item.setdefault("actions",deepcopy(default["nations"][i]["actions"]))
+    for cell in game["map"]:
+        cell.setdefault("claim", None)
     _sync(game); return game
 
 def nation(game,nation_id): return next(x for x in game["nations"] if x["id"]==nation_id)
@@ -54,14 +56,30 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
         if source["troops"]<3: raise ValueError("この地域には進軍できる兵が足りません。")
         moving=max(2,source["troops"]//2)
         if target["owner"] is None:
-            if player["wealth"]<3: raise ValueError("進出には軍資金が3必要です。")
-            player["wealth"]-=3; source["troops"]-=moving; target.update(owner=pid,troops=moving); player["actions"]["expand"]+=1; message=f"{target['id']}へ進出し、新しい領土を得た。"
+            claim = target.get("claim") or {}
+            if claim.get("owner") != pid:
+                if player["wealth"]<2: raise ValueError("進出準備には軍資金が2必要です。")
+                player["wealth"]-=2
+                target["claim"]={"owner":pid,"progress":1}
+                player["actions"]["expand"]+=1
+                message=f"{target['id']}に先遣隊を置いた。もう一度進軍すると領土になります。"
+            else:
+                if player["wealth"]<2: raise ValueError("領土化には軍資金が2必要です。")
+                player["wealth"]-=2; source["troops"]-=moving
+                target.update(owner=pid,troops=moving,claim=None)
+                player["actions"]["expand"]+=1
+                message=f"{target['id']}の統治を固め、新しい領土を得た。"
         elif target["owner"]==pid:
             source["troops"]-=moving; target["troops"]+=moving; player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
         else:
             defender=nation(game,target["owner"]); attack=moving+rng.randint(0,3); defence=target["troops"]+(5 if target["structure"]=="fort" else 0)+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
-            if attack>defence: defender["morale"]=max(15,defender["morale"]-5); target.update(owner=pid,troops=max(2,attack-defence)); message=f"{defender['name']}との戦に勝ち、地域を奪った。"
-            else: target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3); message=f"{defender['name']}の守りを崩せず、兵を退いた。"
+            if attack>defence:
+                defender["morale"]=max(15,defender["morale"]-5)
+                target.update(owner=pid,troops=max(2,attack-defence),claim=None)
+                message=f"戦力 {attack} 対 {defence}。{defender['name']}に勝ち、地域を奪った。"
+            else:
+                target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
+                message=f"戦力 {attack} 対 {defence}。{defender['name']}の守りを崩せず、兵を退いた。"
     elif action in {"town","fort"}:
         if source.get("structure"): raise ValueError("ここにはすでに施設があります。")
         cost=10 if action=="town" else 8
@@ -94,7 +112,13 @@ def _cpu_turn(game,cpu,rng):
         source,target=rng.choice(frontier)
         if source["troops"]>=4:
             moving=max(2,source["troops"]//2); source["troops"]-=moving
-            if target["owner"] is None: target.update(owner=cpu["id"],troops=moving); cpu["actions"]["expand"]+=1
+            if target["owner"] is None:
+                claim=target.get("claim") or {}
+                if claim.get("owner")==cpu["id"]:
+                    target.update(owner=cpu["id"],troops=moving,claim=None); cpu["actions"]["expand"]+=1
+                else:
+                    source["troops"]+=moving
+                    target["claim"]={"owner":cpu["id"],"progress":1}
             elif moving+rng.randint(0,3)>target["troops"]+rng.randint(0,3): target.update(owner=cpu["id"],troops=max(2,moving-target["troops"])); cpu["actions"]["battle"]+=1
     elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1
     elif cpu["purpose"] in {"交易","富国","外交"}: cpu["wealth"]+=3; cpu["actions"]["trade"]+=1
