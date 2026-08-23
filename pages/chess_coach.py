@@ -1,12 +1,13 @@
 from nicegui import ui
 
 from core.auth import require_app_access, selected_user_id
-from core.chess_coach import board_from, legal_targets, new_game, play_user_move
+from core.chess_coach import board_from, legal_targets, new_game, play_user_move, undo_full_turn
 from core.data import data
 from core.theme import Theme
 
 
-PIECES={"P":"♙","N":"♘","B":"♗","R":"♖","Q":"♕","K":"♔",
+# 白黒とも同じシルエットを使い、色だけを変える。輪郭駒と塗り駒の混在を防ぐ。
+PIECES={"P":"♟","N":"♞","B":"♝","R":"♜","Q":"♛","K":"♚",
         "p":"♟","n":"♞","b":"♝","r":"♜","q":"♛","k":"♚"}
 
 
@@ -34,6 +35,12 @@ def chess_coach_page():
     def reset():
         game.clear(); game.update(new_game()); state.update(selected=None,targets=[],home=False); save(); render.refresh()
 
+    def undo():
+        try:
+            undo_full_turn(game); state.update(selected=None,targets=[]); save(); ui.notify('あなたと先生の手を戻しました')
+        except ValueError as error: ui.notify(str(error),type='warning')
+        render.refresh()
+
     @ui.refreshable
     def render():
         if state['home']:
@@ -50,7 +57,9 @@ def chess_coach_page():
                 ui.button(icon='arrow_back',on_click=lambda:(state.update(home=True),render.refresh())).props('flat round').classes('header-back')
                 with ui.column().classes('gap-0'):
                     ui.label('CHESS MENTOR').classes('mentor-title'); ui.label('指導対局・あなたは白').classes('mentor-subtitle')
-                ui.button(icon='restart_alt',on_click=reset).props('flat round').classes('header-reset').tooltip('最初から')
+                with ui.row().classes('gap-0'):
+                    ui.button(icon='undo',on_click=undo).props('flat round').classes('header-reset').tooltip('一手戻す')
+                    ui.button(icon='restart_alt',on_click=reset).props('flat round').classes('header-reset').tooltip('最初から')
             with ui.element('section').classes('lesson-status'):
                 ui.label(f"LESSON {len(game.get('history',[]))//2+1:02d}").classes('lesson-number')
                 ui.label('あなたの手番').classes('turn-title')

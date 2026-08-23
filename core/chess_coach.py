@@ -93,6 +93,10 @@ def explain_move(before, move, actor="あなた"):
     attackers = after.attackers(not after.turn, move.to_square)
     defenders = after.attackers(after.turn, move.to_square)
     if attackers and not defenders: cautions.append(f"移動先の{name}が相手に狙われています")
+    elif attackers:
+        cheapest=min((PIECE_VALUES[after.piece_at(sq).piece_type] for sq in attackers),default=9999)
+        if cheapest<=PIECE_VALUES[piece.piece_type]:
+            cautions.append(f"{name}は次に取られる可能性があります。交換して得かまで確認が必要です")
     if not reasons: reasons.append(f"{name}の位置を変え、次の展開を作る一手です")
     if not cautions: cautions.append("次は相手の狙いを確認してから、自分の攻撃を続けましょう")
     return reasons, cautions
@@ -109,7 +113,9 @@ def candidate_moves(board, count=3):
         if piece.piece_type==chess.QUEEN and len(board.move_stack)<8: bonus-=45
         board.push(move)
         if board.is_check(): bonus+=14
-        score=_score(board)+(bonus if not board.turn else -bonus)
+        # 候補手は相手の最善の返しまで読む。単に「駒を出した」だけの手を
+        # 高評価にしないため、静的評価ではなく1手先のミニマックスを使う。
+        score=_minimax(board,1,-math.inf,math.inf)+(bonus if not board.turn else -bonus)
         board.pop()
         scored.append((score, move))
     scored.sort(key=lambda item:item[0], reverse=board.turn)
@@ -124,14 +130,14 @@ def play_user_move(game, source, target, seed=None):
     move = next((m for m in candidates if m.promotion==chess.QUEEN), candidates[0])
     before=board.copy(); user_reasons,user_cautions=explain_move(before,move)
     san=before.san(move); board.push(move)
-    game.setdefault("history",[]).append({"side":"あなた","move":san,"from":source,"to":target})
+    game.setdefault("history",[]).append({"side":"あなた","move":san,"from":source,"to":target,"fen_before":before.fen()})
     if board.is_game_over():
         title="勝利！" if board.is_checkmate() else "対局終了"
         game["fen"]=board.fen(); game["coach"]={"title":title,"verdict":"FINISH","summary":"最後まで指し切りました。","why":" / ".join(user_reasons),"danger":" / ".join(user_cautions),"candidates":[]}; return
     reply=cpu_move(board,seed)
     cpu_before=board.copy(); cpu_reasons,cpu_cautions=explain_move(cpu_before,reply,"先生")
     cpu_san=cpu_before.san(reply); board.push(reply)
-    game["history"].append({"side":"先生","move":cpu_san,"from":chess.square_name(reply.from_square),"to":chess.square_name(reply.to_square)})
+    game["history"].append({"side":"先生","move":cpu_san,"from":chess.square_name(reply.from_square),"to":chess.square_name(reply.to_square),"fen_before":cpu_before.fen()})
     delta=_score(board)-_score(chess.Board())
     verdict="GOOD" if delta>=-80 else ("CAREFUL" if delta>=-220 else "RETHINK")
     labels={"GOOD":"いい一手","CAREFUL":"少し注意","RETHINK":"考え直せる一手"}
@@ -141,3 +147,17 @@ def play_user_move(game, source, target, seed=None):
         "danger":f"相手の意図：{' / '.join(cpu_reasons)}。{' / '.join(user_cautions)}",
         "candidates":candidate_moves(board)}
     game["fen"]=board.fen()
+
+
+def undo_full_turn(game):
+    """Undo the teacher reply and the player's preceding move."""
+    history=game.setdefault("history",[])
+    user_index=next((i for i in range(len(history)-1,-1,-1) if history[i].get("side")=="あなた"),None)
+    if user_index is None: raise ValueError("まだ戻せる手がありません。")
+    fen=history[user_index].get("fen_before")
+    if not fen: raise ValueError("この対局の古い手は戻せません。次の一手から利用できます。")
+    del history[user_index:]
+    game["fen"]=fen
+    game["coach"]={"title":"一手戻しました","verdict":"GUIDE",
+        "summary":"別の考え方を試してみましょう。","why":"失敗を戻して比較することも、上達の大切な練習です。",
+        "danger":"相手の次の一手を予想してから指してみましょう。","candidates":candidate_moves(chess.Board(fen))}
