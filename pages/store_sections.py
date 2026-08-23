@@ -106,6 +106,7 @@ def inventory_page():
     is_owner = current_role() == "owner"
     record_date = operational_date_jst().isoformat()
     purchase_quantities = store_ops.purchase_quantities(record_date)
+    reset_at = store_ops.inventory_check_reset_at()
     content = section_shell("在庫確認", "現在の在庫をまとめて入力")
     with content:
         fields, purchase_fields = [], []
@@ -116,6 +117,8 @@ def inventory_page():
             with ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
                               value=False).classes("surface-card w-full q-mb-sm"):
                 for item in category_items:
+                    last_check = str(item.get("last_inventory_check_at", ""))
+                    was_reset = bool(reset_at and (not last_check or last_check <= reset_at))
                     with ui.row().classes("inventory-row-new w-full items-center no-wrap"):
                         with ui.column().classes("gap-0 grow min-w-0"):
                             ui.label(item["name"]).classes("text-xs font-black")
@@ -126,13 +129,13 @@ def inventory_page():
                                                 "outlined dense inputmode=decimal").classes("buy-field")
                             purchase_fields.append((item["id"], buy))
                         if item.get("tracking_mode") == "count":
-                            field = ui.number(value=item.get("current_stock"), step=.1,
+                            field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
                                               suffix=item.get("unit", "個")).props(
                                                   "outlined dense inputmode=decimal").classes("stock-field")
                             fields.append((item["id"], "count", field))
                         else:
                             field = ui.select({"enough": "十分", "low": "少ない", "out": "なし"},
-                                              value=item.get("status", "enough")).props(
+                                              value=None if was_reset else item.get("status", "enough")).props(
                                                   "outlined dense options-dense").classes("stock-field")
                             fields.append((item["id"], "status", field))
 
@@ -151,6 +154,23 @@ def inventory_page():
 
         ui.button("まとめて保存", icon="save", on_click=save_all).classes("w-full q-mt-md")
         if is_owner:
+            with ui.dialog() as reset_dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
+                ui.label("在庫確認をリセットしますか？").classes("text-lg font-black")
+                ui.label("現在の入力欄だけを未入力に戻します。商品・確認履歴・仕入れ予定は消えません。").classes(
+                    "text-xs text-grey-7 q-mt-sm")
+
+                def reset_check():
+                    store_ops.reset_inventory_check()
+                    reset_dialog.close()
+                    ui.navigate.to("/store-ops/inventory")
+
+                with ui.row().classes("w-full gap-2 q-mt-md"):
+                    ui.button("戻る", on_click=reset_dialog.close).props("flat").classes("grow")
+                    ui.button("リセット", icon="restart_alt", on_click=reset_check).props(
+                        "unelevated color=negative").classes("grow")
+
+            ui.button("在庫確認をリセット", icon="restart_alt", on_click=reset_dialog.open).props(
+                "outline color=negative no-caps").classes("w-full q-mt-sm")
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
                 "/store-ops/purchase-list")).props("outline no-caps").classes("w-full q-mt-sm")
         ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:100px}.buy-field{width:60px}.buy-field input{color:#C84949!important;font-weight:900!important}")

@@ -102,7 +102,7 @@ class StoreOperationsManager:
                     raise ValueError(f"{item['name']}の在庫状態を選んでください。")
                 prepared.append((item, "status", status))
 
-        checked_at = datetime.now().isoformat(timespec="seconds")
+        checked_at = datetime.now().isoformat(timespec="microseconds")
         for item, kind, value in prepared:
             if kind == "count":
                 item["current_stock"] = value
@@ -120,6 +120,17 @@ class StoreOperationsManager:
         if prepared:
             self._data_manager.save()
         return len(prepared)
+
+    def inventory_check_reset_at(self):
+        """在庫確認フォームを最後に手動リセットした時刻を返す。"""
+        return str(self._data_manager.data.get("store_inventory_check_reset_at", ""))
+
+    def reset_inventory_check(self):
+        """在庫の実績や発注情報を残したまま、確認フォームだけを未入力に戻す。"""
+        reset_at = datetime.now().isoformat(timespec="microseconds")
+        self._data_manager.data["store_inventory_check_reset_at"] = reset_at
+        self._data_manager.save()
+        return reset_at
 
     def update_count_settings(self, item_id, unit, required_stock=None,
                               reorder_point=None, current_stock=None):
