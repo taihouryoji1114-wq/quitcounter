@@ -11,26 +11,24 @@ def test_policy_advances_turn_and_is_deterministic_with_seed():
     assert nation(game, "n0")["walls"] == 10
 
 
-def test_new_world_is_large_and_spreads_ten_capitals():
+def test_new_world_uses_real_tokyo_regions_and_spreads_ten_capitals():
     game = initial_game()
     capitals = [cell for cell in game["map"] if cell["structure"] == "capital"]
-    assert len(game["map"]) == 140
+    assert len(game["map"]) == 53
     assert len(capitals) == 10
-    assert max(cell["row"] for cell in capitals) >= 9
-    assert max(cell["col"] for cell in capitals) >= 13
+    assert map_cell(game, "13122")["name"] == "葛飾区"
+    assert map_cell(game, "13122")["owner"] == "n0"
+    assert "13121" in map_cell(game, "13122")["neighbors"]
 
 
-def test_old_small_world_expands_without_losing_progress():
+def test_old_grid_world_is_kept_as_recovery_snapshot():
     game = initial_game()
-    game["map"] = [cell for cell in game["map"] if cell["row"] < 6 and cell["col"] < 8]
-    game.pop("version")
-    game.pop("rows")
-    game.pop("cols")
-    map_cell(game, "r0c0")["troops"] = 19
+    game["map"] = [{"id": "r0c0", "row": 0, "col": 0, "owner": "n0", "troops": 19}]
+    game.pop("map_kind")
     normalize_game(game)
-    assert len(game["map"]) == 140
-    assert map_cell(game, "r0c0")["troops"] == 19
-    assert game["version"] == 2
+    assert len(game["map"]) == 53
+    assert game["legacy_grid_map"][0]["troops"] == 19
+    assert game["version"] == 3
 
 
 def test_large_country_has_cohesion_cost():
@@ -42,17 +40,17 @@ def test_large_country_has_cohesion_cost():
 
 def test_map_advance_requires_two_explicit_occupation_turns():
     game = initial_game()
-    perform_map_action(game, "advance", "r0c0", "r0c1", seed=2)
-    assert map_cell(game, "r0c1")["owner"] is None
-    assert map_cell(game, "r0c1")["claim"]["owner"] == "n0"
-    assert map_cell(game, "r0c1")["troops"] > 0
+    perform_map_action(game, "advance", "13122", "13121", seed=2)
+    assert map_cell(game, "13121")["owner"] is None
+    assert map_cell(game, "13121")["claim"]["owner"] == "n0"
+    assert map_cell(game, "13121")["troops"] > 0
 
-    perform_map_action(game, "occupy", "r0c1", seed=2)
-    assert map_cell(game, "r0c1")["owner"] is None
-    assert map_cell(game, "r0c1")["claim"]["progress"] == 1
+    perform_map_action(game, "occupy", "13121", seed=2)
+    assert map_cell(game, "13121")["owner"] is None
+    assert map_cell(game, "13121")["claim"]["progress"] == 1
 
-    perform_map_action(game, "occupy", "r0c1", seed=2)
-    assert map_cell(game, "r0c1")["owner"] == "n0"
+    perform_map_action(game, "occupy", "13121", seed=2)
+    assert map_cell(game, "13121")["owner"] == "n0"
     assert nation(game, "n0")["territory"] == 2
     assert game["turn"] == 4
 
@@ -78,8 +76,8 @@ def test_old_save_receives_diplomacy_without_losing_progress():
 def test_alliance_blocks_friendly_fire():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
-    source = map_cell(game, "r0c0")
-    target = map_cell(game, "r0c1")
+    source = map_cell(game, "13122")
+    target = map_cell(game, "13121")
     target.update(owner="n1", troops=2)
     before = source["troops"]
     try:
@@ -94,8 +92,8 @@ def test_alliance_blocks_friendly_fire():
 def test_allied_reinforcements_reach_weakest_threatened_border():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
-    border = map_cell(game, "r0c0")
-    enemy = map_cell(game, "r0c1")
+    border = map_cell(game, "13122")
+    enemy = map_cell(game, "13121")
     enemy.update(owner="n2", troops=6)
     before = border["troops"]
     message = request_reinforcements(game, "n1", seed=1)
@@ -107,7 +105,7 @@ def test_allied_reinforcements_reach_weakest_threatened_border():
 def test_allied_reinforcements_have_a_cooldown():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
-    map_cell(game, "r0c1").update(owner="n2", troops=6)
+    map_cell(game, "13121").update(owner="n2", troops=6)
     request_reinforcements(game, "n1", seed=1)
     try:
         request_reinforcements(game, "n1", seed=1)
@@ -118,18 +116,18 @@ def test_allied_reinforcements_have_a_cooldown():
 
 def test_ambush_requires_a_forest_source_and_is_reported():
     game = initial_game()
-    source = map_cell(game, "r0c0")
+    source = map_cell(game, "13122")
     source["terrain"] = "forest"
-    map_cell(game, "r0c1").update(owner="n2", troops=2)
-    message = perform_map_action(game, "advance", "r0c0", "r0c1", seed=1, tactic="ambush")
+    map_cell(game, "13121").update(owner="n2", troops=2)
+    message = perform_map_action(game, "advance", "13122", "13121", seed=1, tactic="ambush")
     assert "伏兵" in message
 
 
 def test_pincer_requires_two_friendly_fronts():
     game = initial_game()
-    target = map_cell(game, "r0c1")
+    target = map_cell(game, "13107")
     target.update(owner="n2", troops=2)
-    second_front = map_cell(game, "r1c1")
+    second_front = map_cell(game, "13121")
     second_front.update(owner="n0", troops=4)
-    message = perform_map_action(game, "advance", "r0c0", "r0c1", seed=1, tactic="pincer")
+    message = perform_map_action(game, "advance", "13122", "13107", seed=1, tactic="pincer")
     assert "挟撃" in message

@@ -1,48 +1,58 @@
 """Playable turn-based solo nation strategy rules for 大王."""
 from copy import deepcopy
 from datetime import datetime
+import json
+from pathlib import Path
 import random
 
 POLICIES={"prosper":("富国","国力と収入を伸ばす",2,0,1),"train":("訓練","兵を鍛える",0,3,0),"guard":("守備","守りを整える",0,1,3),"trade":("交易","資金を得る",3,0,1)}
 NATION_SEEDS=(("暁国","均衡"),("北嶺","守備"),("蒼海","交易"),("紅蓮","拡大"),("白峰","富国"),("翠野","生存"),("紫雲","機会"),("金砂","交易"),("黒鉄","軍備"),("月影","外交"))
-MAP_VERSION=2
-ROWS,COLS=10,14
-CAPITALS=((0,0),(0,5),(0,10),(3,3),(3,8),(3,13),(6,1),(6,6),(7,11),(9,4))
+MAP_VERSION=3
+MAP_KIND="tokyo_mainland"
+_MAP_DATA=json.loads((Path(__file__).resolve().parents[1]/"static"/"daiou_tokyo_map.json").read_text())
+_REGIONS={item["id"]:item for item in _MAP_DATA["regions"]}
+# The player begins in 葛飾区.  The other powers are spread through the 23
+# wards and Tama so no single country starts with an automatic advantage.
+CAPITALS={"13122":"n0","13201":"n1","13111":"n2","13120":"n3","13112":"n4",
+          "13205":"n5","13108":"n6","13209":"n7","13202":"n8","13104":"n9"}
 TERRAINS=("plain","plain","forest","plain","hill","plain","river")
 
-def _terrain(row,col):
-    return TERRAINS[(row*5+col*3+row*col)%len(TERRAINS)]
-
 def _initial_map():
-    capitals={p:f"n{i}" for i,p in enumerate(CAPITALS)}; cells=[]
-    for row in range(ROWS):
-        for col in range(COLS):
-            owner=capitals.get((row,col))
-            cells.append({"id":f"r{row}c{col}","row":row,"col":col,"terrain":_terrain(row,col),"owner":owner,"structure":"capital" if owner else None,"troops":8 if owner else 0})
+    cells=[]
+    for region in _MAP_DATA["regions"]:
+        owner=CAPITALS.get(region["id"])
+        cells.append({"id":region["id"],"name":region["name"],"terrain":region["terrain"],
+                      "neighbors":region["neighbors"],"owner":owner,
+                      "structure":"capital" if owner else None,"troops":8 if owner else 0})
     return cells
+
+def map_viewbox(): return _MAP_DATA["viewBox"]
+def region_shape(region_id): return _REGIONS[region_id]
 
 def initial_game(now=None):
     now=now or datetime.now(); nations=[]
     for i,(name,purpose) in enumerate(NATION_SEEDS):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
-    return {"version":MAP_VERSION,"rows":ROWS,"cols":COLS,"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"support_history":{},"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
+    return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"support_history":{},"log":["葛飾の地から、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
+    previous_map_kind=game.get("map_kind")
     default=initial_game()
     for key,value in default.items(): game.setdefault(key,deepcopy(value))
+    if previous_map_kind != MAP_KIND:
+        # Never discard the former board.  It remains embedded in the save as
+        # a recovery snapshot while the active campaign moves to real regions.
+        if game.get("map") and not game.get("legacy_grid_map"):
+            game["legacy_grid_map"]=deepcopy(game["map"])
+        game["map"]=_initial_map()
+        game["log"]=["旧天下盤を保存し、葛飾から実在地域で再出発した。"]+game.get("log",[])
     if not game.get("map"): game["map"]=_initial_map()
-    # Older saves keep every existing country, army and building. The wider
-    # world is added around that progress instead of replacing the save.
-    existing={(int(cell.get("row",0)),int(cell.get("col",0))) for cell in game["map"]}
-    for row in range(ROWS):
-        for col in range(COLS):
-            if (row,col) not in existing:
-                game["map"].append({"id":f"r{row}c{col}","row":row,"col":col,
-                                    "terrain":_terrain(row,col),"owner":None,
-                                    "structure":None,"troops":0,"claim":None})
-    game.update(version=MAP_VERSION,rows=ROWS,cols=COLS)
+    game.update(version=MAP_VERSION,map_kind=MAP_KIND)
     for i,item in enumerate(game["nations"]): item.setdefault("actions",deepcopy(default["nations"][i]["actions"]))
     for cell in game["map"]:
+        region=_REGIONS.get(cell["id"],{})
+        cell.setdefault("name",region.get("name",cell["id"]))
+        cell.setdefault("neighbors",region.get("neighbors",[]))
         cell.setdefault("claim", None)
         # Older saves only recorded a scout marker. Treat it as a forward camp
         # so the save can continue under the explicit occupation flow.
@@ -54,7 +64,9 @@ def normalize_game(game):
 
 def nation(game,nation_id): return next(x for x in game["nations"] if x["id"]==nation_id)
 def map_cell(game,cell_id): return next(x for x in game["map"] if x["id"]==cell_id)
-def adjacent_cells(game,source): return [x for x in game["map"] if abs(x["row"]-source["row"])+abs(x["col"]-source["col"])==1]
+def adjacent_cells(game,source):
+    neighbor_ids=set(source.get("neighbors",[]))
+    return [x for x in game["map"] if x["id"] in neighbor_ids]
 
 def relation_key(a,b): return "|".join(sorted((a,b)))
 def relation(game,a,b):
@@ -168,7 +180,7 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             target["troops"]=moving
             target["claim"]={"owner":pid,"progress":0,"started_turn":game["turn"]}
             player["actions"]["expand"]+=1
-            message=f"{target['id']}へ進軍し、先遣隊が野営を始めた。次のターンから領土化できます。"
+            message=f"{target.get('name',target['id'])}へ進軍し、先遣隊が野営を始めた。次のターンから領土化できます。"
         elif target["owner"]==pid:
             source["troops"]-=moving; target["troops"]+=moving; player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
         else:
@@ -196,9 +208,9 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
         if claim["progress"]>=2:
             source.update(owner=pid,claim=None)
             player["actions"]["expand"]+=1
-            message=f"{source['id']}を2ターン守り抜き、正式な領土とした。"
+            message=f"{source.get('name',source['id'])}を2ターン守り抜き、正式な領土とした。"
         else:
-            message=f"{source['id']}の領土化を進めた。あと1ターン守れば自国領になる。"
+            message=f"{source.get('name',source['id'])}の領土化を進めた。あと1ターン守れば自国領になる。"
     elif action in {"town","fort"}:
         if source.get("structure"): raise ValueError("ここにはすでに施設があります。")
         cost=10 if action=="town" else 8
