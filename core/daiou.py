@@ -30,6 +30,12 @@ def normalize_game(game):
     for i,item in enumerate(game["nations"]): item.setdefault("actions",deepcopy(default["nations"][i]["actions"]))
     for cell in game["map"]:
         cell.setdefault("claim", None)
+        # Older saves only recorded a scout marker. Treat it as a forward camp
+        # so the save can continue under the explicit occupation flow.
+        if cell.get("claim"):
+            cell["claim"].setdefault("progress", 0)
+            cell["claim"].setdefault("started_turn", max(1, game.get("turn", 1)-1))
+            cell["troops"] = max(2, int(cell.get("troops", 0)))
     _sync(game); return game
 
 def nation(game,nation_id): return next(x for x in game["nations"] if x["id"]==nation_id)
@@ -47,7 +53,9 @@ def derived_identity(item):
 
 def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
     normalize_game(game); pid=game["player"]; player=nation(game,pid); source=map_cell(game,source_id)
-    if source["owner"]!=pid: raise ValueError("自分の領土を選んでください。")
+    is_player_camp=source["owner"] is None and (source.get("claim") or {}).get("owner")==pid
+    if source["owner"]!=pid and not (action=="occupy" and is_player_camp):
+        raise ValueError("自分の領土を選んでください。")
     rng=random.Random(seed if seed is not None else game["turn"]*104729)
     if action in {"advance","invade"}:
         if not target_id: raise ValueError("進む先を選んでください。")
@@ -57,18 +65,26 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
         moving=max(2,source["troops"]//2)
         if target["owner"] is None:
             claim = target.get("claim") or {}
-            if claim.get("owner") != pid:
-                if player["wealth"]<2: raise ValueError("進出準備には軍資金が2必要です。")
-                player["wealth"]-=2
-                target["claim"]={"owner":pid,"progress":1}
-                player["actions"]["expand"]+=1
-                message=f"{target['id']}に先遣隊を置いた。もう一度進軍すると領土になります。"
-            else:
-                if player["wealth"]<2: raise ValueError("領土化には軍資金が2必要です。")
-                player["wealth"]-=2; source["troops"]-=moving
-                target.update(owner=pid,troops=moving,claim=None)
-                player["actions"]["expand"]+=1
-                message=f"{target['id']}の統治を固め、新しい領土を得た。"
+            if claim.get("owner") == pid:
+                raise ValueError("先遣隊は到着済みです。その野営地を選び『領土化』を進めてください。")
+            if claim.get("owner"):
+                defender=nation(game,claim["owner"]); attack=moving+rng.randint(0,3); defence=target["troops"]+rng.randint(0,3)
+                source["troops"]-=moving; player["actions"]["battle"]+=1
+                if attack>defence:
+                    target["troops"]=max(2,attack-defence)
+                    target["claim"]={"owner":pid,"progress":0,"started_turn":game["turn"]}
+                    defender["morale"]=max(15,defender["morale"]-4)
+                    message=f"戦力 {attack} 対 {defence}。{defender['name']}の野営地を破り、先遣隊を置いた。"
+                else:
+                    target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
+                    message=f"戦力 {attack} 対 {defence}。{defender['name']}の野営地を崩せず退いた。"
+                _advance_world(game,rng); _sync(game); game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=(now or datetime.now()).isoformat(timespec="seconds"); return message
+            if player["wealth"]<2: raise ValueError("進出準備には軍資金が2必要です。")
+            player["wealth"]-=2; source["troops"]-=moving
+            target["troops"]=moving
+            target["claim"]={"owner":pid,"progress":0,"started_turn":game["turn"]}
+            player["actions"]["expand"]+=1
+            message=f"{target['id']}へ進軍し、先遣隊が野営を始めた。次のターンから領土化できます。"
         elif target["owner"]==pid:
             source["troops"]-=moving; target["troops"]+=moving; player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
         else:
@@ -80,6 +96,19 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None):
             else:
                 target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
                 message=f"戦力 {attack} 対 {defence}。{defender['name']}の守りを崩せず、兵を退いた。"
+    elif action=="occupy":
+        claim=source.get("claim") or {}
+        if source["owner"] is not None or claim.get("owner")!=pid:
+            raise ValueError("自国の先遣隊がいる中立地を選んでください。")
+        if game["turn"]<=claim.get("started_turn",0):
+            raise ValueError("到着したターンには領土化できません。次のターンまで守ってください。")
+        claim["progress"]=int(claim.get("progress",0))+1
+        if claim["progress"]>=2:
+            source.update(owner=pid,claim=None)
+            player["actions"]["expand"]+=1
+            message=f"{source['id']}を2ターン守り抜き、正式な領土とした。"
+        else:
+            message=f"{source['id']}の領土化を進めた。あと1ターン守れば自国領になる。"
     elif action in {"town","fort"}:
         if source.get("structure"): raise ValueError("ここにはすでに施設があります。")
         cost=10 if action=="town" else 8
@@ -104,6 +133,13 @@ def _advance_world(game,rng):
     game["turn"]+=1; game["season"]=("春","夏","秋","冬")[(game["turn"]-1)%4]
 
 def _cpu_turn(game,cpu,rng):
+    camps=[x for x in game["map"] if x.get("owner") is None and (x.get("claim") or {}).get("owner")==cpu["id"]]
+    if camps:
+        camp=rng.choice(camps); claim=camp["claim"]
+        claim["progress"]=int(claim.get("progress",0))+1
+        if claim["progress"]>=2:
+            camp.update(owner=cpu["id"],claim=None); cpu["actions"]["expand"]+=1
+        return
     owned=[x for x in game["map"] if x["owner"]==cpu["id"]]
     if not owned: cpu["alive"]=False; return
     cpu["wealth"]+=len(owned)+sum(2 for x in owned if x["structure"]=="town")
@@ -114,11 +150,14 @@ def _cpu_turn(game,cpu,rng):
             moving=max(2,source["troops"]//2); source["troops"]-=moving
             if target["owner"] is None:
                 claim=target.get("claim") or {}
-                if claim.get("owner")==cpu["id"]:
-                    target.update(owner=cpu["id"],troops=moving,claim=None); cpu["actions"]["expand"]+=1
-                else:
-                    source["troops"]+=moving
-                    target["claim"]={"owner":cpu["id"],"progress":1}
+                if claim.get("owner") is None:
+                    target["troops"]=moving
+                    target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
+                elif moving+rng.randint(0,3)>target["troops"]+rng.randint(0,3):
+                    target["troops"]=max(2,moving-target["troops"])
+                    target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
+                    cpu["actions"]["battle"]+=1
+                else: target["troops"]=max(1,target["troops"]-max(1,moving//2))
             elif moving+rng.randint(0,3)>target["troops"]+rng.randint(0,3): target.update(owner=cpu["id"],troops=max(2,moving-target["troops"])); cpu["actions"]["battle"]+=1
     elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1
     elif cpu["purpose"] in {"交易","富国","外交"}: cpu["wealth"]+=3; cpu["actions"]["trade"]+=1

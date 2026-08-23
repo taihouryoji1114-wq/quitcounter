@@ -22,13 +22,14 @@ def daiou_page():
         if not state["selected"]: ui.notify('先に金色の自国領を選んでください',type='warning'); return
         try:
             message=perform_map_action(game,action,state["selected"],target); save(); ui.notify(message,type='positive')
-            if map_cell(game,state["selected"])["owner"]!=game["player"]: state["selected"]=None
+            current=map_cell(game,state["selected"])
+            if current["owner"]!=game["player"] and (current.get('claim') or {}).get('owner')!=game['player']: state["selected"]=None
             render.refresh()
         except ValueError as error: ui.notify(str(error),type='warning')
 
     def select_cell(cell_id):
         cell=map_cell(game,cell_id)
-        if cell["owner"]==game["player"]:
+        if cell["owner"]==game["player"] or (cell.get('claim') or {}).get('owner')==game['player']:
             state["selected"]=cell_id; render.refresh()
         elif state["selected"]: act('advance',cell_id)
         else: ui.notify('金色の自国領から選びます',type='info')
@@ -64,7 +65,7 @@ def daiou_page():
                         ui.label(f"{player['name']}　領土 {player['territory']}　兵力 {sum(x['troops'] for x in game['map'] if x['owner']==game['player'])}").classes('home-realm')
                     ui.button('続きから',icon='play_arrow',on_click=continue_game).props('unelevated no-caps').classes('continue-button')
                     ui.button('新しく始める',on_click=new_game_dialog.open).props('flat no-caps').classes('new-button')
-                ui.add_css(DAIOU_CSS)
+                ui.add_css(DAIOU_CSS+DAIOU_BATTLE_CSS)
                 return
             with ui.element('section').classes('daiou-hero'):
                 ui.button(icon='home',on_click=return_home).props('flat round aria-label="大王ホームへ戻る"').classes('battle-home-button')
@@ -80,35 +81,49 @@ def daiou_page():
                     for cell in game['map']:
                         classes=f"map-cell terrain-{cell['terrain']} "
                         classes+=f"owner-{cell['owner']}" if cell['owner'] else 'neutral'
+                        neighbors=[x for x in game['map'] if abs(x['row']-cell['row'])+abs(x['col']-cell['col'])==1]
+                        if cell['owner'] and any(x['owner'] not in {None,cell['owner']} for x in neighbors): classes+=' frontline'
                         if cell['id']==state['selected']: classes+=' selected'
                         with ui.element('button').classes(classes).on('click',lambda _,cid=cell['id']:select_cell(cid)):
                             ui.label(TERRAIN_ICON[cell['terrain']]).classes('terrain-mark')
                             if cell.get('structure'): ui.label(STRUCTURE_ICON[cell['structure']]).classes('structure-mark')
                             if cell.get('claim'):
                                 claim_nation=nation(game,cell['claim']['owner'])
-                                ui.label('先').classes(f"claim-mark claim-{claim_nation['id']}").tooltip(f"{claim_nation['name']}の先遣隊")
+                                progress=cell['claim'].get('progress',0)
+                                ui.label(f"陣 {progress}/2").classes(f"claim-mark claim-{claim_nation['id']}").tooltip(f"{claim_nation['name']}の野営地・領土化 {progress}/2")
                             if cell['owner']:
                                 ui.label(nation(game,cell['owner'])['name'][:1]).classes('owner-mark')
-                            if cell['owner']: ui.label(str(cell['troops'])).classes('troop-mark')
+                            if cell['owner'] or cell.get('claim'): ui.label(f"⚔ {cell['troops']}").classes('troop-mark')
             with ui.element('section').classes('command-panel'):
                 if selected:
-                    owner=nation(game,selected['owner'])
-                    ui.label(f"選択中：{owner['name']} {selected['id']}　兵 {selected['troops']}").classes('selected-title')
-                    ui.label('隣のマスをタップすると、進出・兵の移動・侵攻を実行します').classes('selected-help')
-                    with ui.element('div').classes('command-grid'):
-                        ui.button('兵を集める 5',icon='groups',on_click=lambda:act('recruit')).props('flat no-caps')
-                        ui.button('町を築く 10',icon='holiday_village',on_click=lambda:act('town')).props('flat no-caps')
-                        ui.button('砦を築く 8',icon='fort',on_click=lambda:act('fort')).props('flat no-caps')
-                        ui.button('隣国と交易',icon='handshake',on_click=lambda:act('trade')).props('flat no-caps')
+                    claim=selected.get('claim') or {}
+                    if claim.get('owner')==game['player'] and selected['owner'] is None:
+                        progress=claim.get('progress',0)
+                        ui.label(f"先遣隊の野営地　兵 {selected['troops']}").classes('selected-title')
+                        ui.label(f"領土化 {progress}/2　ここを守りながら2ターン統治を進めます").classes('selected-help')
+                        with ui.element('div').classes('occupation-progress'):
+                            for step in range(2): ui.element('span').classes('occupation-seal'+(' done' if step<progress else ''))
+                        ui.button('領土化を進める',icon='flag',on_click=lambda:act('occupy')).props('unelevated no-caps').classes('occupy-button')
+                    else:
+                        owner=nation(game,selected['owner'])
+                        ui.label(f"選択中：{owner['name']} {selected['id']}　兵 {selected['troops']}").classes('selected-title')
+                        ui.label('隣の地域を押すと、軍が進みます').classes('selected-help')
+                        with ui.element('div').classes('command-grid'):
+                            ui.button('兵を集める 5',icon='groups',on_click=lambda:act('recruit')).props('flat no-caps')
+                            ui.button('町を築く 10',icon='holiday_village',on_click=lambda:act('town')).props('flat no-caps')
+                            ui.button('砦を築く 8',icon='fort',on_click=lambda:act('fort')).props('flat no-caps')
+                            ui.button('隣国と交易',icon='handshake',on_click=lambda:act('trade')).props('flat no-caps')
                 else: ui.label('まず金色の自国領をタップ').classes('empty-command')
             with ui.expansion('十国の現在',icon='public').classes('nation-box w-full'):
                 for item in sorted(game['nations'],key=strength,reverse=True):
                     with ui.element('div').classes('nation-row'+(' player' if item['id']==game['player'] else '')):
                         ui.label(('あなた・' if item['id']==game['player'] else '')+item['name']).classes('font-black grow')
-                        ui.label(f"領土 {item['territory']}　{derived_identity(item)}").classes('nation-detail')
+                        action=max(item.get('actions',{}),key=item.get('actions',{}).get)
+                        intent={'expand':'↗ 拡大','trade':'⇄ 交易','build':'▣ 建設','defend':'⬟ 防衛','battle':'⚔ 交戦'}[action]
+                        ui.label(f"{intent}　領土 {item['territory']}").classes('nation-detail')
             with ui.expansion('国史',icon='history').classes('nation-box w-full'):
                 for line in game.get('log',[]): ui.label(line).classes('history-line')
-        ui.add_css(DAIOU_CSS)
+        ui.add_css(DAIOU_CSS+DAIOU_BATTLE_CSS)
         ui.run_javascript(DAIOU_MAP_MEMORY_SCRIPT)
     render()
 
@@ -125,6 +140,14 @@ DAIOU_MAP_MEMORY_SCRIPT = r'''
     }, {passive: true});
   });
 })();
+'''
+
+DAIOU_BATTLE_CSS='''
+.map-cell.frontline:after{content:'⚔';position:absolute;right:4px;top:23px;font-size:11px;color:#FFD36E;filter:drop-shadow(0 0 5px #D83A2E);animation:battlePulse 1.25s ease-in-out infinite}
+.claim-mark{left:18px!important;top:18px!important;width:auto!important;height:24px!important;padding:0 6px!important;border-radius:8px!important;background:linear-gradient(135deg,#F3D68B,#B88635)!important}
+.occupation-progress{display:flex;gap:8px;margin:10px 0}.occupation-seal{display:block;width:26px;height:8px;border-radius:99px;background:rgba(255,255,255,.14);border:1px solid rgba(240,201,111,.35)}
+.occupation-seal.done{background:#EFCB78;box-shadow:0 0 10px rgba(239,203,120,.5)}.occupy-button{width:100%;min-height:44px!important;background:linear-gradient(135deg,#B98332,#F0CE78)!important;color:#152018!important;font-weight:950!important;border-radius:13px!important}
+@keyframes battlePulse{50%{transform:scale(1.24);filter:drop-shadow(0 0 10px #FF4D35)}}
 '''
 
 DAIOU_CSS='''
