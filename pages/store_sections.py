@@ -153,24 +153,24 @@ def inventory_page():
             ui.notify("在庫を保存しました", type="positive")
 
         ui.button("まとめて保存", icon="save", on_click=save_all).classes("w-full q-mt-md")
+        with ui.dialog() as reset_dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
+            ui.label("在庫確認をリセットしますか？").classes("text-lg font-black")
+            ui.label("現在の入力欄だけを未入力に戻します。商品・確認履歴・管理者の仕入れ予定は消えません。").classes(
+                "text-xs text-grey-7 q-mt-sm")
+
+            def reset_check():
+                store_ops.reset_inventory_check()
+                reset_dialog.close()
+                ui.navigate.to("/store-ops/inventory")
+
+            with ui.row().classes("w-full gap-2 q-mt-md"):
+                ui.button("戻る", on_click=reset_dialog.close).props("flat").classes("grow")
+                ui.button("リセット", icon="restart_alt", on_click=reset_check).props(
+                    "unelevated color=negative").classes("grow")
+
+        ui.button("在庫確認をリセット", icon="restart_alt", on_click=reset_dialog.open).props(
+            "outline color=negative no-caps").classes("w-full q-mt-sm")
         if is_owner:
-            with ui.dialog() as reset_dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
-                ui.label("在庫確認をリセットしますか？").classes("text-lg font-black")
-                ui.label("現在の入力欄だけを未入力に戻します。商品・確認履歴・仕入れ予定は消えません。").classes(
-                    "text-xs text-grey-7 q-mt-sm")
-
-                def reset_check():
-                    store_ops.reset_inventory_check()
-                    reset_dialog.close()
-                    ui.navigate.to("/store-ops/inventory")
-
-                with ui.row().classes("w-full gap-2 q-mt-md"):
-                    ui.button("戻る", on_click=reset_dialog.close).props("flat").classes("grow")
-                    ui.button("リセット", icon="restart_alt", on_click=reset_check).props(
-                        "unelevated color=negative").classes("grow")
-
-            ui.button("在庫確認をリセット", icon="restart_alt", on_click=reset_dialog.open).props(
-                "outline color=negative no-caps").classes("w-full q-mt-sm")
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
                 "/store-ops/purchase-list")).props("outline no-caps").classes("w-full q-mt-sm")
         ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:100px}.buy-field{width:60px}.buy-field input{color:#C84949!important;font-weight:900!important}")

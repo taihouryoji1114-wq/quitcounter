@@ -11,6 +11,28 @@ def test_policy_advances_turn_and_is_deterministic_with_seed():
     assert nation(game, "n0")["walls"] == 10
 
 
+def test_new_world_is_large_and_spreads_ten_capitals():
+    game = initial_game()
+    capitals = [cell for cell in game["map"] if cell["structure"] == "capital"]
+    assert len(game["map"]) == 140
+    assert len(capitals) == 10
+    assert max(cell["row"] for cell in capitals) >= 9
+    assert max(cell["col"] for cell in capitals) >= 13
+
+
+def test_old_small_world_expands_without_losing_progress():
+    game = initial_game()
+    game["map"] = [cell for cell in game["map"] if cell["row"] < 6 and cell["col"] < 8]
+    game.pop("version")
+    game.pop("rows")
+    game.pop("cols")
+    map_cell(game, "r0c0")["troops"] = 19
+    normalize_game(game)
+    assert len(game["map"]) == 140
+    assert map_cell(game, "r0c0")["troops"] == 19
+    assert game["version"] == 2
+
+
 def test_large_country_has_cohesion_cost():
     game = initial_game()
     small = nation(game, "n0")

@@ -5,28 +5,42 @@ import random
 
 POLICIES={"prosper":("富国","国力と収入を伸ばす",2,0,1),"train":("訓練","兵を鍛える",0,3,0),"guard":("守備","守りを整える",0,1,3),"trade":("交易","資金を得る",3,0,1)}
 NATION_SEEDS=(("暁国","均衡"),("北嶺","守備"),("蒼海","交易"),("紅蓮","拡大"),("白峰","富国"),("翠野","生存"),("紫雲","機会"),("金砂","交易"),("黒鉄","軍備"),("月影","外交"))
-ROWS,COLS=6,8
-CAPITALS=((0,0),(0,3),(0,7),(2,1),(2,5),(3,7),(5,0),(5,3),(5,7),(3,3))
+MAP_VERSION=2
+ROWS,COLS=10,14
+CAPITALS=((0,0),(0,5),(0,10),(3,3),(3,8),(3,13),(6,1),(6,6),(7,11),(9,4))
 TERRAINS=("plain","plain","forest","plain","hill","plain","river")
+
+def _terrain(row,col):
+    return TERRAINS[(row*5+col*3+row*col)%len(TERRAINS)]
 
 def _initial_map():
     capitals={p:f"n{i}" for i,p in enumerate(CAPITALS)}; cells=[]
     for row in range(ROWS):
         for col in range(COLS):
             owner=capitals.get((row,col))
-            cells.append({"id":f"r{row}c{col}","row":row,"col":col,"terrain":TERRAINS[(row*5+col*3+row*col)%len(TERRAINS)],"owner":owner,"structure":"capital" if owner else None,"troops":8 if owner else 0})
+            cells.append({"id":f"r{row}c{col}","row":row,"col":col,"terrain":_terrain(row,col),"owner":owner,"structure":"capital" if owner else None,"troops":8 if owner else 0})
     return cells
 
 def initial_game(now=None):
     now=now or datetime.now(); nations=[]
     for i,(name,purpose) in enumerate(NATION_SEEDS):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
-    return {"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"support_history":{},"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
+    return {"version":MAP_VERSION,"rows":ROWS,"cols":COLS,"turn":1,"season":"春","player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,"support_history":{},"log":["十の国が並び立つ大陸で、あなたの治世が始まった。"],"created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
     default=initial_game()
     for key,value in default.items(): game.setdefault(key,deepcopy(value))
     if not game.get("map"): game["map"]=_initial_map()
+    # Older saves keep every existing country, army and building. The wider
+    # world is added around that progress instead of replacing the save.
+    existing={(int(cell.get("row",0)),int(cell.get("col",0))) for cell in game["map"]}
+    for row in range(ROWS):
+        for col in range(COLS):
+            if (row,col) not in existing:
+                game["map"].append({"id":f"r{row}c{col}","row":row,"col":col,
+                                    "terrain":_terrain(row,col),"owner":None,
+                                    "structure":None,"troops":0,"claim":None})
+    game.update(version=MAP_VERSION,rows=ROWS,cols=COLS)
     for i,item in enumerate(game["nations"]): item.setdefault("actions",deepcopy(default["nations"][i]["actions"]))
     for cell in game["map"]:
         cell.setdefault("claim", None)
