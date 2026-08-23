@@ -97,7 +97,7 @@ def chankocchi_page():
                     ui.element('div').classes('cloud cloud-one'); ui.element('div').classes('cloud cloud-two')
                 ui.element('div').classes('shelf'); ui.element('div').classes('table')
                 with ui.element('div').classes('speech-bubble'): ui.label(state['speech'])
-                ui.image('/static/chankocchi_stage1.png').classes('chanko-character')
+                ui.element('div').classes('chanko-character pose-sit').props('aria-label="部屋で暮らすちゃんこっち"')
                 if mode == 'eating': ui.label(FOODS.get(profile.get('last_food'), FOODS['chanko'])['icon']).classes('action-prop food-prop')
                 if mode == 'bath':
                     ui.label('🛁').classes('action-prop bath-prop'); ui.label('○ ｡ ○').classes('bubble-prop')
@@ -125,9 +125,57 @@ def chankocchi_page():
                     ui.button(reward_label, on_click=store_reward).props('unelevated no-caps').classes('store-reward').set_enabled(not today_claimed)
             if can_depart(profile): ui.button('次の世代を迎える', on_click=next_generation).props('unelevated no-caps color=deep-orange-7').classes('w-full q-mt-md')
         ui.add_css(CHANKO_CSS)
+        if mode == 'living':
+            ui.run_javascript(CHANKO_LIFE_SCRIPT)
     save(); render()
 
 
 CHANKO_CSS = '''
-.chanko-app{min-height:100vh;width:min(100%,680px);margin:0 auto;padding:18px 16px 54px;background:linear-gradient(180deg,#FFF8E8,#F3E2C7);box-sizing:border-box}.chanko-logo{font-size:27px;font-weight:950;color:#3C2D24}.chanko-sub{font-size:10px;font-weight:800;color:#8A6F59}.coin-pill{padding:8px 13px;border-radius:999px;background:#3C2D24;color:#FFD980;font-weight:900}.chanko-top{padding:2px 3px 12px}.life-room{position:relative;height:360px;border-radius:31px;overflow:hidden;background:linear-gradient(180deg,#E8D9B8 0 68%,#B98253 68%);border:1px solid rgba(115,72,43,.15);box-shadow:0 18px 44px rgba(95,61,37,.16)}.life-room:after{content:'';position:absolute;left:0;right:0;bottom:0;height:32%;background:repeating-linear-gradient(90deg,rgba(90,49,26,.12) 0 1px,transparent 1px 52px)}.window{position:absolute;left:8%;top:18%;width:31%;height:35%;border:9px solid #F5E9CC;background:linear-gradient(#8CC8DB,#E7F4D6);box-shadow:0 5px 18px rgba(81,67,45,.14)}.window:before,.window:after{content:'';position:absolute;background:#F5E9CC}.window:before{width:7px;top:0;bottom:0;left:48%}.window:after{height:7px;left:0;right:0;top:48%}.cloud{position:absolute;width:28px;height:9px;border-radius:20px;background:#fff;opacity:.75;animation:cloud 12s linear infinite}.cloud-one{top:24%;left:8%}.cloud-two{top:62%;left:50%;animation-delay:-6s}.shelf{position:absolute;right:7%;top:27%;width:27%;height:8px;background:#815D43;box-shadow:0 35px #815D43}.shelf:after{content:'▣  ◉  ▥';position:absolute;bottom:4px;color:#6E8C6B;font-size:25px;white-space:nowrap}.table{position:absolute;right:7%;bottom:20%;width:31%;height:12px;border-radius:4px;background:#7B5034;box-shadow:7px 46px 0 -3px #68422D,-7px 46px 0 -3px #68422D}.speech-bubble{position:absolute;z-index:8;top:15px;left:15px;right:15px;padding:12px 14px;border-radius:18px 18px 18px 5px;background:rgba(255,255,255,.94);font-size:13px;font-weight:900;color:#46352A}.chanko-character{position:absolute!important;z-index:5;width:105px!important;height:105px!important;object-fit:contain;left:45%;bottom:18%;filter:drop-shadow(0 9px 7px rgba(67,42,25,.25));animation:wander 14s ease-in-out infinite,breathe 2.4s ease-in-out infinite}.mode-eating .chanko-character{animation:nibble .42s ease-in-out infinite}.mode-bath .chanko-character{left:51%;bottom:18%;width:82px!important;height:82px!important;animation:bob .7s ease-in-out infinite}.mode-playing .chanko-character{animation:hop .55s ease-in-out infinite}.action-prop{position:absolute;z-index:7}.food-prop{font-size:42px;left:57%;bottom:13%}.bath-prop{font-size:90px;left:42%;bottom:7%;z-index:6}.bubble-prop{position:absolute;z-index:8;left:55%;bottom:30%;font-size:22px;color:white;animation:bubbles 1.5s ease-out infinite}.play-prop{font-size:40px;left:57%;bottom:32%}.meter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:11px 0}.meter-card{padding:9px 8px;border-radius:14px;background:rgba(255,255,255,.74);font-size:9px;font-weight:900;color:#725945}.care-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.care-button{background:#fff!important;color:#543E30!important;min-height:53px!important;border-radius:16px!important}.growth-card,.store-link{margin-top:11px;padding:15px!important;border-radius:21px!important;border:1px solid rgba(120,81,51,.12)!important;box-shadow:0 8px 22px rgba(93,61,39,.07)!important}.growing-chip{font-size:9px;font-weight:900;padding:6px 9px;border-radius:999px;background:#E8EFEA;color:#52685A}.store-link{background:linear-gradient(135deg,#284E3E,#4E8064)!important;color:#fff!important}.store-open{color:white!important}.store-reward{background:#FFE09A!important;color:#5C421B!important}.choice-dialog{width:min(92vw,440px)!important;padding:22px!important;border-radius:25px!important}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:12px}.food-choice{min-height:58px!important;border-radius:16px!important;background:#FFF7E5!important;color:#49382D!important}.mini-area{position:relative;height:260px;margin-top:12px;border-radius:20px;background:linear-gradient(#BDE4EC,#F7E0A7 65%,#8FC574 65%);overflow:hidden}.mini-target{position:absolute!important;left:42%;top:38%;font-size:27px!important;transition:left .15s,top .15s}.mini-score{text-align:center;font-size:19px;font-weight:950;color:#5C421B}@keyframes wander{0%,100%{left:12%;transform:scaleX(1)}42%{left:68%;transform:scaleX(1)}45%{transform:scaleX(-1)}92%{left:18%;transform:scaleX(-1)}}@keyframes breathe{50%{margin-bottom:4px}}@keyframes nibble{50%{transform:translateY(5px) rotate(4deg)}}@keyframes bob{50%{transform:translateY(-4px)}}@keyframes hop{50%{transform:translateY(-22px) rotate(5deg)}}@keyframes bubbles{to{transform:translateY(-35px);opacity:0}}@keyframes cloud{to{transform:translateX(95px)}}@media(max-width:390px){.life-room{height:330px}.care-button{font-size:11px!important}}
+.chanko-app{min-height:100vh;width:min(100%,680px);margin:0 auto;padding:18px 16px 54px;background:linear-gradient(180deg,#FFF8E8,#F3E2C7);box-sizing:border-box}.chanko-logo{font-size:27px;font-weight:950;color:#3C2D24}.chanko-sub{font-size:10px;font-weight:800;color:#8A6F59}.coin-pill{padding:8px 13px;border-radius:999px;background:#3C2D24;color:#FFD980;font-weight:900}.chanko-top{padding:2px 3px 12px}.life-room{position:relative;height:360px;border-radius:31px;overflow:hidden;background:linear-gradient(180deg,#E8D9B8 0 68%,#B98253 68%);border:1px solid rgba(115,72,43,.15);box-shadow:0 18px 44px rgba(95,61,37,.16)}.life-room:after{content:'';position:absolute;left:0;right:0;bottom:0;height:32%;background:repeating-linear-gradient(90deg,rgba(90,49,26,.12) 0 1px,transparent 1px 52px)}.window{position:absolute;left:8%;top:18%;width:31%;height:35%;border:9px solid #F5E9CC;background:linear-gradient(#8CC8DB,#E7F4D6);box-shadow:0 5px 18px rgba(81,67,45,.14)}.window:before,.window:after{content:'';position:absolute;background:#F5E9CC}.window:before{width:7px;top:0;bottom:0;left:48%}.window:after{height:7px;left:0;right:0;top:48%}.cloud{position:absolute;width:28px;height:9px;border-radius:20px;background:#fff;opacity:.75;animation:cloud 12s linear infinite}.cloud-one{top:24%;left:8%}.cloud-two{top:62%;left:50%;animation-delay:-6s}.shelf{position:absolute;right:7%;top:27%;width:27%;height:8px;background:#815D43;box-shadow:0 35px #815D43}.shelf:after{content:'▣  ◉  ▥';position:absolute;bottom:4px;color:#6E8C6B;font-size:25px;white-space:nowrap}.table{position:absolute;right:7%;bottom:20%;width:31%;height:12px;border-radius:4px;background:#7B5034;box-shadow:7px 46px 0 -3px #68422D,-7px 46px 0 -3px #68422D}.speech-bubble{position:absolute;z-index:8;top:15px;left:15px;right:15px;padding:12px 14px;border-radius:18px 18px 18px 5px;background:rgba(255,255,255,.94);font-size:13px;font-weight:900;color:#46352A}.chanko-character{position:absolute!important;z-index:5;width:118px!important;height:118px!important;left:44%;bottom:13%;background-image:url('/static/chankocchi_life_sprites.png');background-repeat:no-repeat;background-size:400% 100%;filter:drop-shadow(0 8px 6px rgba(67,42,25,.22));transition:left 2.8s cubic-bezier(.45,.05,.55,.95),bottom 2.8s ease;transform-origin:50% 92%;will-change:left,transform}.pose-walk-a{background-position:0 0}.pose-walk-b{background-position:33.333% 0}.pose-sit{background-position:66.666% 0;animation:living-breath 3.6s ease-in-out infinite}.pose-sleep{background-position:100% 0;animation:sleep-breath 4.5s ease-in-out infinite}.is-walking{animation:step-bob .34s ease-in-out infinite}.facing-left{transform:scaleX(-1)}.mode-eating .chanko-character{background-position:66.666% 0;animation:nibble .55s ease-in-out infinite}.mode-bath .chanko-character{left:51%;bottom:18%;width:90px!important;height:90px!important;background-position:66.666% 0;animation:bob .8s ease-in-out infinite}.mode-playing .chanko-character{background-position:0 0;animation:hop .65s ease-in-out infinite}.action-prop{position:absolute;z-index:7}.food-prop{font-size:42px;left:57%;bottom:13%}.bath-prop{font-size:90px;left:42%;bottom:7%;z-index:6}.bubble-prop{position:absolute;z-index:8;left:55%;bottom:30%;font-size:22px;color:white;animation:bubbles 1.5s ease-out infinite}.play-prop{font-size:40px;left:57%;bottom:32%}.meter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:11px 0}.meter-card{padding:9px 8px;border-radius:14px;background:rgba(255,255,255,.74);font-size:9px;font-weight:900;color:#725945}.care-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.care-button{background:#fff!important;color:#543E30!important;min-height:53px!important;border-radius:16px!important}.growth-card,.store-link{margin-top:11px;padding:15px!important;border-radius:21px!important;border:1px solid rgba(120,81,51,.12)!important;box-shadow:0 8px 22px rgba(93,61,39,.07)!important}.growing-chip{font-size:9px;font-weight:900;padding:6px 9px;border-radius:999px;background:#E8EFEA;color:#52685A}.store-link{background:linear-gradient(135deg,#284E3E,#4E8064)!important;color:#fff!important}.store-open{color:white!important}.store-reward{background:#FFE09A!important;color:#5C421B!important}.choice-dialog{width:min(92vw,440px)!important;padding:22px!important;border-radius:25px!important}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:12px}.food-choice{min-height:58px!important;border-radius:16px!important;background:#FFF7E5!important;color:#49382D!important}.mini-area{position:relative;height:260px;margin-top:12px;border-radius:20px;background:linear-gradient(#BDE4EC,#F7E0A7 65%,#8FC574 65%);overflow:hidden}.mini-target{position:absolute!important;left:42%;top:38%;font-size:27px!important;transition:left .15s,top .15s}.mini-score{text-align:center;font-size:19px;font-weight:950;color:#5C421B}@keyframes living-breath{50%{transform:translateY(-2px) rotate(1deg)}}@keyframes sleep-breath{50%{transform:scale(.985)}}@keyframes step-bob{50%{margin-bottom:5px}}@keyframes nibble{50%{transform:translateY(4px) rotate(2deg)}}@keyframes bob{50%{transform:translateY(-4px)}}@keyframes hop{50%{transform:translateY(-18px) rotate(4deg)}}@keyframes bubbles{to{transform:translateY(-35px);opacity:0}}@keyframes cloud{to{transform:translateX(95px)}}@media(max-width:390px){.life-room{height:330px}.care-button{font-size:11px!important}}
+'''
+
+
+CHANKO_LIFE_SCRIPT = r'''
+(() => {
+  if (window.__chankoLifeTimer) clearTimeout(window.__chankoLifeTimer);
+  if (window.__chankoStepTimer) clearInterval(window.__chankoStepTimer);
+  const actor = document.querySelector('.life-room.mode-living .chanko-character');
+  if (!actor) return;
+  const places = [
+    {left: '13%', bottom: '13%', stay: 6500, pose: 'sit'},
+    {left: '34%', bottom: '13%', stay: 4200, pose: 'sit'},
+    {left: '61%', bottom: '13%', stay: 5600, pose: 'sit'},
+    {left: '72%', bottom: '13%', stay: 7600, pose: 'sleep'},
+  ];
+  let current = 1;
+  const setPose = pose => {
+    actor.classList.remove('pose-walk-a','pose-walk-b','pose-sit','pose-sleep','is-walking');
+    actor.classList.add(`pose-${pose}`);
+  };
+  const live = () => {
+    const choices = places.map((_, i) => i).filter(i => i !== current);
+    const next = choices[Math.floor(Math.random() * choices.length)];
+    const destination = places[next];
+    const goingLeft = next < current;
+    actor.classList.toggle('facing-left', goingLeft);
+    actor.classList.add('is-walking');
+    let foot = false;
+    window.__chankoStepTimer = setInterval(() => {
+      foot = !foot;
+      actor.classList.toggle('pose-walk-a', foot);
+      actor.classList.toggle('pose-walk-b', !foot);
+      actor.classList.remove('pose-sit','pose-sleep');
+    }, 250);
+    requestAnimationFrame(() => { actor.style.left = destination.left; actor.style.bottom = destination.bottom; });
+    window.__chankoLifeTimer = setTimeout(() => {
+      clearInterval(window.__chankoStepTimer);
+      current = next;
+      actor.classList.remove('facing-left');
+      setPose(destination.pose);
+      window.__chankoLifeTimer = setTimeout(live, destination.stay + Math.random() * 3500);
+    }, 2850);
+  };
+  setPose('sit');
+  window.__chankoLifeTimer = setTimeout(live, 3800);
+})();
 '''
