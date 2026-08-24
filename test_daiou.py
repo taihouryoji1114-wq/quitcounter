@@ -1,4 +1,5 @@
-from core.daiou import (_cpu_turn, _natural_recruitment, apply_policy, border_strain, derived_identity, diplomatic_label,
+from core.daiou import (_cpu_turn, _natural_recruitment, apply_policy, border_strain, command_capacity,
+                         commander_for_legion, commander_rank, derived_identity, diplomatic_label,
                          end_turn, form_legion, initial_game, legion_at, map_cell, nation, normalize_game,
                          perform_map_action, frontier_count, relation, request_reinforcements,
                          respond_to_diplomatic_offer, strength, trade_with_nation)
@@ -28,7 +29,34 @@ def test_old_grid_world_is_kept_as_recovery_snapshot():
     normalize_game(game)
     assert len(game["map"]) == 53
     assert game["legacy_grid_map"][0]["troops"] == 19
-    assert game["version"] == 5
+    assert game["version"] == 6
+
+
+def test_campaign_starts_with_growing_commanders_for_every_nation():
+    game = initial_game()
+    assert len(game["commanders"]) == 30
+    legion = legion_at(game, "13122")
+    commander = commander_for_legion(game, legion)
+    assert commander["name"] == "黒田 景虎"
+    assert commander_rank(commander) == "百人将"
+    assert command_capacity(commander) == 10
+
+
+def test_commander_rank_and_capacity_continue_after_great_general():
+    commander = {"level": 65}
+    assert commander_rank(commander) == "大将軍"
+    assert command_capacity(commander) > 60
+
+
+def test_old_save_receives_commanders_without_losing_turn():
+    game = initial_game()
+    game.pop("commanders")
+    for legion in game["legions"]:
+        legion.pop("commander_id", None)
+    game["turn"] = 17
+    normalize_game(game)
+    assert game["turn"] == 17
+    assert commander_for_legion(game, legion_at(game, "13122")) is not None
 
 
 def test_large_country_has_cohesion_cost():
