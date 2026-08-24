@@ -1,4 +1,4 @@
-from core.daiou import (apply_policy, derived_identity, diplomatic_label,
+from core.daiou import (_cpu_turn, apply_policy, derived_identity, diplomatic_label,
                          end_turn, form_legion, initial_game, legion_at, map_cell, nation, normalize_game,
                          perform_map_action, relation, request_reinforcements,
                          strength)
@@ -117,6 +117,47 @@ def test_player_can_choose_exact_marching_troops_between_own_regions():
     assert target["troops"] == 5
 
 
+def test_player_can_transfer_chosen_troops_to_non_adjacent_own_region():
+    game = initial_game()
+    source = map_cell(game, "13122")
+    target = map_cell(game, "13201")
+    target.update(owner="n0", troops=2, claim=None)
+    assert target["id"] not in source["neighbors"]
+    message = perform_map_action(game, "transfer", source["id"], target["id"], march_troops=3)
+    assert "兵3を移動" in message
+    assert source["troops"] == 5
+    assert target["troops"] == 5
+
+
+def test_transfer_100_percent_leaves_one_guard_and_moves_every_available_soldier():
+    game = initial_game()
+    source = map_cell(game, "13122")
+    target = map_cell(game, "13201")
+    target.update(owner="n0", troops=2, claim=None)
+    message = perform_map_action(game, "transfer", source["id"], target["id"], march_troops=source["troops"])
+    assert "兵7を移動" in message
+    assert source["troops"] == 1
+    assert target["troops"] == 9
+
+
+def test_enemy_attack_on_player_creates_a_visible_report():
+    class FixedRng:
+        def __init__(self): self.values=iter((.9,0))
+        def random(self): return next(self.values)
+        def randint(self, _a, _b): return 0
+        def choice(self, choices):
+            return next((pair for pair in choices if isinstance(pair,tuple) and pair[1].get("owner")=="n0"), choices[0])
+
+    game=initial_game(); game["turn_events"]=[]
+    attacker=map_cell(game,"13121"); defender=map_cell(game,"13122")
+    attacker.update(owner="n1",troops=30,claim=None,structure=None)
+    defender["troops"]=1
+    _cpu_turn(game,nation(game,"n1"),FixedRng())
+    assert game["turn_events"]
+    assert game["turn_events"][0]["kind"] == "enemy_attack"
+    assert game["turn_events"][0]["target"] == "葛飾区"
+
+
 def test_allied_reinforcements_reach_weakest_threatened_border():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
@@ -152,22 +193,6 @@ def test_ambush_has_been_removed():
         assert False, "廃止した伏兵を使用できてしまった"
     except ValueError as error:
         assert "戦い方" in str(error)
-
-
-def test_gather_concentrates_domestic_troops_and_leaves_garrisons():
-    game = initial_game()
-    destination = map_cell(game, "13122")
-    donor_a = map_cell(game, "13121")
-    donor_b = map_cell(game, "13123")
-    donor_a.update(owner="n0", troops=7, claim=None)
-    donor_b.update(owner="n0", troops=5, claim=None)
-    before = destination["troops"]
-    message = perform_map_action(game, "gather", destination["id"])
-    assert "兵8" in message
-    assert destination["troops"] == before + 8
-    assert donor_a["troops"] == 2
-    assert donor_b["troops"] == 2
-    assert legion_at(game,destination["id"])["owner"] == "n0"
 
 
 def test_army_group_moves_as_one_visible_unit_without_duplicating_troops():

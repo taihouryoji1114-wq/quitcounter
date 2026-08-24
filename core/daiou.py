@@ -45,7 +45,7 @@ def initial_game(now=None):
              for region_id,owner in CAPITALS.items()]
     return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","commands_left":COMMANDS_PER_TURN,
             "player":"n0","nations":nations,"map":world,"legions":legions,"diplomacy":{},"coalition":None,
-            "support_history":{},"log":["葛飾の地から、あなたの治世が始まった。"],
+            "support_history":{},"turn_events":[],"log":["葛飾の地から、あなたの治世が始まった。"],
             "created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
@@ -222,7 +222,19 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
     if source["owner"]!=pid and not (action=="occupy" and is_player_camp):
         raise ValueError("自分の領土を選んでください。")
     rng=random.Random(seed if seed is not None else game["turn"]*104729)
-    if action in {"advance","invade"}:
+    if action=="transfer":
+        if not target_id: raise ValueError("兵を移す自国領を選んでください。")
+        target=map_cell(game,target_id)
+        if target["id"]==source["id"]: raise ValueError("別の自国領を選んでください。")
+        if target.get("owner")!=pid: raise ValueError("兵の移動先は自国領だけです。")
+        if source["troops"]<2: raise ValueError("この地域には移動できる兵がいません。")
+        moving=max(1,source["troops"]//2) if march_troops is None else int(march_troops)
+        moving=min(moving,source["troops"]-1)
+        if moving<1: raise ValueError("移動する兵数を選んでください。")
+        source["troops"]-=moving; target["troops"]+=moving
+        _relocate_legion(game,source_id,target_id); player["actions"]["defend"]+=1
+        message=f"{source['name']}から{target['name']}へ兵{moving}を移動した。"
+    elif action in {"advance","invade"}:
         if not target_id: raise ValueError("進む先を選んでください。")
         target=map_cell(game,target_id)
         if target not in adjacent_cells(game,source): raise ValueError("隣の地域へだけ進めます。")
@@ -313,22 +325,6 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
     elif action=="recruit":
         if player["wealth"]<5: raise ValueError("徴兵には軍資金が5必要です。")
         player["wealth"]-=5; source["troops"]+=4; player["army"]+=4; message="兵を4集め、この地域へ置いた。"
-    elif action=="gather":
-        donors=[cell for cell in game["map"] if cell.get("owner")==pid and cell["id"]!=source["id"]]
-        gathered=0
-        for donor in donors:
-            sent=max(0,int(donor.get("troops",0))-2)
-            donor["troops"]-=sent; gathered+=sent
-        if gathered<=0: raise ValueError("他の領土に移動できる兵がいません。各地には守備兵2を残します。")
-        source["troops"]+=gathered; player["actions"]["defend"]+=1
-        primary=legion_at(game,source_id)
-        if not primary:
-            owned_legions=[item for item in game.get("legions",[]) if item.get("owner")==pid]
-            number=max([int(item["id"].rsplit("-",1)[-1]) for item in owned_legions if item.get("id","").rsplit("-",1)[-1].isdigit()] or [0])+1
-            primary={"id":f"{pid}-{number}","owner":pid,"name":_legion_name(number),"location":source_id,"formed_turn":game["turn"]}
-            game["legions"].append(primary)
-        game["legions"]=[item for item in game["legions"] if item.get("owner")!=pid or item["id"]==primary["id"]]
-        message=f"国内へ集結命令を出し、{len(donors)}地域から兵{gathered}を{source['name']}へ集めた。"
     else: raise ValueError("行動を選んでください。")
     return _spend_command(game,message,now)
 
@@ -346,6 +342,7 @@ def end_turn(game,now=None,seed=None):
     return message
 
 def _advance_world(game,rng):
+    game["turn_events"]=[]
     player=nation(game,game["player"]); owned=[x for x in game["map"] if x["owner"]==player["id"]]
     player["wealth"]+=sum(region_income(x) for x in owned)-sum(x["troops"] for x in owned)//30
     for cpu in game["nations"]:
@@ -395,10 +392,13 @@ def _cpu_turn(game,cpu,rng):
                     target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
                     _relocate_legion(game,source["id"],target["id"])
                 elif moving+rng.randint(0,3)>target["troops"]+rng.randint(0,3):
+                    attacked_player=(target.get("claim") or {}).get("owner")==game["player"]
                     target["troops"]=max(2,moving-target["troops"])
                     target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
                     _relocate_legion(game,source["id"],target["id"])
                     cpu["actions"]["battle"]+=1
+                    if attacked_player:
+                        game["turn_events"].append({"kind":"enemy_attack","result":"lost","attacker":cpu["name"],"target":target["name"],"message":f"{cpu['name']}軍が{target['name']}の野営地を襲撃。先遣隊が敗れ、野営地を奪われました。"})
                 else: target["troops"]=max(1,target["troops"]-max(1,moving//2))
             else:
                 defender_id=target["owner"]
@@ -409,7 +409,12 @@ def _cpu_turn(game,cpu,rng):
                     target.update(owner=cpu["id"],troops=max(2,attack-defence),claim=None); cpu["actions"]["battle"]+=1
                     _relocate_legion(game,source["id"],target["id"])
                     if was_capital: _capital_surrender(game,cpu["id"],defender_id)
+                    if defender_id==game["player"]:
+                        outcome="本城が陥落しました。" if was_capital else "守備隊が敗れ、領土を奪われました。"
+                        game["turn_events"].append({"kind":"enemy_attack","result":"lost","attacker":cpu["name"],"target":target["name"],"attack":attack,"defence":defence,"message":f"{cpu['name']}軍が{target['name']}へ侵攻。戦力 {attack} 対 {defence}。{outcome}"})
                 else: target["troops"]=max(1,defence-attack)
+                if attack<=defence and defender_id==game["player"]:
+                    game["turn_events"].append({"kind":"enemy_attack","result":"defended","attacker":cpu["name"],"target":target["name"],"attack":attack,"defence":defence,"message":f"{cpu['name']}軍が{target['name']}へ侵攻。戦力 {attack} 対 {defence}。守備隊が撃退しました。"})
     elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1
     elif cpu["purpose"] in {"交易","富国","外交"}: cpu["wealth"]+=3; cpu["actions"]["trade"]+=1
     else: rng.choice(owned)["troops"]+=1
