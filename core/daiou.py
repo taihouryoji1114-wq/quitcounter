@@ -17,6 +17,10 @@ _REGIONS={item["id"]:item for item in _MAP_DATA["regions"]}
 CAPITALS={"13122":"n0","13201":"n1","13111":"n2","13120":"n3","13112":"n4",
           "13205":"n5","13108":"n6","13209":"n7","13202":"n8","13104":"n9"}
 TERRAINS=("plain","plain","forest","plain","hill","plain","river")
+_ARMY_NUMERALS=("零","一","二","三","四","五","六","七","八","九","十")
+
+def _legion_name(number):
+    return f"第{_ARMY_NUMERALS[number] if number<len(_ARMY_NUMERALS) else number}軍"
 
 def _initial_map():
     cells=[]
@@ -36,8 +40,11 @@ def initial_game(now=None):
     now=now or datetime.now(); nations=[]
     for i,(name,purpose) in enumerate(NATION_SEEDS):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
+    world=_initial_map()
+    legions=[{"id":f"{owner}-1","owner":owner,"name":"第一軍","location":region_id,"formed_turn":1}
+             for region_id,owner in CAPITALS.items()]
     return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","commands_left":COMMANDS_PER_TURN,
-            "player":"n0","nations":nations,"map":_initial_map(),"diplomacy":{},"coalition":None,
+            "player":"n0","nations":nations,"map":world,"legions":legions,"diplomacy":{},"coalition":None,
             "support_history":{},"log":["葛飾の地から、あなたの治世が始まった。"],
             "created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
@@ -68,10 +75,39 @@ def normalize_game(game):
             cell["claim"].setdefault("started_turn", max(1, game.get("turn", 1)-1))
             cell["claim"].setdefault("last_progress_turn", 0)
             cell["troops"] = max(2, int(cell.get("troops", 0)))
+    valid_ids={cell["id"] for cell in game["map"]}
+    game["legions"]=[legion for legion in game.get("legions",[]) if legion.get("location") in valid_ids
+                     and nation(game,legion.get("owner"))["alive"]
+                     and (map_cell(game,legion["location"]).get("owner")==legion.get("owner")
+                          or (map_cell(game,legion["location"]).get("claim") or {}).get("owner")==legion.get("owner"))]
     _sync(game); return game
 
 def nation(game,nation_id): return next(x for x in game["nations"] if x["id"]==nation_id)
 def map_cell(game,cell_id): return next(x for x in game["map"] if x["id"]==cell_id)
+def legion_at(game,cell_id):
+    return next((item for item in game.get("legions",[]) if item.get("location")==cell_id),None)
+
+def _relocate_legion(game,source_id,target_id):
+    moving=legion_at(game,source_id); standing=legion_at(game,target_id)
+    if not moving: return
+    if standing and standing["id"]!=moving["id"]:
+        game["legions"].remove(moving)
+    else: moving["location"]=target_id
+
+def _clear_legions(game,owner_id):
+    game["legions"]=[item for item in game.get("legions",[]) if item.get("owner")!=owner_id]
+
+def form_legion(game,cell_id,now=None):
+    """Turn a garrison into a named field army without duplicating its troops."""
+    normalize_game(game); pid=game["player"]; cell=map_cell(game,cell_id)
+    if cell.get("owner")!=pid: raise ValueError("自国領で軍団を編成してください。")
+    if cell.get("troops",0)<5: raise ValueError("軍団の編成には兵5以上が必要です。")
+    if legion_at(game,cell_id): raise ValueError("この地域にはすでに軍団がいます。")
+    owned=[item for item in game.get("legions",[]) if item.get("owner")==pid]
+    number=max([int(item["id"].rsplit("-",1)[-1]) for item in owned if item.get("id","").rsplit("-",1)[-1].isdigit()] or [0])+1
+    name=_legion_name(number)
+    game["legions"].append({"id":f"{pid}-{number}","owner":pid,"name":name,"location":cell_id,"formed_turn":game["turn"]})
+    return _spend_command(game,f"{cell['name']}で{name}を編成した。",now)
 def adjacent_cells(game,source):
     neighbor_ids=set(source.get("neighbors",[]))
     return [x for x in game["map"] if x["id"] in neighbor_ids]
@@ -169,6 +205,7 @@ def _capital_surrender(game,winner_id,loser_id):
         if claim.get("owner")==loser_id:
             cell["claim"]=None; cell["troops"]=0
     loser=nation(game,loser_id); loser["alive"]=False; loser["territory"]=0
+    _clear_legions(game,loser_id)
     return captured
 
 def _spend_command(game,message,now):
@@ -204,6 +241,7 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
                     target["troops"]=max(2,attack-defence)
                     target["claim"]={"owner":pid,"progress":0,"started_turn":game["turn"]}
                     defender["morale"]=max(15,defender["morale"]-4)
+                    _relocate_legion(game,source_id,target_id)
                     message=f"戦力 {attack} 対 {defence}。{defender['name']}の野営地を破り、先遣隊を置いた。"
                 else:
                     target["troops"]=max(1,defence-attack); player["morale"]=max(15,player["morale"]-3)
@@ -213,16 +251,18 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             player["wealth"]-=2; source["troops"]-=moving
             target["troops"]=moving
             target["claim"]={"owner":pid,"progress":0,"started_turn":game["turn"]}
+            _relocate_legion(game,source_id,target_id)
             player["actions"]["expand"]+=1
             message=f"{target.get('name',target['id'])}へ進軍し、先遣隊が野営を始めた。次のターンから領土化できます。"
         elif target["owner"]==pid:
-            source["troops"]-=moving; target["troops"]+=moving; player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
+            source["troops"]-=moving; target["troops"]+=moving; _relocate_legion(game,source_id,target_id); player["actions"]["defend"]+=1; message="領国内で兵を移し、守りを整えた。"
         else:
             defender=nation(game,target["owner"])
             if relation(game,pid,defender["id"])["status"]=="alliance":
                 source["troops"]-=moving; target["troops"]+=moving
                 player["actions"]["defend"]+=1
                 relation(game,pid,defender["id"])["trust"]=min(100,relation(game,pid,defender["id"])["trust"]+3)
+                _relocate_legion(game,source_id,target_id)
                 message=f"{defender['name']}の{target['name']}へ援軍{moving}を派遣した。"
                 return _spend_command(game,message,now)
             bonus,tactic_label=_tactical_attack_bonus(game,source,target,tactic,pid)
@@ -235,6 +275,7 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
                 defender["morale"]=max(15,defender["morale"]-5)
                 was_capital=target.get("structure")=="capital"
                 target.update(owner=pid,troops=max(2,attack-defence),claim=None)
+                _relocate_legion(game,source_id,target_id)
                 if was_capital:
                     lands=_capital_surrender(game,pid,defender["id"])
                     message=f"{tactic_label}！ 戦力 {attack} 対 {defence}。{defender['name']}の本城を落とし、残る{lands}地域が降伏した。"
@@ -280,6 +321,13 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             donor["troops"]-=sent; gathered+=sent
         if gathered<=0: raise ValueError("他の領土に移動できる兵がいません。各地には守備兵2を残します。")
         source["troops"]+=gathered; player["actions"]["defend"]+=1
+        primary=legion_at(game,source_id)
+        if not primary:
+            owned_legions=[item for item in game.get("legions",[]) if item.get("owner")==pid]
+            number=max([int(item["id"].rsplit("-",1)[-1]) for item in owned_legions if item.get("id","").rsplit("-",1)[-1].isdigit()] or [0])+1
+            primary={"id":f"{pid}-{number}","owner":pid,"name":_legion_name(number),"location":source_id,"formed_turn":game["turn"]}
+            game["legions"].append(primary)
+        game["legions"]=[item for item in game["legions"] if item.get("owner")!=pid or item["id"]==primary["id"]]
         message=f"国内へ集結命令を出し、{len(donors)}地域から兵{gathered}を{source['name']}へ集めた。"
     else: raise ValueError("行動を選んでください。")
     return _spend_command(game,message,now)
@@ -345,9 +393,11 @@ def _cpu_turn(game,cpu,rng):
                 if claim.get("owner") is None:
                     target["troops"]=moving
                     target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
+                    _relocate_legion(game,source["id"],target["id"])
                 elif moving+rng.randint(0,3)>target["troops"]+rng.randint(0,3):
                     target["troops"]=max(2,moving-target["troops"])
                     target["claim"]={"owner":cpu["id"],"progress":0,"started_turn":game["turn"]}
+                    _relocate_legion(game,source["id"],target["id"])
                     cpu["actions"]["battle"]+=1
                 else: target["troops"]=max(1,target["troops"]-max(1,moving//2))
             else:
@@ -357,6 +407,7 @@ def _cpu_turn(game,cpu,rng):
                 if attack>defence:
                     was_capital=target.get("structure")=="capital"
                     target.update(owner=cpu["id"],troops=max(2,attack-defence),claim=None); cpu["actions"]["battle"]+=1
+                    _relocate_legion(game,source["id"],target["id"])
                     if was_capital: _capital_surrender(game,cpu["id"],defender_id)
                 else: target["troops"]=max(1,defence-attack)
     elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1

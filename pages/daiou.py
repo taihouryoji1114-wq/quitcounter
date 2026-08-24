@@ -2,7 +2,7 @@ from nicegui import ui
 
 from core.auth import require_app_access, selected_user_id
 from core.daiou import (adjacent_cells, derived_identity, diplomatic_label, end_alliance,
-                         end_turn, initial_game, map_cell, map_viewbox, nation, normalize_game,
+                         end_turn, form_legion, initial_game, legion_at, map_cell, map_viewbox, nation, normalize_game,
                          perform_map_action, propose_alliance, relation,
                          region_income, region_shape, request_reinforcements, strength,
                          terrain_effect)
@@ -32,6 +32,11 @@ def daiou_page():
             current=map_cell(game,state["selected"])
             if current["owner"]!=game["player"] and (current.get('claim') or {}).get('owner')!=game['player']: state["selected"]=None
             render.refresh()
+        except ValueError as error: ui.notify(str(error),type='warning')
+
+    def create_legion():
+        try:
+            message=form_legion(game,state['selected']); save(); ui.notify(message,type='positive'); render.refresh()
         except ValueError as error: ui.notify(str(error),type='warning')
 
     def select_cell(cell_id):
@@ -144,11 +149,13 @@ def daiou_page():
                         svg.append(f'<text x="{shape["cx"]}" y="{shape["cy"]-13}" text-anchor="middle" class="region-structure">{structure}</text>')
                     if cell['owner'] or cell.get('claim'):
                         marker_owner=cell['owner'] or cell['claim']['owner']
+                        legion=legion_at(game,cell['id'])
                         svg.append(f'<circle cx="{shape["cx"]}" cy="{shape["cy"]}" r="11" class="region-army owner-{marker_owner}"/>')
-                        svg.append(f'<text x="{shape["cx"]-5}" y="{shape["cy"]+4}" text-anchor="middle" class="region-piece">♟</text>')
+                        svg.append(f'<text x="{shape["cx"]-5}" y="{shape["cy"]+4}" text-anchor="middle" class="region-piece">{"⚑" if legion else "•"}</text>')
                         svg.append(f'<text x="{shape["cx"]+5}" y="{shape["cy"]+3.5}" text-anchor="middle" class="region-troops">{cell["troops"]}</text>')
                         owner_name=nation(game,marker_owner)['name']
-                        svg.append(f'<text x="{shape["cx"]}" y="{shape["cy"]+18}" text-anchor="middle" class="region-owner-name">{owner_name}</text>')
+                        marker_name=f"{owner_name}・{legion['name']}" if legion else f"{owner_name}・守備隊"
+                        svg.append(f'<text x="{shape["cx"]}" y="{shape["cy"]+18}" text-anchor="middle" class="region-owner-name">{marker_name}</text>')
                 if state.get('last_move') and state['last_move'][1]:
                     start=region_shape(state['last_move'][0]); finish=region_shape(state['last_move'][1])
                     svg.append(f'<circle r="6" class="marching-unit"><animate attributeName="cx" from="{start["cx"]}" to="{finish["cx"]}" dur=".9s" fill="freeze"/><animate attributeName="cy" from="{start["cy"]}" to="{finish["cy"]}" dur=".9s" fill="freeze"/></circle>')
@@ -171,9 +178,11 @@ def daiou_page():
                     new_tab=True).classes('map-source')
             if inspected:
                 inspect_owner=nation(game,inspected['owner'])['name'] if inspected.get('owner') else '未領有地'
+                inspect_legion=legion_at(game,inspected['id'])
                 with ui.element('section').classes('region-intel'):
                     ui.label(f"{inspected['name']}　｜　{inspect_owner}").classes('region-intel-title')
-                    ui.label(f"季節収入 +{region_income(inspected)}　・　{terrain_effect(inspected)}　・　兵 {inspected['troops']}").classes('region-intel-copy')
+                    unit_name=inspect_legion['name'] if inspect_legion else ('先遣隊' if inspected.get('claim') else '守備隊')
+                    ui.label(f"{unit_name}・兵 {inspected['troops']}　｜　季節収入 +{region_income(inspected)}　｜　{terrain_effect(inspected)}").classes('region-intel-copy')
             with ui.element('section').classes('command-panel'):
                 if selected:
                     claim=selected.get('claim') or {}
@@ -186,7 +195,9 @@ def daiou_page():
                         ui.button('領土化を進める',icon='flag',on_click=lambda:act('occupy')).props('unelevated no-caps').classes('occupy-button')
                     else:
                         owner=nation(game,selected['owner'])
-                        ui.label(f"選択中：{selected['name']}（{owner['name']}）　兵 {selected['troops']}").classes('selected-title')
+                        selected_legion=legion_at(game,selected['id'])
+                        unit_name=selected_legion['name'] if selected_legion else '守備隊'
+                        ui.label(f"{unit_name}｜{selected['name']}（{owner['name']}）　兵 {selected['troops']}").classes('selected-title')
                         ui.label('隣の地域を押すと、軍が進みます').classes('selected-help')
                         with ui.element('div').classes('march-picker'):
                             ui.label('派遣兵力').classes('march-label')
@@ -197,11 +208,19 @@ def daiou_page():
                                 ui.button(f'{icon} {label}',on_click=lambda _,value=key:choose_tactic(value)).props('flat dense no-caps').classes('tactic-choice'+(' active' if state['tactic']==key else ''))
                         with ui.element('div').classes('command-grid'):
                             ui.button('徴兵 +4／資金5',icon='person_add',on_click=lambda:act('recruit')).props('flat no-caps')
-                            ui.button('全領土から集結',icon='hub',on_click=lambda:act('gather')).props('flat no-caps')
+                            ui.button('全領土から軍団へ集結',icon='hub',on_click=lambda:act('gather')).props('flat no-caps')
+                            if not selected_legion: ui.button('軍団を編成',icon='flag',on_click=create_legion).props('flat no-caps')
                             ui.button('町を築く 10',icon='holiday_village',on_click=lambda:act('town')).props('flat no-caps')
                             ui.button('砦を築く 8',icon='fort',on_click=lambda:act('fort')).props('flat no-caps')
                             ui.button('隣国と交易',icon='handshake',on_click=lambda:act('trade')).props('flat no-caps')
                 else: ui.label('まず金色の自国領をタップ').classes('empty-command')
+            player_legions=[item for item in game.get('legions',[]) if item.get('owner')==game['player']]
+            with ui.expansion(f"軍団一覧　{len(player_legions)}軍",icon='flag').classes('nation-box w-full'):
+                for legion in player_legions:
+                    location=map_cell(game,legion['location'])
+                    with ui.element('div').classes('nation-row player'):
+                        ui.label(legion['name']).classes('font-black grow')
+                        ui.label(f"{location['name']}・兵 {location['troops']}").classes('nation-detail')
             with ui.expansion('十国の現在',icon='public').classes('nation-box w-full'):
                 for item in sorted((x for x in game['nations'] if x['alive']),key=strength,reverse=True):
                     with ui.element('div').classes('nation-row'+(' player' if item['id']==game['player'] else '')):

@@ -1,5 +1,5 @@
 from core.daiou import (apply_policy, derived_identity, diplomatic_label,
-                         end_turn, initial_game, map_cell, nation, normalize_game,
+                         end_turn, form_legion, initial_game, legion_at, map_cell, nation, normalize_game,
                          perform_map_action, relation, request_reinforcements,
                          strength)
 
@@ -167,6 +167,30 @@ def test_gather_concentrates_domestic_troops_and_leaves_garrisons():
     assert destination["troops"] == before + 8
     assert donor_a["troops"] == 2
     assert donor_b["troops"] == 2
+    assert legion_at(game,destination["id"])["owner"] == "n0"
+
+
+def test_army_group_moves_as_one_visible_unit_without_duplicating_troops():
+    game=initial_game()
+    source=map_cell(game,"13122")
+    target=map_cell(game,"13121")
+    target.update(owner="n0",troops=2,claim=None)
+    total_before=sum(cell["troops"] for cell in game["map"] if cell.get("owner")=="n0")
+    assert legion_at(game,source["id"])["name"] == "第一軍"
+    perform_map_action(game,"advance",source["id"],target["id"],march_troops=3)
+    assert legion_at(game,source["id"]) is None
+    assert legion_at(game,target["id"])["name"] == "第一軍"
+    assert sum(cell["troops"] for cell in game["map"] if cell.get("owner")=="n0") == total_before
+
+
+def test_player_can_form_a_second_named_army_group():
+    game=initial_game()
+    target=map_cell(game,"13121")
+    target.update(owner="n0",troops=6,claim=None)
+    message=form_legion(game,target["id"])
+    assert "第二軍" in message
+    assert legion_at(game,target["id"])["name"] == "第二軍"
+    assert target["troops"] == 6
 
 
 def test_capturing_a_capital_annexes_the_defeated_country():
