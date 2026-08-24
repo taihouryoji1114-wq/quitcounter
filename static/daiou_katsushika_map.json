@@ -1,0 +1,29 @@
+{
+  "source": "大王・葛飾区先行戦場（町名を基にしたゲーム用簡略地図）",
+  "license": "original game map",
+  "viewBox": "0 0 720 920",
+  "regions": [
+    {"id":"k01","name":"西水元","path":"M82 52 L244 42 L252 154 L76 166 Z","cx":163,"cy":103,"terrain":"river","neighbors":["k02","k04"]},
+    {"id":"k02","name":"水元","path":"M244 42 L438 58 L424 166 L252 154 Z","cx":341,"cy":105,"terrain":"forest","neighbors":["k01","k03","k04","k05"]},
+    {"id":"k03","name":"東水元","path":"M438 58 L632 88 L616 190 L424 166 Z","cx":526,"cy":119,"terrain":"river","neighbors":["k02","k05","k06"]},
+    {"id":"k04","name":"南水元","path":"M76 166 L252 154 L260 278 L90 286 Z","cx":169,"cy":218,"terrain":"plain","neighbors":["k01","k02","k05","k07"]},
+    {"id":"k05","name":"金町","path":"M252 154 L424 166 L430 286 L260 278 Z","cx":342,"cy":221,"terrain":"plain","neighbors":["k02","k03","k04","k06","k07","k08"]},
+    {"id":"k06","name":"東金町","path":"M424 166 L616 190 L600 306 L430 286 Z","cx":519,"cy":235,"terrain":"hill","neighbors":["k03","k05","k08","k09"]},
+    {"id":"k07","name":"亀有","path":"M90 286 L260 278 L270 400 L104 412 Z","cx":180,"cy":344,"terrain":"plain","neighbors":["k04","k05","k08","k10"]},
+    {"id":"k08","name":"新宿","path":"M260 278 L430 286 L438 410 L270 400 Z","cx":350,"cy":344,"terrain":"plain","neighbors":["k05","k06","k07","k09","k10","k11"]},
+    {"id":"k09","name":"柴又","path":"M430 286 L600 306 L584 426 L438 410 Z","cx":517,"cy":355,"terrain":"river","neighbors":["k06","k08","k11","k12"]},
+    {"id":"k10","name":"西亀有","path":"M104 412 L270 400 L282 522 L112 536 Z","cx":192,"cy":462,"terrain":"plain","neighbors":["k07","k08","k11","k13"]},
+    {"id":"k11","name":"高砂","path":"M270 400 L438 410 L446 532 L282 522 Z","cx":360,"cy":468,"terrain":"plain","neighbors":["k08","k09","k10","k12","k13","k14"]},
+    {"id":"k12","name":"鎌倉","path":"M438 410 L584 426 L568 548 L446 532 Z","cx":508,"cy":480,"terrain":"forest","neighbors":["k09","k11","k14","k15"]},
+    {"id":"k13","name":"青戸","path":"M112 536 L282 522 L294 642 L124 656 Z","cx":203,"cy":590,"terrain":"plain","neighbors":["k10","k11","k14","k16","k17"]},
+    {"id":"k14","name":"細田","path":"M282 522 L446 532 L454 650 L294 642 Z","cx":369,"cy":588,"terrain":"hill","neighbors":["k11","k12","k13","k15","k17","k18"]},
+    {"id":"k15","name":"奥戸","path":"M446 532 L568 548 L552 670 L454 650 Z","cx":505,"cy":604,"terrain":"plain","neighbors":["k12","k14","k18","k19"]},
+    {"id":"k16","name":"お花茶屋","path":"M124 656 L242 646 L250 770 L134 784 Z","cx":185,"cy":713,"terrain":"plain","neighbors":["k13","k17","k20"]},
+    {"id":"k17","name":"立石","path":"M242 646 L384 646 L390 772 L250 770 Z","cx":317,"cy":708,"terrain":"plain","neighbors":["k13","k14","k16","k18","k20","k21"]},
+    {"id":"k18","name":"東立石","path":"M384 646 L552 670 L536 790 L390 772 Z","cx":467,"cy":716,"terrain":"river","neighbors":["k14","k15","k17","k19","k21","k22"]},
+    {"id":"k19","name":"東新小岩","path":"M552 670 L642 690 L622 806 L536 790 Z","cx":585,"cy":738,"terrain":"plain","neighbors":["k15","k18","k22"]},
+    {"id":"k20","name":"堀切","path":"M134 784 L250 770 L258 884 L142 892 Z","cx":197,"cy":831,"terrain":"river","neighbors":["k16","k17","k21"]},
+    {"id":"k21","name":"四つ木","path":"M250 770 L390 772 L398 886 L258 884 Z","cx":324,"cy":828,"terrain":"plain","neighbors":["k17","k18","k20","k22"]},
+    {"id":"k22","name":"東四つ木","path":"M390 772 L536 790 L520 898 L398 886 Z","cx":461,"cy":839,"terrain":"hill","neighbors":["k18","k19","k21"]}
+  ]
+}

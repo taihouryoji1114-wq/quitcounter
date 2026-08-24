@@ -7,15 +7,15 @@ import random
 
 POLICIES={"prosper":("富国","国力と収入を伸ばす",2,0,1),"train":("訓練","兵を鍛える",0,3,0),"guard":("守備","守りを整える",0,1,3),"trade":("交易","資金を得る",3,0,1)}
 NATION_SEEDS=(("暁国","均衡"),("北嶺","守備"),("蒼海","交易"),("紅蓮","拡大"),("白峰","富国"),("翠野","生存"),("紫雲","機会"),("金砂","交易"),("黒鉄","軍備"),("月影","外交"))
-MAP_VERSION=6
-MAP_KIND="tokyo_mainland"
+MAP_VERSION=7
+MAP_KIND="katsushika_campaign"
 COMMANDS_PER_TURN=3
-_MAP_DATA=json.loads((Path(__file__).resolve().parents[1]/"static"/"daiou_tokyo_map.json").read_text())
+_MAP_DATA=json.loads((Path(__file__).resolve().parents[1]/"static"/"daiou_katsushika_map.json").read_text())
 _REGIONS={item["id"]:item for item in _MAP_DATA["regions"]}
-# The player begins in 葛飾区.  The other powers are spread through the 23
-# wards and Tama so no single country starts with an automatic advantage.
-CAPITALS={"13122":"n0","13201":"n1","13111":"n2","13120":"n3","13112":"n4",
-          "13205":"n5","13108":"n6","13209":"n7","13202":"n8","13104":"n9"}
+# First finish a dense, readable campaign inside Katsushika. Later versions
+# can append neighbouring wards without changing these stable region ids.
+CAPITALS={"k07":"n0","k03":"n1","k12":"n2","k20":"n3","k19":"n4",
+          "k01":"n5","k15":"n6","k22":"n7","k06":"n8","k16":"n9"}
 TERRAINS=("plain","plain","forest","plain","hill","plain","river")
 _ARMY_NUMERALS=("零","一","二","三","四","五","六","七","八","九","十")
 COMMANDER_NAMES=("黒田 景虎","蒼井 政宗","海堂 宗近","紅林 兼信","白石 晴久",
@@ -77,7 +77,7 @@ def initial_game(now=None):
         nations.append({"id":f"n{i}","name":name,"purpose":purpose,"territory":1,"wealth":30,"army":20,"morale":70,"walls":8,"alive":True,"actions":{"expand":0,"trade":0,"build":0,"defend":0,"battle":0}})
     world=_initial_map()
     legions=[{"id":f"{owner}-1","owner":owner,"name":"第一軍","location":region_id,"formed_turn":1,
-              "commander_id":f"c{int(owner[1:])}"} for region_id,owner in CAPITALS.items()]
+              "commander_id":f"c{int(owner[1:])}","status":"garrisoned","route":None} for region_id,owner in CAPITALS.items()]
     return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","commands_left":COMMANDS_PER_TURN,
             "player":"n0","nations":nations,"map":world,"legions":legions,"commanders":_initial_commanders(),"diplomacy":{},"coalition":None,
             "coalition_history":[],"support_history":{},"trade_history":{},"trade_agreements":{},
@@ -91,10 +91,12 @@ def normalize_game(game):
     if previous_map_kind != MAP_KIND:
         # Never discard the former board.  It remains embedded in the save as
         # a recovery snapshot while the active campaign moves to real regions.
-        if game.get("map") and not game.get("legacy_grid_map"):
+        if game.get("map") and previous_map_kind=="tokyo_mainland" and not game.get("legacy_tokyo_map"):
+            game["legacy_tokyo_map"]=deepcopy(game["map"])
+        elif game.get("map") and not game.get("legacy_grid_map"):
             game["legacy_grid_map"]=deepcopy(game["map"])
         game["map"]=_initial_map()
-        game["log"]=["旧天下盤を保存し、葛飾から実在地域で再出発した。"]+game.get("log",[])
+        game["log"]=["旧天下盤を保存し、葛飾区内の統一戦へ移行した。"]+game.get("log",[])
     if not game.get("map"): game["map"]=_initial_map()
     game.update(version=MAP_VERSION,map_kind=MAP_KIND)
     for i,item in enumerate(game["nations"]): item.setdefault("actions",deepcopy(default["nations"][i]["actions"]))
@@ -122,6 +124,8 @@ def normalize_game(game):
                      and (map_cell(game,legion["location"]).get("owner")==legion.get("owner")
                           or (map_cell(game,legion["location"]).get("claim") or {}).get("owner")==legion.get("owner"))]
     for legion in game["legions"]:
+        legion.setdefault("status","garrisoned")
+        legion.setdefault("route",None)
         if not commander_for_legion(game,legion):
             available=next((item for item in game["commanders"] if item["owner"]==legion["owner"]
                             and item["id"] not in {x.get("commander_id") for x in game["legions"]}),None)
@@ -133,12 +137,19 @@ def map_cell(game,cell_id): return next(x for x in game["map"] if x["id"]==cell_
 def legion_at(game,cell_id):
     return next((item for item in game.get("legions",[]) if item.get("location")==cell_id),None)
 
+def legion_defence_bonus(game,cell_id):
+    legion=legion_at(game,cell_id)
+    return 3 if legion and legion.get("status")=="garrisoned" else 0
+
 def _relocate_legion(game,source_id,target_id):
     moving=legion_at(game,source_id); standing=legion_at(game,target_id)
     if not moving: return
     if standing and standing["id"]!=moving["id"]:
         game["legions"].remove(moving)
-    else: moving["location"]=target_id
+    else:
+        moving["location"]=target_id
+        moving["status"]="marching"
+        moving["route"]={"from":source_id,"to":target_id,"started_turn":game["turn"]}
 
 def _clear_legions(game,owner_id):
     game["legions"]=[item for item in game.get("legions",[]) if item.get("owner")!=owner_id]
@@ -155,7 +166,7 @@ def form_legion(game,cell_id,now=None):
     available=next((item for item in game["commanders"] if item["owner"]==pid
                     and item["id"] not in {x.get("commander_id") for x in game["legions"]}),None)
     if not available: raise ValueError("軍団を率いる未配置の武将がいません。")
-    game["legions"].append({"id":f"{pid}-{number}","owner":pid,"name":name,"location":cell_id,"formed_turn":game["turn"],"commander_id":available["id"]})
+    game["legions"].append({"id":f"{pid}-{number}","owner":pid,"name":name,"location":cell_id,"formed_turn":game["turn"],"commander_id":available["id"],"status":"garrisoned","route":None})
     return _spend_command(game,f"{cell['name']}で{name}を編成した。",now)
 def adjacent_cells(game,source):
     neighbor_ids=set(source.get("neighbors",[]))
@@ -383,7 +394,7 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             structure_defence={"fort":5,"capital":8}.get(target.get("structure"),0)
             army_command=2+(min(5,(commander["level"]-1)//10) if commander else 0)
             exposed=border_strain(game,defender["id"])
-            attack=max(1,moving+army_command+bonus-overreach+rng.randint(0,3)); defence=max(1,target["troops"]+structure_defence+terrain_defence+rng.randint(0,3)-exposed); source["troops"]-=moving; player["actions"]["battle"]+=1
+            attack=max(1,moving+army_command+bonus-overreach+rng.randint(0,3)); defence=max(1,target["troops"]+structure_defence+terrain_defence+legion_defence_bonus(game,target["id"])+rng.randint(0,3)-exposed); source["troops"]-=moving; player["actions"]["battle"]+=1
             if commander:
                 commander["battles"]+=1; _gain_commander_xp(game,marching_legion,6)
             relation(game,pid,defender["id"])["status"]="war"
@@ -429,6 +440,11 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
     elif action=="recruit":
         if player["wealth"]<5: raise ValueError("徴兵には軍資金が5必要です。")
         player["wealth"]-=5; source["troops"]+=4; player["army"]+=4; message="兵を4集め、この地域へ置いた。"
+    elif action=="station":
+        legion=legion_at(game,source_id)
+        if not legion: raise ValueError("駐屯できる軍団がいません。")
+        legion["status"]="garrisoned"; legion["route"]=None; player["actions"]["defend"]+=1
+        message=f"{source['name']}に{legion['name']}を駐屯させ、防御力を3高めた。"
     else: raise ValueError("行動を選んでください。")
     return _spend_command(game,message,now)
 
@@ -447,6 +463,9 @@ def end_turn(game,now=None,seed=None):
 
 def _advance_world(game,rng):
     game["turn_events"]=[]
+    for legion in game.get("legions",[]):
+        if legion.get("status")=="marching":
+            legion["status"]="waiting"; legion["route"]=None
     player=nation(game,game["player"]); owned=[x for x in game["map"] if x["owner"]==player["id"]]
     player["wealth"]+=sum(region_income(x) for x in owned)-sum(x["troops"] for x in owned)//30
     _natural_recruitment(game,player,rng)
@@ -545,7 +564,7 @@ def _cpu_turn(game,cpu,rng):
                 else: target["troops"]=max(1,target["troops"]-max(1,moving//2))
             else:
                 defender_id=target["owner"]
-                defence=max(1,target["troops"]+{"fort":5,"capital":8}.get(target.get("structure"),0)+{"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)+rng.randint(0,3)-border_strain(game,defender_id))
+                defence=max(1,target["troops"]+{"fort":5,"capital":8}.get(target.get("structure"),0)+{"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)+legion_defence_bonus(game,target["id"])+rng.randint(0,3)-border_strain(game,defender_id))
                 command_bonus=min(5,(commander["level"]-1)//10) if commander else 0
                 attack=moving+command_bonus+rng.randint(0,3)
                 if commander:
@@ -561,7 +580,10 @@ def _cpu_turn(game,cpu,rng):
                 else: target["troops"]=max(1,defence-attack)
                 if attack<=defence and defender_id==game["player"]:
                     game["turn_events"].append({"kind":"enemy_attack","result":"defended","attacker":cpu["name"],"target":target["name"],"attack":attack,"defence":defence,"message":f"{cpu['name']}軍が{target['name']}へ侵攻。戦力 {attack} 対 {defence}。守備隊が撃退しました。"})
-    elif cpu["purpose"] in {"守備","生存"}: rng.choice(owned)["troops"]+=2; cpu["actions"]["defend"]+=1
+    elif cpu["purpose"] in {"守備","生存"}:
+        post=rng.choice(owned); post["troops"]+=2; cpu["actions"]["defend"]+=1
+        legion=legion_at(game,post["id"])
+        if legion: legion["status"]="garrisoned"; legion["route"]=None
     elif cpu["purpose"] in {"交易","富国","外交"}: cpu["wealth"]+=3; cpu["actions"]["trade"]+=1
     else: rng.choice(owned)["troops"]+=1
 

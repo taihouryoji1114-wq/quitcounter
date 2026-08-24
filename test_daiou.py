@@ -1,6 +1,6 @@
 from core.daiou import (_cpu_turn, _natural_recruitment, apply_policy, border_strain, command_capacity,
                          commander_for_legion, commander_rank, derived_identity, diplomatic_label,
-                         end_turn, form_legion, initial_game, legion_at, map_cell, nation, normalize_game,
+                         end_turn, form_legion, initial_game, legion_at, legion_defence_bonus, map_cell, nation, normalize_game,
                          perform_map_action, frontier_count, relation, request_reinforcements,
                          respond_to_diplomatic_offer, strength, trade_with_nation)
 
@@ -12,14 +12,14 @@ def test_policy_advances_turn_and_is_deterministic_with_seed():
     assert nation(game, "n0")["walls"] == 10
 
 
-def test_new_world_uses_real_tokyo_regions_and_spreads_ten_capitals():
+def test_new_world_focuses_on_katsushika_and_spreads_ten_capitals():
     game = initial_game()
     capitals = [cell for cell in game["map"] if cell["structure"] == "capital"]
-    assert len(game["map"]) == 53
+    assert len(game["map"]) == 22
     assert len(capitals) == 10
-    assert map_cell(game, "13122")["name"] == "葛飾区"
-    assert map_cell(game, "13122")["owner"] == "n0"
-    assert "13121" in map_cell(game, "13122")["neighbors"]
+    assert map_cell(game, "k07")["name"] == "亀有"
+    assert map_cell(game, "k07")["owner"] == "n0"
+    assert "k08" in map_cell(game, "k07")["neighbors"]
 
 
 def test_old_grid_world_is_kept_as_recovery_snapshot():
@@ -27,19 +27,44 @@ def test_old_grid_world_is_kept_as_recovery_snapshot():
     game["map"] = [{"id": "r0c0", "row": 0, "col": 0, "owner": "n0", "troops": 19}]
     game.pop("map_kind")
     normalize_game(game)
-    assert len(game["map"]) == 53
+    assert len(game["map"]) == 22
     assert game["legacy_grid_map"][0]["troops"] == 19
-    assert game["version"] == 6
+    assert game["version"] == 7
+
+
+def test_previous_tokyo_campaign_is_kept_separately():
+    game = initial_game()
+    old_map = [{"id": "13122", "name": "葛飾区", "troops": 31}]
+    game.update(map_kind="tokyo_mainland", map=old_map)
+    normalize_game(game)
+    assert game["legacy_tokyo_map"] == old_map
+    assert len(game["map"]) == 22
 
 
 def test_campaign_starts_with_growing_commanders_for_every_nation():
     game = initial_game()
     assert len(game["commanders"]) == 30
-    legion = legion_at(game, "13122")
+    legion = legion_at(game, "k07")
     commander = commander_for_legion(game, legion)
     assert commander["name"] == "黒田 景虎"
     assert commander_rank(commander) == "百人将"
     assert command_capacity(commander) == 10
+    assert legion["status"] == "garrisoned"
+    assert legion_defence_bonus(game, "k07") == 3
+
+
+def test_army_route_and_garrison_status_are_persisted():
+    game = initial_game()
+    target = map_cell(game, "k08")
+    target.update(owner="n0", troops=2, claim=None)
+    perform_map_action(game, "advance", "k07", "k08", march_troops=3)
+    legion = legion_at(game, "k08")
+    assert legion["status"] == "marching"
+    assert legion["route"] == {"from": "k07", "to": "k08", "started_turn": 1}
+    perform_map_action(game, "station", "k08")
+    assert legion["status"] == "garrisoned"
+    assert legion["route"] is None
+    assert legion_defence_bonus(game, "k08") == 3
 
 
 def test_commander_rank_and_capacity_continue_after_great_general():
@@ -56,7 +81,7 @@ def test_old_save_receives_commanders_without_losing_turn():
     game["turn"] = 17
     normalize_game(game)
     assert game["turn"] == 17
-    assert commander_for_legion(game, legion_at(game, "13122")) is not None
+    assert commander_for_legion(game, legion_at(game, "k07")) is not None
 
 
 def test_large_country_has_cohesion_cost():
@@ -99,19 +124,19 @@ def test_uncovered_wide_border_creates_defence_strain():
 
 def test_map_advance_requires_two_explicit_occupation_turns():
     game = initial_game()
-    perform_map_action(game, "advance", "13122", "13121", seed=2)
-    assert map_cell(game, "13121")["owner"] is None
-    assert map_cell(game, "13121")["claim"]["owner"] == "n0"
-    assert map_cell(game, "13121")["troops"] > 0
+    perform_map_action(game, "advance", "k07", "k08", seed=2)
+    assert map_cell(game, "k08")["owner"] is None
+    assert map_cell(game, "k08")["claim"]["owner"] == "n0"
+    assert map_cell(game, "k08")["troops"] > 0
 
     end_turn(game, seed=2)
-    perform_map_action(game, "occupy", "13121", seed=2)
-    assert map_cell(game, "13121")["owner"] is None
-    assert map_cell(game, "13121")["claim"]["progress"] == 1
+    perform_map_action(game, "occupy", "k08", seed=2)
+    assert map_cell(game, "k08")["owner"] is None
+    assert map_cell(game, "k08")["claim"]["progress"] == 1
 
     end_turn(game, seed=2)
-    perform_map_action(game, "occupy", "13121", seed=2)
-    assert map_cell(game, "13121")["owner"] == "n0"
+    perform_map_action(game, "occupy", "k08", seed=2)
+    assert map_cell(game, "k08")["owner"] == "n0"
     assert nation(game, "n0")["territory"] == 2
     assert game["turn"] == 3
 
@@ -137,8 +162,8 @@ def test_old_save_receives_diplomacy_without_losing_progress():
 def test_alliance_receives_troops_without_friendly_fire():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
-    source = map_cell(game, "13122")
-    target = map_cell(game, "13121")
+    source = map_cell(game, "k07")
+    target = map_cell(game, "k08")
     target.update(owner="n1", troops=2)
     before = source["troops"]
     message = perform_map_action(game, "advance", source["id"], target["id"], seed=3, march_troops=3)
@@ -151,13 +176,13 @@ def test_alliance_receives_troops_without_friendly_fire():
 def test_three_orders_are_planned_before_the_world_moves():
     game = initial_game()
     start_turn = game["turn"]
-    perform_map_action(game, "recruit", "13122")
-    perform_map_action(game, "recruit", "13122")
-    perform_map_action(game, "recruit", "13122")
+    perform_map_action(game, "recruit", "k07")
+    perform_map_action(game, "recruit", "k07")
+    perform_map_action(game, "recruit", "k07")
     assert game["turn"] == start_turn
     assert game["commands_left"] == 0
     try:
-        perform_map_action(game, "recruit", "13122")
+        perform_map_action(game, "recruit", "k07")
         assert False, "軍令上限を超えて行動できてしまった"
     except ValueError as error:
         assert "使い切りました" in str(error)
@@ -168,9 +193,9 @@ def test_three_orders_are_planned_before_the_world_moves():
 
 def test_player_can_choose_exact_marching_troops_between_own_regions():
     game = initial_game()
-    target = map_cell(game, "13121")
+    target = map_cell(game, "k08")
     target.update(owner="n0", troops=2, claim=None)
-    source = map_cell(game, "13122")
+    source = map_cell(game, "k07")
     perform_map_action(game, "advance", source["id"], target["id"], march_troops=3)
     assert source["troops"] == 5
     assert target["troops"] == 5
@@ -178,8 +203,8 @@ def test_player_can_choose_exact_marching_troops_between_own_regions():
 
 def test_player_can_transfer_chosen_troops_to_non_adjacent_own_region():
     game = initial_game()
-    source = map_cell(game, "13122")
-    target = map_cell(game, "13201")
+    source = map_cell(game, "k07")
+    target = map_cell(game, "k03")
     target.update(owner="n0", troops=2, claim=None)
     assert target["id"] not in source["neighbors"]
     message = perform_map_action(game, "transfer", source["id"], target["id"], march_troops=3)
@@ -190,8 +215,8 @@ def test_player_can_transfer_chosen_troops_to_non_adjacent_own_region():
 
 def test_transfer_100_percent_leaves_one_guard_and_moves_every_available_soldier():
     game = initial_game()
-    source = map_cell(game, "13122")
-    target = map_cell(game, "13201")
+    source = map_cell(game, "k07")
+    target = map_cell(game, "k03")
     target.update(owner="n0", troops=2, claim=None)
     message = perform_map_action(game, "transfer", source["id"], target["id"], march_troops=source["troops"])
     assert "兵7を移動" in message
@@ -208,20 +233,20 @@ def test_enemy_attack_on_player_creates_a_visible_report():
             return next((pair for pair in choices if isinstance(pair,tuple) and pair[1].get("owner")=="n0"), choices[0])
 
     game=initial_game(); game["turn_events"]=[]
-    attacker=map_cell(game,"13121"); defender=map_cell(game,"13122")
+    attacker=map_cell(game,"k08"); defender=map_cell(game,"k07")
     attacker.update(owner="n1",troops=30,claim=None,structure=None)
     defender["troops"]=1
     _cpu_turn(game,nation(game,"n1"),FixedRng())
     assert game["turn_events"]
     assert game["turn_events"][0]["kind"] == "enemy_attack"
-    assert game["turn_events"][0]["target"] == "葛飾区"
+    assert game["turn_events"][0]["target"] == "亀有"
 
 
 def test_allied_reinforcements_reach_weakest_threatened_border():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
-    border = map_cell(game, "13122")
-    enemy = map_cell(game, "13121")
+    border = map_cell(game, "k07")
+    enemy = map_cell(game, "k08")
     enemy.update(owner="n2", troops=6)
     before = border["troops"]
     message = request_reinforcements(game, "n1", seed=1)
@@ -233,7 +258,7 @@ def test_allied_reinforcements_reach_weakest_threatened_border():
 def test_allied_reinforcements_have_a_cooldown():
     game = initial_game()
     relation(game, "n0", "n1").update(status="alliance", trust=80)
-    map_cell(game, "13121").update(owner="n2", troops=6)
+    map_cell(game, "k08").update(owner="n2", troops=6)
     request_reinforcements(game, "n1", seed=1)
     try:
         request_reinforcements(game, "n1", seed=1)
@@ -244,11 +269,11 @@ def test_allied_reinforcements_have_a_cooldown():
 
 def test_ambush_has_been_removed():
     game = initial_game()
-    source = map_cell(game, "13122")
+    source = map_cell(game, "k07")
     source["terrain"] = "forest"
-    map_cell(game, "13121").update(owner="n2", troops=2)
+    map_cell(game, "k08").update(owner="n2", troops=2)
     try:
-        perform_map_action(game, "advance", "13122", "13121", seed=1, tactic="ambush")
+        perform_map_action(game, "advance", "k07", "k08", seed=1, tactic="ambush")
         assert False, "廃止した伏兵を使用できてしまった"
     except ValueError as error:
         assert "戦い方" in str(error)
@@ -256,8 +281,8 @@ def test_ambush_has_been_removed():
 
 def test_army_group_moves_as_one_visible_unit_without_duplicating_troops():
     game=initial_game()
-    source=map_cell(game,"13122")
-    target=map_cell(game,"13121")
+    source=map_cell(game,"k07")
+    target=map_cell(game,"k08")
     target.update(owner="n0",troops=2,claim=None)
     total_before=sum(cell["troops"] for cell in game["map"] if cell.get("owner")=="n0")
     assert legion_at(game,source["id"])["name"] == "第一軍"
@@ -269,7 +294,7 @@ def test_army_group_moves_as_one_visible_unit_without_duplicating_troops():
 
 def test_player_can_form_a_second_named_army_group():
     game=initial_game()
-    target=map_cell(game,"13121")
+    target=map_cell(game,"k08")
     target.update(owner="n0",troops=6,claim=None)
     message=form_legion(game,target["id"])
     assert "第二軍" in message
@@ -278,7 +303,7 @@ def test_player_can_form_a_second_named_army_group():
 
 
 def test_garrison_must_be_formed_into_an_army_before_crossing_border():
-    game=initial_game(); source=map_cell(game,"13121"); source.update(owner="n0",troops=8,claim=None)
+    game=initial_game(); source=map_cell(game,"k08"); source.update(owner="n0",troops=8,claim=None)
     target=map_cell(game,source["neighbors"][0]); target.update(owner="n2",troops=2,claim=None)
     try:
         perform_map_action(game,"advance",source["id"],target["id"],march_troops=4,seed=1)
@@ -301,7 +326,7 @@ def test_chosen_country_trade_and_incoming_alliance_offer():
 
 def test_soldiers_grow_slowly_but_stop_at_population_capacity():
     class FixedRng: pass
-    game=initial_game(); player=nation(game,"n0"); capital=map_cell(game,"13122")
+    game=initial_game(); player=nation(game,"n0"); capital=map_cell(game,"k07")
     before=capital["troops"]; _natural_recruitment(game,player,FixedRng())
     assert capital["troops"] in {before+1,before+2}
     capital["troops"]=100
@@ -311,9 +336,9 @@ def test_soldiers_grow_slowly_but_stop_at_population_capacity():
 
 def test_capturing_a_capital_annexes_the_defeated_country():
     game = initial_game()
-    source = map_cell(game, "13122")
-    capital = map_cell(game, "13121")
-    extra = map_cell(game, "13123")
+    source = map_cell(game, "k07")
+    capital = map_cell(game, "k08")
+    extra = map_cell(game, "k09")
     capital.update(owner="n1", structure="capital", troops=1, claim=None)
     extra.update(owner="n1", troops=6, claim=None)
     source["troops"] = 40
@@ -326,9 +351,9 @@ def test_capturing_a_capital_annexes_the_defeated_country():
 
 def test_pincer_requires_two_friendly_fronts():
     game = initial_game()
-    target = map_cell(game, "13107")
+    target = map_cell(game, "k10")
     target.update(owner="n2", troops=2)
-    second_front = map_cell(game, "13121")
+    second_front = map_cell(game, "k08")
     second_front.update(owner="n0", troops=4)
-    message = perform_map_action(game, "advance", "13122", "13107", seed=1, tactic="pincer")
+    message = perform_map_action(game, "advance", "k07", "k10", seed=1, tactic="pincer")
     assert "挟撃" in message
