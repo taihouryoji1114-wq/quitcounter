@@ -206,6 +206,19 @@ def strength(item):
     land=max(1,int(item["territory"])); cohesion=max(.58,1.08-(land-1)*.055)
     return round(item["army"]*cohesion+item["walls"]*.65+item["morale"]*.16)
 
+def frontier_count(game,nation_id):
+    """Number of owned regions exposed to another nation or a foreign camp."""
+    return sum(1 for cell in game["map"] if cell.get("owner")==nation_id and any(
+        neighbor.get("owner") not in {None,nation_id}
+        or ((neighbor.get("claim") or {}).get("owner") not in {None,nation_id})
+        for neighbor in adjacent_cells(game,cell)))
+
+def border_strain(game,nation_id):
+    """Wide borders spread command capacity thin; field armies cover two fronts each."""
+    fronts=frontier_count(game,nation_id)
+    armies=sum(legion.get("owner")==nation_id for legion in game.get("legions",[]))
+    return min(6,max(0,fronts-(armies*2+1)))
+
 def derived_identity(item):
     actions=item.get("actions",{}); labels={"expand":"開拓の国","trade":"交易の国","build":"建設の国","defend":"守りの国","battle":"武威の国"}
     if not actions or max(actions.values(),default=0)<2: return "まだ定まっていない"
@@ -316,7 +329,8 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             terrain_defence={"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)
             structure_defence={"fort":5,"capital":8}.get(target.get("structure"),0)
             army_command=2  # A named field army has command staff and marches as one unit.
-            attack=max(1,moving+army_command+bonus-overreach+rng.randint(0,3)); defence=target["troops"]+structure_defence+terrain_defence+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
+            exposed=border_strain(game,defender["id"])
+            attack=max(1,moving+army_command+bonus-overreach+rng.randint(0,3)); defence=max(1,target["troops"]+structure_defence+terrain_defence+rng.randint(0,3)-exposed); source["troops"]-=moving; player["actions"]["battle"]+=1
             relation(game,pid,defender["id"])["status"]="war"
             if attack>defence:
                 defender["morale"]=max(15,defender["morale"]-5)
@@ -472,7 +486,7 @@ def _cpu_turn(game,cpu,rng):
                 else: target["troops"]=max(1,target["troops"]-max(1,moving//2))
             else:
                 defender_id=target["owner"]
-                defence=target["troops"]+{"fort":5,"capital":8}.get(target.get("structure"),0)+{"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)+rng.randint(0,3)
+                defence=max(1,target["troops"]+{"fort":5,"capital":8}.get(target.get("structure"),0)+{"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)+rng.randint(0,3)-border_strain(game,defender_id))
                 attack=moving+rng.randint(0,3)
                 if attack>defence:
                     was_capital=target.get("structure")=="capital"

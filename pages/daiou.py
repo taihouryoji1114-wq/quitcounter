@@ -1,7 +1,7 @@
 from nicegui import ui
 
 from core.auth import require_app_access, selected_user_id
-from core.daiou import (adjacent_cells, derived_identity, diplomatic_label, end_alliance,
+from core.daiou import (adjacent_cells, border_strain, derived_identity, diplomatic_label, end_alliance,
                          end_turn, form_legion, initial_game, legion_at, map_cell, map_viewbox, nation, normalize_game,
                          perform_map_action, propose_alliance, relation,
                          region_income, region_shape, request_reinforcements, respond_to_diplomatic_offer, strength,
@@ -12,6 +12,8 @@ from core.theme import Theme
 
 TERRAIN_ICON={"plain":"·","forest":"♣","hill":"▲","river":"≈"}
 STRUCTURE_ICON={"capital":"城","town":"町","fort":"砦",None:""}
+KATSUSHIKA_DISTRICTS=(("亀有",1095,226),("金町",1120,187),("柴又",1145,211),("青戸",1097,250),
+                      ("高砂",1125,244),("新小岩",1125,287),("堀切",1080,233))
 
 @ui.page('/daiou')
 def daiou_page():
@@ -78,7 +80,7 @@ def daiou_page():
         state['march']=percent; render.refresh()
 
     def change_map_zoom(delta):
-        state['map_zoom']=max(70,min(180,state['map_zoom']+delta)); render.refresh()
+        state['map_zoom']=max(70,min(280,state['map_zoom']+delta)); render.refresh()
 
     def begin_transfer():
         if not state.get('selected'): ui.notify('兵を出す自国領を先に選んでください',type='warning'); return
@@ -155,6 +157,8 @@ def daiou_page():
                 ui.label('戦況').classes('war-status-title')
                 ui.label(f"国境の緊張 {len(fronts)}か所").classes('war-status-item danger' if fronts else 'war-status-item')
                 ui.label(f"領土化中 {len(camps)}陣").classes('war-status-item')
+                strain=border_strain(game,game['player'])
+                ui.label(f"国境負担 {strain}").classes('war-status-item danger' if strain else 'war-status-item')
             if game.get('coalition'):
                 members='・'.join(nation(game,x)['name'] for x in game['coalition']['members'])
                 with ui.element('section').classes('coalition-alert'):
@@ -212,6 +216,11 @@ def daiou_page():
                     if cell['id']==state['selected']: classes+=' selected'
                     shape=region_shape(cell['id'])
                     svg.append(f'<path d="{shape["path"]}" vector-effect="non-scaling-stroke" class="{classes}" data-region="{cell["id"]}" aria-label="{cell["name"]}"><title>{cell["name"]}</title></path>')
+                    if cell['id']=='13122' and state['map_zoom']>=140:
+                        roads=' '.join(f'{x},{y}' for _,x,y in KATSUSHIKA_DISTRICTS)
+                        svg.append(f'<polyline points="{roads}" class="local-road"/>')
+                        for district,x,y in KATSUSHIKA_DISTRICTS:
+                            svg.append(f'<circle cx="{x}" cy="{y}" r="2.8" class="local-base"/><text x="{x+4}" y="{y-3}" class="local-name">{district}</text>')
                     if cell.get('structure'):
                         structure={'capital':'城','town':'町','fort':'砦'}[cell['structure']]
                         svg.append(f'<g class="structure-marker structure-{cell["structure"]}" transform="translate({shape["cx"]-11} {shape["cy"]-29})"><path d="M1 19h20V8l-4 3V5l-4 3V2L9 8V5L5 11 1 8z"/><text x="11" y="17" text-anchor="middle">{structure}</text></g>')
@@ -252,7 +261,9 @@ def daiou_page():
                 with ui.element('section').classes('region-intel'):
                     ui.label(f"{inspected['name']}　｜　{inspect_owner}").classes('region-intel-title')
                     unit_name=inspect_legion['name'] if inspect_legion else ('先遣隊' if inspected.get('claim') else '守備隊')
-                    ui.label(f"{unit_name}・兵 {inspected['troops']}　｜　季節収入 +{region_income(inspected)}　｜　{terrain_effect(inspected)}").classes('region-intel-copy')
+                    strain=border_strain(game,inspected['owner']) if inspected.get('owner') else 0
+                    strain_text=f"　｜　国境負担 -{strain}" if strain else ''
+                    ui.label(f"{unit_name}・兵 {inspected['troops']}　｜　季節収入 +{region_income(inspected)}　｜　{terrain_effect(inspected)}{strain_text}").classes('region-intel-copy')
             with ui.element('section').classes('command-panel'):
                 if selected:
                     claim=selected.get('claim') or {}
@@ -299,7 +310,8 @@ def daiou_page():
                         ui.label(('あなた・' if item['id']==game['player'] else '')+item['name']).classes('font-black grow')
                         action=max(item.get('actions',{}),key=item.get('actions',{}).get)
                         intent={'expand':'↗ 拡大','trade':'⇄ 交易','build':'▣ 建設','defend':'⬟ 防衛','battle':'⚔ 交戦'}[action]
-                        ui.label(f"{intent}　領土 {item['territory']}・兵力 {item['army']}").classes('nation-detail')
+                        strain=border_strain(game,item['id'])
+                        ui.label(f"{intent}　領土 {item['territory']}・兵力 {item['army']}"+(f"・国境負担 {strain}" if strain else '')).classes('nation-detail')
                         if item['id']!=game['player']:
                             status=diplomatic_label(game,game['player'],item['id'])
                             ui.label(status).classes('relation-chip '+relation(game,game['player'],item['id'])['status'])
@@ -347,7 +359,7 @@ DAIOU_MAP_MEMORY_SCRIPT = r'''
 '''
 
 DAIOU_UNITS_CSS='''
-.army-headquarters{margin:0 0 12px;padding:13px;border-radius:18px;background:linear-gradient(135deg,rgba(68,49,27,.95),rgba(19,31,28,.96));border:1px solid rgba(240,201,111,.35)}.army-hq-title{font-family:serif;font-size:14px;font-weight:950;letter-spacing:.16em;color:#FFE09A}.army-hq-copy{font-size:8px;color:#C9C4B4}.army-hq-count{padding:5px 9px;border-radius:99px;background:#D5AD55;color:#142019;font-size:9px;font-weight:950}.army-hq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.army-hq-card{display:flex;align-items:center;gap:8px;min-width:0;padding:9px;border:1px solid rgba(255,224,154,.18);border-radius:13px;color:#F7E8C5;background:rgba(255,255,255,.055);text-align:left}.army-role-guide{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.army-role-guide .q-label{padding:7px;border-radius:9px;background:rgba(0,0,0,.18);font-size:8px;color:#E5D6B7}.army-miniature{position:relative;width:36px;height:32px;flex:0 0 36px}.army-soldier{position:absolute;bottom:2px;width:12px;height:15px;border-radius:6px 6px 3px 3px;background:linear-gradient(#E7C56E,#7E5A25);box-shadow:0 2px 4px #000}.army-soldier:before{content:'';position:absolute;left:2px;top:-7px;width:8px;height:8px;border-radius:50%;background:#F0D084}.army-soldier.lead{left:13px;height:18px;z-index:2}.army-soldier.rear{left:3px;transform:scale(.8);opacity:.8}.army-banner{position:absolute;right:2px;top:1px;width:12px;height:15px;border-left:2px solid #E8CB81;background:#9D3028;clip-path:polygon(0 0,100% 0,72% 50%,100% 100%,0 100%)}.army-card-name{font-size:10px;font-weight:950;color:#F6D689}.army-card-place{font-size:8px;color:#BFC7BD}.army-card-troops{font-size:10px;font-weight:950;white-space:nowrap}.nation-legend{display:flex;gap:5px;overflow-x:auto;margin:6px 0 8px;padding-bottom:3px}.nation-legend-chip{display:flex;align-items:center;gap:5px;flex:0 0 auto;padding:5px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:8px;font-weight:850}.nation-legend-chip.player{box-shadow:inset 0 0 0 1px #F5CA69;color:#FFE3A0}.nation-color-dot{width:8px;height:8px;border-radius:50%;background:#777}.owner-n0 .nation-color-dot{background:#a88032}.owner-n1 .nation-color-dot{background:#527ca7}.owner-n2 .nation-color-dot{background:#337f79}.owner-n3 .nation-color-dot{background:#a84944}.owner-n4 .nation-color-dot{background:#aaa68f}.owner-n5 .nation-color-dot{background:#568947}.owner-n6 .nation-color-dot{background:#765b94}.owner-n7 .nation-color-dot{background:#9a693b}.owner-n8 .nation-color-dot{background:#4c555d}.owner-n9 .nation-color-dot{background:#7770a2}.field-army,.garrison-shield{pointer-events:none;fill:#22312B;stroke:#FFE5A0;stroke-width:1.5;filter:drop-shadow(0 3px 2px rgba(0,0,0,.65))}.field-army.owner-n0,.garrison-shield.owner-n0{fill:#a88032}.field-army.owner-n1,.garrison-shield.owner-n1{fill:#527ca7}.field-army.owner-n2,.garrison-shield.owner-n2{fill:#337f79}.field-army.owner-n3,.garrison-shield.owner-n3{fill:#a84944}.field-army.owner-n4,.garrison-shield.owner-n4{fill:#aaa68f}.field-army.owner-n5,.garrison-shield.owner-n5{fill:#568947}.field-army.owner-n6,.garrison-shield.owner-n6{fill:#765b94}.field-army.owner-n7,.garrison-shield.owner-n7{fill:#9a693b}.field-army.owner-n8,.garrison-shield.owner-n8{fill:#4c555d}.field-army.owner-n9,.garrison-shield.owner-n9{fill:#7770a2}.field-army .army-shadow{fill:#0A1110;stroke:none;opacity:.75}.field-army .army-flag{stroke:#F7D986;stroke-width:1.5}.structure-marker{pointer-events:none;fill:#171B18;stroke:#F5D688;stroke-width:1}.structure-marker text{fill:#FFF0C2;stroke:none;font-size:7px;font-weight:950}.structure-capital{fill:#7B301E}.structure-town{fill:#5E4A25}.structure-fort{fill:#34484A}.envoy-card{display:flex;align-items:center;gap:7px;margin-bottom:10px;padding:12px;border-radius:15px;background:linear-gradient(110deg,#24483d,#172720);border:1px solid rgba(118,222,182,.35)}.envoy-title{font-size:11px;font-weight:950;color:#9CE8CC}.envoy-copy{font-size:8px;color:#DDE8DF}.envoy-accept{background:#4A9B7A!important}.envoy-decline{color:#D8CDB6!important}.map-heading-row{margin-top:5px}.map-zoom-button{color:#F2D481!important;background:rgba(255,255,255,.07)!important}.map-zoom-value{min-width:38px;text-align:center;font-size:9px;font-weight:950}.diplomacy-button.trade{color:#9FE1C4!important}@media(max-width:480px){.army-hq-grid,.army-role-guide{grid-template-columns:1fr}}
+.army-headquarters{margin:0 0 12px;padding:13px;border-radius:18px;background:linear-gradient(135deg,rgba(68,49,27,.95),rgba(19,31,28,.96));border:1px solid rgba(240,201,111,.35)}.army-hq-title{font-family:serif;font-size:14px;font-weight:950;letter-spacing:.16em;color:#FFE09A}.army-hq-copy{font-size:8px;color:#C9C4B4}.army-hq-count{padding:5px 9px;border-radius:99px;background:#D5AD55;color:#142019;font-size:9px;font-weight:950}.army-hq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.army-hq-card{display:flex;align-items:center;gap:8px;min-width:0;padding:9px;border:1px solid rgba(255,224,154,.18);border-radius:13px;color:#F7E8C5;background:rgba(255,255,255,.055);text-align:left}.army-role-guide{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.army-role-guide .q-label{padding:7px;border-radius:9px;background:rgba(0,0,0,.18);font-size:8px;color:#E5D6B7}.army-miniature{position:relative;width:36px;height:32px;flex:0 0 36px}.army-soldier{position:absolute;bottom:2px;width:12px;height:15px;border-radius:6px 6px 3px 3px;background:linear-gradient(#E7C56E,#7E5A25);box-shadow:0 2px 4px #000}.army-soldier:before{content:'';position:absolute;left:2px;top:-7px;width:8px;height:8px;border-radius:50%;background:#F0D084}.army-soldier.lead{left:13px;height:18px;z-index:2}.army-soldier.rear{left:3px;transform:scale(.8);opacity:.8}.army-banner{position:absolute;right:2px;top:1px;width:12px;height:15px;border-left:2px solid #E8CB81;background:#9D3028;clip-path:polygon(0 0,100% 0,72% 50%,100% 100%,0 100%)}.army-card-name{font-size:10px;font-weight:950;color:#F6D689}.army-card-place{font-size:8px;color:#BFC7BD}.army-card-troops{font-size:10px;font-weight:950;white-space:nowrap}.nation-legend{display:flex;gap:5px;overflow-x:auto;margin:6px 0 8px;padding-bottom:3px}.nation-legend-chip{display:flex;align-items:center;gap:5px;flex:0 0 auto;padding:5px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:8px;font-weight:850}.nation-legend-chip.player{box-shadow:inset 0 0 0 1px #F5CA69;color:#FFE3A0}.nation-color-dot{width:8px;height:8px;border-radius:50%;background:#777}.owner-n0 .nation-color-dot{background:#a88032}.owner-n1 .nation-color-dot{background:#527ca7}.owner-n2 .nation-color-dot{background:#337f79}.owner-n3 .nation-color-dot{background:#a84944}.owner-n4 .nation-color-dot{background:#aaa68f}.owner-n5 .nation-color-dot{background:#568947}.owner-n6 .nation-color-dot{background:#765b94}.owner-n7 .nation-color-dot{background:#9a693b}.owner-n8 .nation-color-dot{background:#4c555d}.owner-n9 .nation-color-dot{background:#7770a2}.field-army,.garrison-shield{pointer-events:none;fill:#22312B;stroke:#FFE5A0;stroke-width:1.5;filter:drop-shadow(0 3px 2px rgba(0,0,0,.65))}.field-army.owner-n0,.garrison-shield.owner-n0{fill:#a88032}.field-army.owner-n1,.garrison-shield.owner-n1{fill:#527ca7}.field-army.owner-n2,.garrison-shield.owner-n2{fill:#337f79}.field-army.owner-n3,.garrison-shield.owner-n3{fill:#a84944}.field-army.owner-n4,.garrison-shield.owner-n4{fill:#aaa68f}.field-army.owner-n5,.garrison-shield.owner-n5{fill:#568947}.field-army.owner-n6,.garrison-shield.owner-n6{fill:#765b94}.field-army.owner-n7,.garrison-shield.owner-n7{fill:#9a693b}.field-army.owner-n8,.garrison-shield.owner-n8{fill:#4c555d}.field-army.owner-n9,.garrison-shield.owner-n9{fill:#7770a2}.field-army .army-shadow{fill:#0A1110;stroke:none;opacity:.75}.field-army .army-flag{stroke:#F7D986;stroke-width:1.5}.structure-marker{pointer-events:none;fill:#171B18;stroke:#F5D688;stroke-width:1}.structure-marker text{fill:#FFF0C2;stroke:none;font-size:7px;font-weight:950}.structure-capital{fill:#7B301E}.structure-town{fill:#5E4A25}.structure-fort{fill:#34484A}.envoy-card{display:flex;align-items:center;gap:7px;margin-bottom:10px;padding:12px;border-radius:15px;background:linear-gradient(110deg,#24483d,#172720);border:1px solid rgba(118,222,182,.35)}.envoy-title{font-size:11px;font-weight:950;color:#9CE8CC}.envoy-copy{font-size:8px;color:#DDE8DF}.envoy-accept{background:#4A9B7A!important}.envoy-decline{color:#D8CDB6!important}.map-heading-row{margin-top:5px}.map-zoom-button{color:#F2D481!important;background:rgba(255,255,255,.07)!important}.map-zoom-value{min-width:38px;text-align:center;font-size:9px;font-weight:950}.diplomacy-button.trade{color:#9FE1C4!important}.local-road{pointer-events:none;fill:none;stroke:rgba(255,235,173,.62);stroke-width:1.2;stroke-dasharray:3 2}.local-base{pointer-events:none;fill:#FFE19A;stroke:#5A3A13;stroke-width:1}.local-name{pointer-events:none;fill:#FFF5D8;font-size:6px;font-weight:950;paint-order:stroke;stroke:#172019;stroke-width:1.4px}@media(max-width:480px){.army-hq-grid,.army-role-guide{grid-template-columns:1fr}}
 '''
 
 DAIOU_BATTLE_CSS='''

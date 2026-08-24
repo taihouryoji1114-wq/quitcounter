@@ -1,6 +1,6 @@
-from core.daiou import (_cpu_turn, _natural_recruitment, apply_policy, derived_identity, diplomatic_label,
+from core.daiou import (_cpu_turn, _natural_recruitment, apply_policy, border_strain, derived_identity, diplomatic_label,
                          end_turn, form_legion, initial_game, legion_at, map_cell, nation, normalize_game,
-                         perform_map_action, relation, request_reinforcements,
+                         perform_map_action, frontier_count, relation, request_reinforcements,
                          respond_to_diplomatic_offer, strength, trade_with_nation)
 
 
@@ -36,6 +36,37 @@ def test_large_country_has_cohesion_cost():
     small = nation(game, "n0")
     large = dict(small, territory=8)
     assert strength(large) < strength(dict(large, territory=1))
+
+
+def test_uncovered_wide_border_creates_defence_strain():
+    game = initial_game()
+    for cell in game["map"]:
+        cell["owner"] = None
+        cell["claim"] = None
+    game["legions"] = []
+
+    sources = []
+    targets = []
+    reserved = set()
+    for cell in game["map"]:
+        if cell["id"] in reserved:
+            continue
+        target = next((neighbor for neighbor in cell["neighbors"] if neighbor not in reserved), None)
+        if target is None:
+            continue
+        sources.append(cell["id"])
+        targets.append(target)
+        reserved.update((cell["id"], target))
+        if len(sources) == 4:
+            break
+
+    for region_id in sources:
+        map_cell(game, region_id)["owner"] = "n0"
+    for region_id in targets:
+        map_cell(game, region_id)["owner"] = "n1"
+
+    assert frontier_count(game, "n0") == 4
+    assert border_strain(game, "n0") == 3
 
 
 def test_map_advance_requires_two_explicit_occupation_turns():
