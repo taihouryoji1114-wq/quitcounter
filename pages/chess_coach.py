@@ -6,8 +6,9 @@ from core.data import data
 from core.theme import Theme
 
 
-# 白黒とも同じシルエットを使い、色だけを変える。輪郭駒と塗り駒の混在を防ぐ。
-PIECES={"P":"♟","N":"♞","B":"♝","R":"♜","Q":"♛","K":"♚",
+# Safariでは黒駒記号をCSSで白くしても黒表示になる場合がある。
+# 自軍には白駒そのものの記号を使い、ポーンの誤表示を防ぐ。
+PIECES={"P":"♙","N":"♘","B":"♗","R":"♖","Q":"♕","K":"♔",
         "p":"♟","n":"♞","b":"♝","r":"♜","q":"♛","k":"♚"}
 
 
@@ -16,16 +17,20 @@ def chess_coach_page():
     if not require_app_access('chess_coach'): return
     Theme.page('CHESS MENTOR',app_name='chess_coach')
     uid=selected_user_id(); profiles=data.data.setdefault('chess_coach',{}).setdefault('profiles',{})
-    game=profiles.setdefault(uid,new_game()); state={'selected':None,'targets':[],'home':not bool(game.get('history'))}
+    game=profiles.setdefault(uid,new_game()); state={'selected':None,'targets':[],'home':not bool(game.get('history')),
+                                                     'busy':False,'plan_fen':None,'plans':[]}
 
     def save(): data.save()
     def choose(square):
+        if state['busy']: return
         board=board_from(game); piece=board.piece_at(__import__('chess').parse_square(square))
         if state['selected'] and square in state['targets']:
             try:
+                state['busy']=True
                 play_user_move(game,state['selected'],square)
-                state.update(selected=None,targets=[]); save(); ui.notify('先生が応手を返しました',type='positive')
+                state.update(selected=None,targets=[],plan_fen=None,plans=[]); save(); ui.notify('先生が応手を返しました',type='positive')
             except ValueError as error: ui.notify(str(error),type='warning')
+            finally: state['busy']=False
             render.refresh(); return
         if piece and piece.color==board.turn:
             state['selected']=square; state['targets']=legal_targets(game,square)
@@ -95,7 +100,7 @@ def chess_coach_page():
                             if name==state['selected']: classes+=' selected'
                             if name in state['targets']: classes+=' target'
                             if game.get('history') and name in {game['history'][-1].get('from'),game['history'][-1].get('to')}: classes+=' last-move'
-                            with ui.button(on_click=lambda _,value=name:choose(value)).props('flat dense').classes(classes):
+                            with ui.element('button').props(f'type="button" aria-label="{name}"').classes(classes).on('click',lambda _,value=name:choose(value)):
                                 if piece: ui.label(PIECES[piece.symbol()]).classes(
                                     'chess-piece '+('white-piece' if piece.color else 'black-piece')
                                     +f' piece-{piece.symbol().lower()}')
@@ -113,9 +118,12 @@ def chess_coach_page():
                     ui.label('相手の狙い・注意点').classes('insight-label'); ui.label(coach.get('danger','')).classes('insight-text')
                 if coach.get('candidates'):
                     ui.label('次に考えたい候補・タップして計画を研究').classes('candidate-label')
-                    plans=explore_plans(board,count=len(coach['candidates']))
+                    current_fen=board.fen()
+                    if state['plan_fen']!=current_fen:
+                        state['plans']=explore_plans(board,count=len(coach['candidates']))
+                        state['plan_fen']=current_fen
                     with ui.column().classes('candidate-row w-full'):
-                        for i,plan in enumerate(plans):
+                        for i,plan in enumerate(state['plans']):
                             ui.button(f"{i+1}　{plan['move']}　｜　{plan['verdict']}",icon='route',on_click=lambda _,p=plan:open_plan(p)).props('flat no-caps').classes('candidate-chip plan-button')
             if game.get('history'):
                 with ui.expansion('これまでの棋譜',icon='history',value=False).classes('history-panel'):
@@ -130,4 +138,6 @@ body{background:#080B10!important;color:#F4EFE5}.mentor-splash{width:min(100%,70
 .plan-button{width:100%;min-height:39px!important;justify-content:flex-start!important;text-align:left}.plan-dialog{width:min(92vw,560px)!important;padding:22px!important;border:1px solid rgba(218,178,96,.35)!important;border-radius:22px!important;background:linear-gradient(145deg,#19232D,#0C1118)!important;color:#F4EFE5!important}.plan-title{font-family:Georgia,serif;font-size:21px;font-weight:950}.plan-verdict{margin-top:10px;padding:6px 10px;border-radius:8px;background:rgba(213,169,79,.12);font-size:10px;font-weight:950;color:#EBCB86}.variation-line{margin-top:10px;padding:14px;border:1px solid rgba(214,176,99,.22);border-radius:13px;background:#090D13}.variation-text{margin-top:5px;font-family:Georgia,serif;font-size:13px;line-height:1.7;color:#F0D697}.plan-note{margin-top:12px;font-size:8px;line-height:1.6;color:#8F958F}.compare-button{width:100%;margin-top:14px;color:#E4C47E!important}
 /* 碁盤のような灰色をやめ、駒が一目で分かるクラシック配色へ統一 */
 .chess-square.light{background:linear-gradient(145deg,#F1E5C8,#D8C59F)!important}.chess-square.dark{background:linear-gradient(145deg,#57705A,#344A3B)!important}.white-piece{color:#FFF7DC;text-shadow:0 1px 0 #fff,0 2px 0 #D7BD87,-1px 0 #31291F,1px 0 #31291F,0 3px 4px rgba(0,0,0,.75)}.black-piece{color:#24211E;text-shadow:0 1px 0 #8C7653,-1px 0 #060606,1px 0 #060606,0 3px 4px rgba(0,0,0,.72)}.chess-piece.piece-p{transform:scale(.86);transform-origin:center}.chess-piece.piece-n,.chess-piece.piece-b{transform:scale(.94)}
+/* 64個のQuasarボタンを素のボタンへ替え、スマホのタップ遅延と重い再描画を減らす */
+.chess-square{display:block!important;width:100%!important;height:100%!important;margin:0!important;border:0!important;appearance:none;-webkit-appearance:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}.chess-square.target:after{pointer-events:none;width:28%;height:28%;left:36%;top:36%}
 '''
