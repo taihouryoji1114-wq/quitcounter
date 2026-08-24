@@ -7,7 +7,7 @@ import random
 
 POLICIES={"prosper":("富国","国力と収入を伸ばす",2,0,1),"train":("訓練","兵を鍛える",0,3,0),"guard":("守備","守りを整える",0,1,3),"trade":("交易","資金を得る",3,0,1)}
 NATION_SEEDS=(("暁国","均衡"),("北嶺","守備"),("蒼海","交易"),("紅蓮","拡大"),("白峰","富国"),("翠野","生存"),("紫雲","機会"),("金砂","交易"),("黒鉄","軍備"),("月影","外交"))
-MAP_VERSION=4
+MAP_VERSION=5
 MAP_KIND="tokyo_mainland"
 COMMANDS_PER_TURN=3
 _MAP_DATA=json.loads((Path(__file__).resolve().parents[1]/"static"/"daiou_tokyo_map.json").read_text())
@@ -45,7 +45,8 @@ def initial_game(now=None):
              for region_id,owner in CAPITALS.items()]
     return {"version":MAP_VERSION,"map_kind":MAP_KIND,"turn":1,"season":"春","commands_left":COMMANDS_PER_TURN,
             "player":"n0","nations":nations,"map":world,"legions":legions,"diplomacy":{},"coalition":None,
-            "support_history":{},"turn_events":[],"log":["葛飾の地から、あなたの治世が始まった。"],
+            "coalition_history":[],"support_history":{},"trade_history":{},"trade_agreements":{},
+            "diplomatic_offer":None,"offer_history":{},"turn_events":[],"log":["葛飾の地から、あなたの治世が始まった。"],
             "created_at":now.isoformat(timespec="seconds"),"updated_at":now.isoformat(timespec="seconds")}
 
 def normalize_game(game):
@@ -147,6 +148,37 @@ def end_alliance(game,target_id):
     message=f"{target['name']}との協定を破棄した。信用が低下した。"; game["log"]=([message]+game.get("log",[]))[:30]; game["updated_at"]=datetime.now().isoformat(timespec="seconds")
     return message
 
+def trade_with_nation(game,target_id,now=None):
+    """Trade with a chosen living nation instead of an arbitrary neighbour."""
+    normalize_game(game); pid=game["player"]
+    if int(game.get("commands_left",COMMANDS_PER_TURN))<=0: raise ValueError("今季の軍令は使い切りました。")
+    if target_id==pid: raise ValueError("自国とは交易できません。")
+    target=nation(game,target_id); rel=relation(game,pid,target_id)
+    if not target["alive"]: raise ValueError("この国はすでに滅亡しています。")
+    if rel["status"]=="war": raise ValueError("交戦中の国とは交易できません。")
+    if int(game.setdefault("trade_history",{}).get(target_id,-99))==game["turn"]:
+        raise ValueError("この国とは今季すでに交易しました。")
+    agreement=int(game.setdefault("trade_agreements",{}).get(target_id,0))>=game["turn"]
+    gain=4+(2 if rel["status"]=="alliance" else 0)+(2 if agreement else 0)
+    nation(game,pid)["wealth"]+=gain; target["wealth"]+=2
+    nation(game,pid)["actions"]["trade"]+=1; rel["trust"]=min(100,rel["trust"]+3)
+    game["trade_history"][target_id]=game["turn"]
+    return _spend_command(game,f"{target['name']}と交易し、軍資金を{gain}得た。",now)
+
+def respond_to_diplomatic_offer(game,accept):
+    normalize_game(game); offer=game.get("diplomatic_offer")
+    if not offer: raise ValueError("返事を待っている使者はいません。")
+    sender=nation(game,offer["from"]); pid=game["player"]; rel=relation(game,pid,sender["id"])
+    if accept and offer["kind"]=="alliance":
+        rel.update(status="alliance",trust=min(100,rel["trust"]+15)); message=f"{sender['name']}の同盟提案を受け入れた。"
+    elif accept:
+        game.setdefault("trade_agreements",{})[sender["id"]]=game["turn"]+6
+        rel["trust"]=min(100,rel["trust"]+10); message=f"{sender['name']}と6季の交易協定を結んだ。"
+    else:
+        rel["trust"]=max(0,rel["trust"]-2); message=f"{sender['name']}の提案を丁重に断った。"
+    game["diplomatic_offer"]=None; game["log"]=([message]+game.get("log",[]))[:30]
+    game["updated_at"]=datetime.now().isoformat(timespec="seconds"); return message
+
 def request_reinforcements(game,target_id,seed=None):
     """Ask an ally to reinforce the player's weakest border territory."""
     normalize_game(game); pid=game["player"]
@@ -238,6 +270,8 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
         if not target_id: raise ValueError("進む先を選んでください。")
         target=map_cell(game,target_id)
         if target not in adjacent_cells(game,source): raise ValueError("隣の地域へだけ進めます。")
+        if target.get("owner")!=pid and not legion_at(game,source_id):
+            raise ValueError("国境を越えて進軍できるのは軍団だけです。先にこの守備隊を軍団へ編成してください。")
         if source["troops"]<3: raise ValueError("この地域には進軍できる兵が足りません。")
         moving=max(2,source["troops"]//2) if march_troops is None else int(march_troops)
         moving=min(moving,source["troops"]-1)
@@ -281,7 +315,8 @@ def perform_map_action(game,action,source_id,target_id=None,now=None,seed=None,t
             overreach=max(0,(player.get("territory",1)-4)//3)
             terrain_defence={"forest":1,"hill":2,"river":1}.get(target.get("terrain"),0)
             structure_defence={"fort":5,"capital":8}.get(target.get("structure"),0)
-            attack=max(1,moving+bonus-overreach+rng.randint(0,3)); defence=target["troops"]+structure_defence+terrain_defence+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
+            army_command=2  # A named field army has command staff and marches as one unit.
+            attack=max(1,moving+army_command+bonus-overreach+rng.randint(0,3)); defence=target["troops"]+structure_defence+terrain_defence+rng.randint(0,3); source["troops"]-=moving; player["actions"]["battle"]+=1
             relation(game,pid,defender["id"])["status"]="war"
             if attack>defence:
                 defender["morale"]=max(15,defender["morale"]-5)
@@ -345,16 +380,51 @@ def _advance_world(game,rng):
     game["turn_events"]=[]
     player=nation(game,game["player"]); owned=[x for x in game["map"] if x["owner"]==player["id"]]
     player["wealth"]+=sum(region_income(x) for x in owned)-sum(x["troops"] for x in owned)//30
+    _natural_recruitment(game,player,rng)
     for cpu in game["nations"]:
         if cpu["id"]==player["id"] or not cpu["alive"]: continue
         cpu_owned=[x for x in game["map"] if x["owner"]==cpu["id"]]
         cpu["wealth"]+=sum(region_income(x) for x in cpu_owned)-sum(x["troops"] for x in cpu_owned)//30
+        _natural_recruitment(game,cpu,rng)
         orders=3 if cpu["purpose"] in {"拡大","軍備","機会"} else 2
         for _ in range(orders):
             if cpu["alive"]: _cpu_turn(game,cpu,rng)
+    _update_coalition(game)
     _consider_coalition(game,rng)
     _coalition_muster(game)
+    _consider_diplomatic_offer(game,rng)
     game["turn"]+=1; game["season"]=("春","夏","秋","冬")[(game["turn"]-1)%4]
+
+def _natural_recruitment(game,item,rng):
+    """Small population-based growth; large standing armies approach a soft cap."""
+    owned=[cell for cell in game["map"] if cell.get("owner")==item["id"]]
+    if not owned: return
+    troops=sum(cell.get("troops",0) for cell in owned)
+    capacity=10+len(owned)*7+sum(cell.get("structure") in {"town","capital"} for cell in owned)*3
+    if troops>=capacity: return
+    growth=min(2,max(1,(capacity-troops)//18+1))
+    destination=min(owned,key=lambda cell:cell.get("troops",0))
+    destination["troops"]+=growth
+    if item["id"]==game["player"]:
+        game["log"]=[f"民から志願兵{growth}が集まり、{destination['name']}の守りに加わった。"]+game.get("log",[])
+
+def _consider_diplomatic_offer(game,rng):
+    """Occasionally let an AI nation send an alliance or trade proposal."""
+    if game.get("diplomatic_offer") or game["turn"]<3: return
+    pid=game["player"]; history=game.setdefault("offer_history",{})
+    candidates=[]
+    for item in game["nations"]:
+        if item["id"]==pid or not item["alive"]: continue
+        rel=relation(game,pid,item["id"])
+        if rel["status"] in {"war","alliance"} or game["turn"]-int(history.get(item["id"],-99))<5: continue
+        candidates.append(item)
+    if not candidates or rng.random()>.22: return
+    sender=rng.choice(candidates); rel=relation(game,pid,sender["id"])
+    kind="alliance" if sender["purpose"] in {"外交","生存","守備"} and rel["trust"]>=48 else "trade"
+    game["diplomatic_offer"]={"from":sender["id"],"kind":kind,"turn":game["turn"]}
+    history[sender["id"]]=game["turn"]
+    proposal="同盟" if kind=="alliance" else "交易協定"
+    game["log"]=[f"{sender['name']}から{proposal}の使者が訪れた。"]+game.get("log",[])
 
 def _cpu_turn(game,cpu,rng):
     camps=[x for x in game["map"] if x.get("owner") is None and (x.get("claim") or {}).get("owner")==cpu["id"]]
@@ -424,11 +494,18 @@ def _consider_coalition(game,rng):
     alive=[x for x in game["nations"] if x["alive"]]; player=nation(game,game["player"])
     rivals=[x for x in alive if x["id"]!=player["id"]]
     average=sum(x["territory"] for x in rivals)/max(1,len(rivals))
-    if player["territory"]<6 or player["territory"]<average*2.2: return
-    candidates=sorted(rivals,key=lambda x:(x["purpose"] in {"生存","外交","守備"},strength(x)),reverse=True)[:3]
-    if len(candidates)<2 or rng.random()>.45: return
+    last=max((int(x.get("ended_turn",x.get("formed_turn",-99))) for x in game.setdefault("coalition_history",[])),default=-99)
+    # 合従軍 is a campaign-defining emergency, not a routine punishment for growth.
+    if game["turn"]<12 or game["turn"]-last<20: return
+    if player["territory"]<10 or player["territory"]<average*2.8: return
+    average_strength=sum(strength(x) for x in rivals)/max(1,len(rivals))
+    if strength(player)<average_strength*1.45: return
+    candidates=sorted((x for x in rivals if relation(game,x["id"],player["id"])["trust"]<55),
+                      key=lambda x:(x["purpose"] in {"生存","外交","守備"},strength(x)),reverse=True)[:3]
+    if len(candidates)<3 or rng.random()>.08: return
     ids=[x["id"] for x in candidates]
     game["coalition"]={"target":player["id"],"members":ids,"formed_turn":game["turn"],"name":"合従軍"}
+    game["coalition_history"].append({"formed_turn":game["turn"],"members":ids[:]})
     for item in candidates:
         relation(game,item["id"],player["id"]).update(status="war",trust=0)
     for index,left in enumerate(ids):
@@ -437,11 +514,24 @@ def _consider_coalition(game,rng):
     names="・".join(x["name"] for x in candidates)
     game["log"]=[f"急拡大を恐れた{names}が合従軍を結成した！"]+game.get("log",[])
 
+def _update_coalition(game):
+    coalition=game.get("coalition")
+    if not coalition: return
+    elapsed=game["turn"]-int(coalition.get("formed_turn",game["turn"]))
+    target_alive=nation(game,coalition["target"])["alive"]
+    members=[mid for mid in coalition.get("members",[]) if nation(game,mid)["alive"]]
+    if target_alive and len(members)>=2 and elapsed<8: return
+    for record in reversed(game.setdefault("coalition_history",[])):
+        if record.get("formed_turn")==coalition.get("formed_turn") and "ended_turn" not in record:
+            record["ended_turn"]=game["turn"]; break
+    game["coalition"]=None
+    game["log"]=["諸国の利害が割れ、合従軍は解散した。"]+game.get("log",[])
+
 def _coalition_muster(game):
     """Periodically gather coalition troops on borders facing the target."""
     coalition=game.get("coalition") or {}
     if not coalition or game["turn"]<=coalition.get("formed_turn",game["turn"]): return
-    if (game["turn"]-coalition["formed_turn"])%3: return
+    if (game["turn"]-coalition["formed_turn"])%4: return
     target_id=coalition["target"]; gathered=[]
     for member_id in coalition.get("members",[]):
         member=nation(game,member_id)

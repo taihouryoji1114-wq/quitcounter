@@ -1,7 +1,7 @@
-from core.daiou import (_cpu_turn, apply_policy, derived_identity, diplomatic_label,
+from core.daiou import (_cpu_turn, _natural_recruitment, apply_policy, derived_identity, diplomatic_label,
                          end_turn, form_legion, initial_game, legion_at, map_cell, nation, normalize_game,
                          perform_map_action, relation, request_reinforcements,
-                         strength)
+                         respond_to_diplomatic_offer, strength, trade_with_nation)
 
 
 def test_policy_advances_turn_and_is_deterministic_with_seed():
@@ -28,7 +28,7 @@ def test_old_grid_world_is_kept_as_recovery_snapshot():
     normalize_game(game)
     assert len(game["map"]) == 53
     assert game["legacy_grid_map"][0]["troops"] == 19
-    assert game["version"] == 4
+    assert game["version"] == 5
 
 
 def test_large_country_has_cohesion_cost():
@@ -216,6 +216,38 @@ def test_player_can_form_a_second_named_army_group():
     assert "第二軍" in message
     assert legion_at(game,target["id"])["name"] == "第二軍"
     assert target["troops"] == 6
+
+
+def test_garrison_must_be_formed_into_an_army_before_crossing_border():
+    game=initial_game(); source=map_cell(game,"13121"); source.update(owner="n0",troops=8,claim=None)
+    target=map_cell(game,source["neighbors"][0]); target.update(owner="n2",troops=2,claim=None)
+    try:
+        perform_map_action(game,"advance",source["id"],target["id"],march_troops=4,seed=1)
+        assert False,"守備隊が国境を越えてしまった"
+    except ValueError as error:
+        assert "軍団" in str(error)
+
+
+def test_chosen_country_trade_and_incoming_alliance_offer():
+    game=initial_game(); before=nation(game,"n0")["wealth"]
+    message=trade_with_nation(game,"n2")
+    assert "蒼海と交易" in message
+    assert nation(game,"n0")["wealth"]>before
+    assert game["commands_left"]==2
+    game["diplomatic_offer"]={"from":"n9","kind":"alliance","turn":game["turn"]}
+    message=respond_to_diplomatic_offer(game,True)
+    assert "同盟提案" in message
+    assert relation(game,"n0","n9")["status"]=="alliance"
+
+
+def test_soldiers_grow_slowly_but_stop_at_population_capacity():
+    class FixedRng: pass
+    game=initial_game(); player=nation(game,"n0"); capital=map_cell(game,"13122")
+    before=capital["troops"]; _natural_recruitment(game,player,FixedRng())
+    assert capital["troops"] in {before+1,before+2}
+    capital["troops"]=100
+    _natural_recruitment(game,player,FixedRng())
+    assert capital["troops"]==100
 
 
 def test_capturing_a_capital_annexes_the_defeated_country():

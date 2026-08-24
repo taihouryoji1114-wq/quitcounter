@@ -4,7 +4,8 @@ from core.auth import require_app_access, selected_user_id
 from core.daiou import (adjacent_cells, derived_identity, diplomatic_label, end_alliance,
                          end_turn, form_legion, initial_game, legion_at, map_cell, map_viewbox, nation, normalize_game,
                          perform_map_action, propose_alliance, relation,
-                         region_income, region_shape, request_reinforcements, strength,
+                         region_income, region_shape, request_reinforcements, respond_to_diplomatic_offer, strength,
+                         trade_with_nation,
                          terrain_effect)
 from core.data import data
 from core.theme import Theme
@@ -17,7 +18,7 @@ def daiou_page():
     if not require_app_access('daiou'): return
     Theme.page('大王',app_name='daiou')
     user_id=selected_user_id(); games=data.data.setdefault('daiou',{}).setdefault('profiles',{})
-    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"inspect":None,"view":"home","event":None,"tactic":"direct","march":50,"last_move":None,"map_action":None}; data.save()
+    game=games.setdefault(user_id,initial_game()); normalize_game(game); state={"selected":None,"inspect":None,"view":"home","event":None,"tactic":"direct","march":50,"last_move":None,"map_action":None,"map_zoom":100}; data.save()
 
     def save(): games[user_id]=game; data.save()
 
@@ -76,6 +77,9 @@ def daiou_page():
     def choose_march(percent):
         state['march']=percent; render.refresh()
 
+    def change_map_zoom(delta):
+        state['map_zoom']=max(70,min(180,state['map_zoom']+delta)); render.refresh()
+
     def begin_transfer():
         if not state.get('selected'): ui.notify('兵を出す自国領を先に選んでください',type='warning'); return
         state['map_action']='transfer'; ui.notify('移動先の自国領を地図から選んでください'); render.refresh()
@@ -90,8 +94,15 @@ def daiou_page():
         try:
             if kind=='support': message=request_reinforcements(game,target_id)
             elif kind=='propose': message=propose_alliance(game,target_id)
+            elif kind=='trade': message=trade_with_nation(game,target_id)
             else: message=end_alliance(game,target_id)
             state['event']={'kind':'order','message':message}; save(); render.refresh()
+        except ValueError as error: ui.notify(str(error),type='warning')
+
+    def answer_offer(accept):
+        try:
+            message=respond_to_diplomatic_offer(game,accept); state['event']={'kind':'order','message':message}
+            save(); render.refresh()
         except ValueError as error: ui.notify(str(error),type='warning')
 
     def new_game():
@@ -148,12 +159,21 @@ def daiou_page():
                 members='・'.join(nation(game,x)['name'] for x in game['coalition']['members'])
                 with ui.element('section').classes('coalition-alert'):
                     ui.label('合従軍').classes('coalition-title'); ui.label(f"{members}があなたの国を包囲しています").classes('coalition-copy')
+            if game.get('diplomatic_offer'):
+                offer=game['diplomatic_offer']; sender=nation(game,offer['from'])
+                proposal='同盟を結び、互いの国を守りたい' if offer['kind']=='alliance' else '6季の交易協定を結びたい'
+                with ui.element('section').classes('envoy-card'):
+                    with ui.column().classes('gap-0 grow'):
+                        ui.label(f"{sender['name']}から使者が来訪").classes('envoy-title')
+                        ui.label(proposal).classes('envoy-copy')
+                    ui.button('受ける',on_click=lambda:answer_offer(True)).props('unelevated dense no-caps').classes('envoy-accept')
+                    ui.button('断る',on_click=lambda:answer_offer(False)).props('flat dense no-caps').classes('envoy-decline')
             player_legions=[item for item in game.get('legions',[]) if item.get('owner')==game['player']]
             with ui.element('section').classes('army-headquarters'):
                 with ui.row().classes('items-center justify-between w-full no-wrap'):
                     with ui.column().classes('gap-0'):
                         ui.label('軍 団 司 令 部').classes('army-hq-title')
-                        ui.label('軍を選ぶと、現在地と命令画面をすぐ開けます').classes('army-hq-copy')
+                        ui.label('軍団＝国境を越えて進軍する移動部隊・戦闘力+2').classes('army-hq-copy')
                     ui.label(f'{len(player_legions)}軍').classes('army-hq-count')
                 with ui.element('div').classes('army-hq-grid'):
                     for legion in player_legions:
@@ -167,7 +187,15 @@ def daiou_page():
                                 ui.label(legion['name']).classes('army-card-name')
                                 ui.label(location['name']).classes('army-card-place')
                             ui.label(f"兵 {location['troops']}").classes('army-card-troops')
-            ui.label('天下盤').classes('daiou-heading'); ui.label('金色の自国領を選び、隣の土地をタップして進みます').classes('map-guide')
+                with ui.element('div').classes('army-role-guide'):
+                    ui.label('⚑ 軍団　侵攻・遠征・同盟国への援軍を担当')
+                    ui.label('⬟ 守備隊　土地を守り、徴兵・建設・兵の補給を担当')
+            with ui.row().classes('w-full items-center no-wrap map-heading-row'):
+                with ui.column().classes('gap-0 grow'):
+                    ui.label('天下盤').classes('daiou-heading'); ui.label('拡大・縮小は天下盤だけに反映されます').classes('map-guide')
+                ui.button(icon='remove',on_click=lambda:change_map_zoom(-10)).props('flat round dense aria-label="地図を縮小"').classes('map-zoom-button')
+                ui.label(f"{state['map_zoom']}%").classes('map-zoom-value')
+                ui.button(icon='add',on_click=lambda:change_map_zoom(10)).props('flat round dense aria-label="地図を拡大"').classes('map-zoom-button')
             with ui.element('div').classes('nation-legend'):
                 for item in game['nations']:
                     if item['alive']:
@@ -202,7 +230,7 @@ def daiou_page():
                     start=region_shape(state['last_move'][0]); finish=region_shape(state['last_move'][1])
                     svg.append(f'<circle r="6" class="marching-unit"><animate attributeName="cx" from="{start["cx"]}" to="{finish["cx"]}" dur=".9s" fill="freeze"/><animate attributeName="cy" from="{start["cy"]}" to="{finish["cy"]}" dur=".9s" fill="freeze"/></circle>')
                 markup=(f'<div class="tokyo-map-wrap" data-daiou-map><svg viewBox="{map_viewbox()}" role="img" '
-                        f'aria-label="東京都の区市町村地図" class="tokyo-map">{"".join(svg)}</svg></div>')
+                        f'aria-label="東京都の区市町村地図" class="tokyo-map" style="width:{round(850*state["map_zoom"]/100)}px">{"".join(svg)}</svg></div>')
                 map_html=ui.html(markup,sanitize=False)
                 map_html.on('regionclick',select_map_event,
                             js_handler="(event) => emit(event.detail.region)")
@@ -240,7 +268,8 @@ def daiou_page():
                         selected_legion=legion_at(game,selected['id'])
                         unit_name=selected_legion['name'] if selected_legion else '守備隊'
                         ui.label(f"{unit_name}｜{selected['name']}（{owner['name']}）　兵 {selected['troops']}").classes('selected-title')
-                        ui.label('隣の地域へ進軍、または自国領へ必要な兵だけ移動できます').classes('selected-help')
+                        role_help='国境を越えて進軍可能・戦闘力+2' if selected_legion else '土地を守る固定部隊。侵攻するには軍団編成が必要'
+                        ui.label(role_help+'。自国領へは必要な兵だけ移動できます').classes('selected-help')
                         with ui.element('div').classes('march-picker'):
                             ui.label('派遣兵力').classes('march-label')
                             for percent in (25,50,75,100):
@@ -257,7 +286,6 @@ def daiou_page():
                             if not selected_legion: ui.button('軍団を編成',icon='flag',on_click=create_legion).props('flat no-caps')
                             ui.button('町を築く 10',icon='holiday_village',on_click=lambda:act('town')).props('flat no-caps')
                             ui.button('砦を築く 8',icon='fort',on_click=lambda:act('fort')).props('flat no-caps')
-                            ui.button('隣国と交易',icon='handshake',on_click=lambda:act('trade')).props('flat no-caps')
                 else: ui.label('まず金色の自国領をタップ').classes('empty-command')
             with ui.expansion(f"軍団一覧　{len(player_legions)}軍",icon='flag').classes('nation-box w-full'):
                 for legion in player_legions:
@@ -275,6 +303,9 @@ def daiou_page():
                         if item['id']!=game['player']:
                             status=diplomatic_label(game,game['player'],item['id'])
                             ui.label(status).classes('relation-chip '+relation(game,game['player'],item['id'])['status'])
+                            if status!='交戦':
+                                agreement=game.get('trade_agreements',{}).get(item['id'],0)>=game['turn']
+                                ui.button('協定交易' if agreement else '交易',on_click=lambda _,nid=item['id']:negotiate(nid,'trade')).props('flat dense no-caps').classes('diplomacy-button trade')
                             if status in {'同盟','不可侵'}:
                                 if status=='同盟': ui.button('援軍',on_click=lambda _,nid=item['id']:negotiate(nid,'support')).props('flat dense no-caps').classes('diplomacy-button support')
                                 ui.button('破棄',on_click=lambda _,nid=item['id']:negotiate(nid,'end')).props('flat dense no-caps').classes('diplomacy-button danger')
@@ -316,7 +347,7 @@ DAIOU_MAP_MEMORY_SCRIPT = r'''
 '''
 
 DAIOU_UNITS_CSS='''
-.army-headquarters{margin:0 0 12px;padding:13px;border-radius:18px;background:linear-gradient(135deg,rgba(68,49,27,.95),rgba(19,31,28,.96));border:1px solid rgba(240,201,111,.35)}.army-hq-title{font-family:serif;font-size:14px;font-weight:950;letter-spacing:.16em;color:#FFE09A}.army-hq-copy{font-size:8px;color:#C9C4B4}.army-hq-count{padding:5px 9px;border-radius:99px;background:#D5AD55;color:#142019;font-size:9px;font-weight:950}.army-hq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.army-hq-card{display:flex;align-items:center;gap:8px;min-width:0;padding:9px;border:1px solid rgba(255,224,154,.18);border-radius:13px;color:#F7E8C5;background:rgba(255,255,255,.055);text-align:left}.army-miniature{position:relative;width:36px;height:32px;flex:0 0 36px}.army-soldier{position:absolute;bottom:2px;width:12px;height:15px;border-radius:6px 6px 3px 3px;background:linear-gradient(#E7C56E,#7E5A25);box-shadow:0 2px 4px #000}.army-soldier:before{content:'';position:absolute;left:2px;top:-7px;width:8px;height:8px;border-radius:50%;background:#F0D084}.army-soldier.lead{left:13px;height:18px;z-index:2}.army-soldier.rear{left:3px;transform:scale(.8);opacity:.8}.army-banner{position:absolute;right:2px;top:1px;width:12px;height:15px;border-left:2px solid #E8CB81;background:#9D3028;clip-path:polygon(0 0,100% 0,72% 50%,100% 100%,0 100%)}.army-card-name{font-size:10px;font-weight:950;color:#F6D689}.army-card-place{font-size:8px;color:#BFC7BD}.army-card-troops{font-size:10px;font-weight:950;white-space:nowrap}.nation-legend{display:flex;gap:5px;overflow-x:auto;margin:6px 0 8px;padding-bottom:3px}.nation-legend-chip{display:flex;align-items:center;gap:5px;flex:0 0 auto;padding:5px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:8px;font-weight:850}.nation-legend-chip.player{box-shadow:inset 0 0 0 1px #F5CA69;color:#FFE3A0}.nation-color-dot{width:8px;height:8px;border-radius:50%;background:#777}.owner-n0 .nation-color-dot{background:#a88032}.owner-n1 .nation-color-dot{background:#527ca7}.owner-n2 .nation-color-dot{background:#337f79}.owner-n3 .nation-color-dot{background:#a84944}.owner-n4 .nation-color-dot{background:#aaa68f}.owner-n5 .nation-color-dot{background:#568947}.owner-n6 .nation-color-dot{background:#765b94}.owner-n7 .nation-color-dot{background:#9a693b}.owner-n8 .nation-color-dot{background:#4c555d}.owner-n9 .nation-color-dot{background:#7770a2}.field-army,.garrison-shield{pointer-events:none;fill:#22312B;stroke:#FFE5A0;stroke-width:1.5;filter:drop-shadow(0 3px 2px rgba(0,0,0,.65))}.field-army.owner-n0,.garrison-shield.owner-n0{fill:#a88032}.field-army.owner-n1,.garrison-shield.owner-n1{fill:#527ca7}.field-army.owner-n2,.garrison-shield.owner-n2{fill:#337f79}.field-army.owner-n3,.garrison-shield.owner-n3{fill:#a84944}.field-army.owner-n4,.garrison-shield.owner-n4{fill:#aaa68f}.field-army.owner-n5,.garrison-shield.owner-n5{fill:#568947}.field-army.owner-n6,.garrison-shield.owner-n6{fill:#765b94}.field-army.owner-n7,.garrison-shield.owner-n7{fill:#9a693b}.field-army.owner-n8,.garrison-shield.owner-n8{fill:#4c555d}.field-army.owner-n9,.garrison-shield.owner-n9{fill:#7770a2}.field-army .army-shadow{fill:#0A1110;stroke:none;opacity:.75}.field-army .army-flag{stroke:#F7D986;stroke-width:1.5}.structure-marker{pointer-events:none;fill:#171B18;stroke:#F5D688;stroke-width:1}.structure-marker text{fill:#FFF0C2;stroke:none;font-size:7px;font-weight:950}.structure-capital{fill:#7B301E}.structure-town{fill:#5E4A25}.structure-fort{fill:#34484A}@media(max-width:480px){.army-hq-grid{grid-template-columns:1fr}}
+.army-headquarters{margin:0 0 12px;padding:13px;border-radius:18px;background:linear-gradient(135deg,rgba(68,49,27,.95),rgba(19,31,28,.96));border:1px solid rgba(240,201,111,.35)}.army-hq-title{font-family:serif;font-size:14px;font-weight:950;letter-spacing:.16em;color:#FFE09A}.army-hq-copy{font-size:8px;color:#C9C4B4}.army-hq-count{padding:5px 9px;border-radius:99px;background:#D5AD55;color:#142019;font-size:9px;font-weight:950}.army-hq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.army-hq-card{display:flex;align-items:center;gap:8px;min-width:0;padding:9px;border:1px solid rgba(255,224,154,.18);border-radius:13px;color:#F7E8C5;background:rgba(255,255,255,.055);text-align:left}.army-role-guide{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.army-role-guide .q-label{padding:7px;border-radius:9px;background:rgba(0,0,0,.18);font-size:8px;color:#E5D6B7}.army-miniature{position:relative;width:36px;height:32px;flex:0 0 36px}.army-soldier{position:absolute;bottom:2px;width:12px;height:15px;border-radius:6px 6px 3px 3px;background:linear-gradient(#E7C56E,#7E5A25);box-shadow:0 2px 4px #000}.army-soldier:before{content:'';position:absolute;left:2px;top:-7px;width:8px;height:8px;border-radius:50%;background:#F0D084}.army-soldier.lead{left:13px;height:18px;z-index:2}.army-soldier.rear{left:3px;transform:scale(.8);opacity:.8}.army-banner{position:absolute;right:2px;top:1px;width:12px;height:15px;border-left:2px solid #E8CB81;background:#9D3028;clip-path:polygon(0 0,100% 0,72% 50%,100% 100%,0 100%)}.army-card-name{font-size:10px;font-weight:950;color:#F6D689}.army-card-place{font-size:8px;color:#BFC7BD}.army-card-troops{font-size:10px;font-weight:950;white-space:nowrap}.nation-legend{display:flex;gap:5px;overflow-x:auto;margin:6px 0 8px;padding-bottom:3px}.nation-legend-chip{display:flex;align-items:center;gap:5px;flex:0 0 auto;padding:5px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:8px;font-weight:850}.nation-legend-chip.player{box-shadow:inset 0 0 0 1px #F5CA69;color:#FFE3A0}.nation-color-dot{width:8px;height:8px;border-radius:50%;background:#777}.owner-n0 .nation-color-dot{background:#a88032}.owner-n1 .nation-color-dot{background:#527ca7}.owner-n2 .nation-color-dot{background:#337f79}.owner-n3 .nation-color-dot{background:#a84944}.owner-n4 .nation-color-dot{background:#aaa68f}.owner-n5 .nation-color-dot{background:#568947}.owner-n6 .nation-color-dot{background:#765b94}.owner-n7 .nation-color-dot{background:#9a693b}.owner-n8 .nation-color-dot{background:#4c555d}.owner-n9 .nation-color-dot{background:#7770a2}.field-army,.garrison-shield{pointer-events:none;fill:#22312B;stroke:#FFE5A0;stroke-width:1.5;filter:drop-shadow(0 3px 2px rgba(0,0,0,.65))}.field-army.owner-n0,.garrison-shield.owner-n0{fill:#a88032}.field-army.owner-n1,.garrison-shield.owner-n1{fill:#527ca7}.field-army.owner-n2,.garrison-shield.owner-n2{fill:#337f79}.field-army.owner-n3,.garrison-shield.owner-n3{fill:#a84944}.field-army.owner-n4,.garrison-shield.owner-n4{fill:#aaa68f}.field-army.owner-n5,.garrison-shield.owner-n5{fill:#568947}.field-army.owner-n6,.garrison-shield.owner-n6{fill:#765b94}.field-army.owner-n7,.garrison-shield.owner-n7{fill:#9a693b}.field-army.owner-n8,.garrison-shield.owner-n8{fill:#4c555d}.field-army.owner-n9,.garrison-shield.owner-n9{fill:#7770a2}.field-army .army-shadow{fill:#0A1110;stroke:none;opacity:.75}.field-army .army-flag{stroke:#F7D986;stroke-width:1.5}.structure-marker{pointer-events:none;fill:#171B18;stroke:#F5D688;stroke-width:1}.structure-marker text{fill:#FFF0C2;stroke:none;font-size:7px;font-weight:950}.structure-capital{fill:#7B301E}.structure-town{fill:#5E4A25}.structure-fort{fill:#34484A}.envoy-card{display:flex;align-items:center;gap:7px;margin-bottom:10px;padding:12px;border-radius:15px;background:linear-gradient(110deg,#24483d,#172720);border:1px solid rgba(118,222,182,.35)}.envoy-title{font-size:11px;font-weight:950;color:#9CE8CC}.envoy-copy{font-size:8px;color:#DDE8DF}.envoy-accept{background:#4A9B7A!important}.envoy-decline{color:#D8CDB6!important}.map-heading-row{margin-top:5px}.map-zoom-button{color:#F2D481!important;background:rgba(255,255,255,.07)!important}.map-zoom-value{min-width:38px;text-align:center;font-size:9px;font-weight:950}.diplomacy-button.trade{color:#9FE1C4!important}@media(max-width:480px){.army-hq-grid,.army-role-guide{grid-template-columns:1fr}}
 '''
 
 DAIOU_BATTLE_CSS='''
