@@ -11,6 +11,13 @@ from core.theme import Theme
 PIECES={"P":"♙","N":"♘","B":"♗","R":"♖","Q":"♕","K":"♔",
         "p":"♟","n":"♞","b":"♝","r":"♜","q":"♛","k":"♚"}
 
+# ポーンとビショップはUnicodeフォントに任せると、端末ごとに大きさや形が
+# 変わってしまう。専用SVGで白黒を同じ形にし、両者の輪郭も明確に分ける。
+PIECE_SVGS = {
+    "p": '''<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="16" r="9"/><path d="M24 27h16l5 19H19z"/><path d="M17 46h30v7H17z"/><path d="M13 53h38v7H13z"/></svg>''',
+    "b": '''<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5c-9 7-14 15-14 23 0 7 5 12 14 12s14-5 14-12C46 20 41 12 32 5z"/><path class="bishop-cut" d="M27 14l10 16"/><path d="M20 39h24l5 9H15z"/><path d="M13 48h38v6H13z"/><path d="M9 54h46v6H9z"/></svg>''',
+}
+
 
 @ui.page('/chess-coach')
 def chess_coach_page():
@@ -35,7 +42,7 @@ def chess_coach_page():
         if piece and piece.color==board.turn:
             state['selected']=square; state['targets']=legal_targets(game,square)
         else: state.update(selected=None,targets=[])
-        render.refresh()
+        board_view.refresh()
 
     def reset():
         game.clear(); game.update(new_game()); state.update(selected=None,targets=[],home=False); save(); render.refresh()
@@ -67,6 +74,37 @@ def chess_coach_page():
             ui.button('別の計画と比べる',icon='account_tree',on_click=dialog.close).props('outline no-caps').classes('compare-button')
         dialog.open()
 
+    def research_plan(index):
+        board=board_from(game); current_fen=board.fen()
+        if state['plan_fen']!=current_fen:
+            state['plans']=explore_plans(board,count=len(game.get('coach',{}).get('candidates',[])))
+            state['plan_fen']=current_fen
+        if index<len(state['plans']): open_plan(state['plans'][index])
+
+    @ui.refreshable
+    def board_view():
+        board=board_from(game)
+        with ui.element('div').classes('board-frame'):
+            with ui.element('div').classes('chess-board'):
+                for rank in range(7,-1,-1):
+                    for file in range(8):
+                        import chess
+                        sq=chess.square(file,rank); name=chess.square_name(sq); piece=board.piece_at(sq)
+                        classes='chess-square '+('light' if (file+rank)%2 else 'dark')
+                        if name==state['selected']: classes+=' selected'
+                        if name in state['targets']: classes+=' target'
+                        if game.get('history') and name in {game['history'][-1].get('from'),game['history'][-1].get('to')}: classes+=' last-move'
+                        with ui.element('button').props(f'type="button" aria-label="{name}"').classes(classes).on('click',lambda _,value=name:choose(value)):
+                            if piece:
+                                symbol=piece.symbol(); kind=symbol.lower()
+                                piece_classes='chess-piece '+('white-piece' if piece.color else 'black-piece')+f' piece-{kind}'
+                                if kind in PIECE_SVGS:
+                                    ui.html(PIECE_SVGS[kind],sanitize=False).classes(piece_classes+' vector-piece')
+                                else:
+                                    ui.label(PIECES[symbol]).classes(piece_classes)
+                            if file==0: ui.label(str(rank+1)).classes('rank-label')
+                            if rank==0: ui.label(chr(97+file)).classes('file-label')
+
     @ui.refreshable
     def render():
         if state['home']:
@@ -90,22 +128,7 @@ def chess_coach_page():
                 ui.label(f"LESSON {len(game.get('history',[]))//2+1:02d}").classes('lesson-number')
                 ui.label('あなたの手番').classes('turn-title')
                 ui.label('動かす駒を選び、光ったマスをタップ').classes('turn-copy')
-            with ui.element('div').classes('board-frame'):
-                with ui.element('div').classes('chess-board'):
-                    for rank in range(7,-1,-1):
-                        for file in range(8):
-                            import chess
-                            sq=chess.square(file,rank); name=chess.square_name(sq); piece=board.piece_at(sq)
-                            classes='chess-square '+('light' if (file+rank)%2 else 'dark')
-                            if name==state['selected']: classes+=' selected'
-                            if name in state['targets']: classes+=' target'
-                            if game.get('history') and name in {game['history'][-1].get('from'),game['history'][-1].get('to')}: classes+=' last-move'
-                            with ui.element('button').props(f'type="button" aria-label="{name}"').classes(classes).on('click',lambda _,value=name:choose(value)):
-                                if piece: ui.label(PIECES[piece.symbol()]).classes(
-                                    'chess-piece '+('white-piece' if piece.color else 'black-piece')
-                                    +f' piece-{piece.symbol().lower()}')
-                                if file==0: ui.label(str(rank+1)).classes('rank-label')
-                                if rank==0: ui.label(chr(97+file)).classes('file-label')
+            board_view()
             with ui.element('section').classes('coach-card '+coach.get('verdict','GUIDE').lower()):
                 with ui.row().classes('items-center no-wrap w-full'):
                     ui.icon('psychology_alt').classes('coach-icon')
@@ -118,13 +141,9 @@ def chess_coach_page():
                     ui.label('相手の狙い・注意点').classes('insight-label'); ui.label(coach.get('danger','')).classes('insight-text')
                 if coach.get('candidates'):
                     ui.label('次に考えたい候補・タップして計画を研究').classes('candidate-label')
-                    current_fen=board.fen()
-                    if state['plan_fen']!=current_fen:
-                        state['plans']=explore_plans(board,count=len(coach['candidates']))
-                        state['plan_fen']=current_fen
                     with ui.column().classes('candidate-row w-full'):
-                        for i,plan in enumerate(state['plans']):
-                            ui.button(f"{i+1}　{plan['move']}　｜　{plan['verdict']}",icon='route',on_click=lambda _,p=plan:open_plan(p)).props('flat no-caps').classes('candidate-chip plan-button')
+                        for i,candidate in enumerate(coach['candidates']):
+                            ui.button(f"{i+1}　{candidate}　｜　計画を研究",icon='route',on_click=lambda _,n=i:research_plan(n)).props('flat no-caps').classes('candidate-chip plan-button')
             if game.get('history'):
                 with ui.expansion('これまでの棋譜',icon='history',value=False).classes('history-panel'):
                     for i,item in enumerate(reversed(game['history'])):
@@ -140,4 +159,5 @@ body{background:#080B10!important;color:#F4EFE5}.mentor-splash{width:min(100%,70
 .chess-square.light{background:linear-gradient(145deg,#F1E5C8,#D8C59F)!important}.chess-square.dark{background:linear-gradient(145deg,#57705A,#344A3B)!important}.white-piece{color:#FFF7DC;text-shadow:0 1px 0 #fff,0 2px 0 #D7BD87,-1px 0 #31291F,1px 0 #31291F,0 3px 4px rgba(0,0,0,.75)}.black-piece{color:#24211E;text-shadow:0 1px 0 #8C7653,-1px 0 #060606,1px 0 #060606,0 3px 4px rgba(0,0,0,.72)}.chess-piece.piece-p{transform:scale(.86);transform-origin:center}.chess-piece.piece-n,.chess-piece.piece-b{transform:scale(.94)}
 /* 64個のQuasarボタンを素のボタンへ替え、スマホのタップ遅延と重い再描画を減らす */
 .chess-square{display:block!important;width:100%!important;height:100%!important;margin:0!important;border:0!important;appearance:none;-webkit-appearance:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}.chess-square.target:after{pointer-events:none;width:28%;height:28%;left:36%;top:36%}
+.vector-piece{filter:drop-shadow(0 4px 2px rgba(0,0,0,.5))}.vector-piece svg{display:block;width:73%;height:73%;overflow:visible;fill:currentColor;stroke:rgba(20,17,13,.78);stroke-width:1.4;stroke-linejoin:round}.vector-piece.piece-p svg{width:62%;height:62%}.vector-piece .bishop-cut{fill:none;stroke:#D5B96F;stroke-width:4.5;stroke-linecap:round}.white-piece.vector-piece svg{stroke:#3E3428}.black-piece.vector-piece svg{stroke:#050607}.black-piece.vector-piece .bishop-cut{stroke:#A98D58}
 '''
