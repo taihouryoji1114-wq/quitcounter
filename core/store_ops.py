@@ -618,6 +618,7 @@ class StoreOperationsManager:
                               "area": prep.get("area", "厨房"), "from_date": source_date,
                               "from_period": source_period,
                               "quantity_mode": prep.get("quantity_mode", False),
+                              "choice_mode": prep.get("choice_mode", False),
                               "completed": prep["status"] == "done"})
         handover_days = self._data_manager.data.get("store_handovers", {})
         for note_date in sorted(handover_days):
@@ -804,6 +805,17 @@ class StoreOperationsManager:
             if isinstance(item, dict) and item.get("id") == handover_id:
                 item["confirmed"] = True
                 item["confirmed_at"] = datetime.now().isoformat(timespec="minutes")
+                self._data_manager.save()
+                return
+        raise ValueError("引き継ぎが見つかりません。")
+
+    def reopen_handover(self, record_date, handover_id):
+        """Return an accidentally completed free handover to the open lane."""
+        for item in self._data_manager.data.setdefault("store_handovers", {}).setdefault(
+                record_date, []):
+            if isinstance(item, dict) and item.get("id") == handover_id:
+                item["confirmed"] = False
+                item["confirmed_at"] = ""
                 self._data_manager.save()
                 return
         raise ValueError("引き継ぎが見つかりません。")

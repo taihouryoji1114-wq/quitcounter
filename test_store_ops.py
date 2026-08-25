@@ -216,6 +216,22 @@ class StoreOperationsManagerTest(unittest.TestCase):
         board = self.manager.service_handover_board("2026-08-20", "lunch")
         self.assertNotIn("古い引き継ぎ", {item["name"] for item in board["items"]})
 
+    def test_completed_handover_can_be_reopened(self):
+        note = self.manager.add_handover("2026-08-19", "補充を確認", "ホール")
+        self.manager.confirm_handover("2026-08-19", note["id"])
+        self.manager.reopen_handover("2026-08-19", note["id"])
+        reopened = self.manager.handovers("2026-08-19")[0]
+        self.assertFalse(reopened["confirmed"])
+        self.assertEqual(reopened["confirmed_at"], "")
+
+    def test_unselected_leftover_rice_keeps_choice_controls_on_board(self):
+        rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager.ensure_service_checklist("2026-08-20", "lunch")
+        board = self.manager.service_handover_board("2026-08-20", "dinner")
+        item = next(value for value in board["items"] if value["id"] == rice["id"])
+        self.assertTrue(item["choice_mode"])
+        self.assertFalse(item["completed"])
+
     def test_completed_service_items_can_be_bulk_reset(self):
         normal = self.manager.add_prep_template("唐揚げ", "厨房")
         fish = self.manager.add_prep_template("サバ", "厨房")
