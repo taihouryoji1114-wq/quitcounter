@@ -4,6 +4,7 @@ import time
 from nicegui import ui
 
 from core.auth import require_app_access
+from core.store_quiz import store_quiz
 from core.theme import Theme
 from pages.store_common import store_header_actions
 
@@ -38,11 +39,11 @@ QUESTIONS = (
 def chanhaya_page():
     if not require_app_access("store_ops"):
         return
-    Theme.page("ちゃんはや｜店舗運営", app_name="store-ops")
+    Theme.page("ちゃんはや｜ちゃんこで早押しクイズ", app_name="store-ops")
     state = {"questions": [], "index": 0, "score": 0, "buzzed": False,
              "result": None, "started_at": 0.0, "finished": False}
     content = Theme.shell(
-        "ちゃんはや", "店舗みんなの早押しクイズ",
+        "ちゃんはや", "ちゃんこで早押しクイズ",
         back_to="/store-ops", action=store_header_actions, brand="店舗運営",
     )
     with content:
@@ -50,13 +51,23 @@ def chanhaya_page():
         def game():
             if not state["questions"]:
                 with ui.card().classes("chan-hero w-full q-pa-xl text-center"):
-                    ui.icon("bolt").classes("chan-logo")
-                    ui.label("知って、押して、強くなる。 ").classes("text-2xl font-black q-mt-md")
-                    ui.label("全5問・正解＋10点・不正解−5点").classes(
-                        "text-xs text-grey-6 q-mt-xs")
+                    with ui.element("div").classes("chan-game-logo"):
+                        ui.icon("bolt").classes("chan-logo-bolt")
+                        ui.label("ちゃんはや").classes("chan-logo-title")
+                    ui.label("ちゃんこで早押しクイズ").classes("chan-catch q-mt-md")
+                    ui.label("知識と反射神経でハイスコアを狙え！").classes(
+                        "text-xs text-white/70 q-mt-xs")
 
                     def start_game():
-                        state.update(questions=random.sample(list(QUESTIONS), 5), index=0,
+                        custom = []
+                        for item in store_quiz.questions():
+                            choices = [item["answer"], *item.get("wrong_answers", [])]
+                            if len(choices) == 4:
+                                random.shuffle(choices)
+                                custom.append((item["question"], tuple(choices), item["answer"]))
+                        pool = custom + list(QUESTIONS)
+                        count = min(5, len(pool))
+                        state.update(questions=random.sample(pool, count), index=0,
                                      score=0, buzzed=False, result=None,
                                      started_at=time.monotonic(), finished=False)
                         game.refresh()
@@ -79,7 +90,7 @@ def chanhaya_page():
 
             question, choices, answer = state["questions"][state["index"]]
             with ui.row().classes("w-full items-center justify-between q-mb-sm"):
-                ui.label(f"Q {state['index'] + 1} / 5").classes("chan-progress")
+                ui.label(f"Q {state['index'] + 1} / {len(state['questions'])}").classes("chan-progress")
                 ui.label(f"SCORE {state['score']}").classes("chan-score")
             with ui.card().classes("chan-question-card w-full q-pa-lg"):
                 ui.label(question).classes("chan-question")
@@ -127,5 +138,5 @@ def chanhaya_page():
 
         game()
         ui.add_css("""
-        body{background:radial-gradient(circle at 50% 0,#FFF0D8,transparent 35%),linear-gradient(180deg,#F8F3EA,#EEF3EF)!important}.chan-hero,.chan-result-card{border-radius:30px!important;background:rgba(255,255,255,.94)!important;border:1px solid #F0D8AF!important;box-shadow:0 20px 55px rgba(86,58,22,.12)!important}.chan-logo{display:flex!important;align-items:center;justify-content:center;width:94px;height:94px;margin:auto;border-radius:50%;font-size:58px!important;color:#fff;background:radial-gradient(circle at 36% 28%,#FFDA60,#F05A36 62%,#B9232C);box-shadow:0 13px 28px rgba(197,58,39,.32),inset 0 3px 7px rgba(255,255,255,.5)}.chan-start{min-height:56px!important;background:linear-gradient(135deg,#EF6A35,#C62F36)!important}.chan-progress,.chan-score{font-size:10px;font-weight:950;letter-spacing:.14em;color:#7C5B38}.chan-question-card{min-height:390px;border-radius:27px!important;background:#fff!important;border:1px solid #EEE4D4!important;box-shadow:0 15px 36px rgba(62,52,35,.09)!important}.chan-question{min-height:92px;font-size:21px;font-weight:950;line-height:1.55;text-align:center;display:flex;align-items:center;justify-content:center}.chan-buzzer{display:flex!important;width:148px!important;height:148px!important;margin:34px auto 18px!important;border:9px solid #FFE7D1!important;background:radial-gradient(circle at 36% 26%,#FF8A56,#E53D37 60%,#A7192C)!important;color:#fff!important;font-size:25px!important;font-weight:950!important;box-shadow:0 15px 0 #8E2630,0 22px 35px rgba(137,35,43,.3)!important}.chan-buzzer:active{transform:translateY(9px);box-shadow:0 6px 0 #8E2630,0 12px 20px rgba(137,35,43,.25)!important}.chan-choice{min-height:51px!important;border-radius:14px!important;font-size:13px!important;font-weight:850!important;text-align:left!important}
+        body{background:radial-gradient(circle at 20% 5%,rgba(88,44,190,.55),transparent 34%),radial-gradient(circle at 85% 25%,rgba(255,47,109,.35),transparent 36%),linear-gradient(180deg,#100826,#071423 65%,#071B16)!important}.chan-hero,.chan-result-card{position:relative;overflow:hidden;border-radius:30px!important;background:linear-gradient(145deg,rgba(35,18,83,.97),rgba(8,30,50,.97))!important;border:1px solid rgba(255,215,91,.55)!important;box-shadow:0 20px 55px rgba(0,0,0,.4),inset 0 0 35px rgba(113,62,255,.18)!important;color:#fff!important}.chan-hero:before{content:'';position:absolute;inset:-70%;background:conic-gradient(transparent,#A863FF,transparent 18%,#FFCA4B,transparent 34%);animation:chan-spin 8s linear infinite;opacity:.15}.chan-hero>*{position:relative}.chan-game-logo{width:170px;height:170px;margin:auto;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 25%,#FFEB79,#FF5E45 35%,#9D154D 66%,#35106E);border:7px solid #FFD968;box-shadow:0 0 0 5px #6B279C,0 0 38px rgba(255,93,198,.65),inset 0 4px 8px rgba(255,255,255,.55)}.chan-logo-bolt{font-size:61px!important;color:#fff;text-shadow:0 4px 0 #9D174B}.chan-logo-title{font-size:21px;font-weight:950;letter-spacing:-.08em;text-shadow:0 3px 0 #671241}.chan-catch{font-size:24px;font-weight:950;color:#FFE77A;text-shadow:0 2px 9px rgba(255,218,65,.32)}.chan-start{min-height:58px!important;border:2px solid #FFE275!important;background:linear-gradient(135deg,#FF5B43,#D92272 55%,#7B25C8)!important;box-shadow:0 8px 0 #611660,0 14px 28px rgba(0,0,0,.34)!important;font-weight:950!important}.chan-progress,.chan-score{font-size:10px;font-weight:950;letter-spacing:.14em;color:#FFE06A}.chan-question-card{min-height:390px;border-radius:27px!important;background:linear-gradient(160deg,#21144A,#0D2843)!important;border:2px solid #7552C9!important;box-shadow:0 15px 36px rgba(0,0,0,.32),inset 0 0 25px rgba(112,75,220,.12)!important;color:#fff!important}.chan-question{min-height:92px;font-size:21px;font-weight:950;line-height:1.55;text-align:center;display:flex;align-items:center;justify-content:center;color:#fff}.chan-buzzer{display:flex!important;width:148px!important;height:148px!important;margin:34px auto 18px!important;border:9px solid #FFE171!important;background:radial-gradient(circle at 36% 26%,#FF9070,#F33255 60%,#991741)!important;color:#fff!important;font-size:25px!important;font-weight:950!important;box-shadow:0 15px 0 #6D173E,0 0 35px rgba(255,64,126,.55)!important}.chan-buzzer:active{transform:translateY(9px);box-shadow:0 6px 0 #6D173E,0 0 18px rgba(255,64,126,.55)!important}.chan-choice{min-height:51px!important;border-radius:14px!important;font-size:13px!important;font-weight:850!important;text-align:left!important;color:#fff!important;border-color:#8E79DA!important;background:rgba(255,255,255,.06)!important}@keyframes chan-spin{to{transform:rotate(360deg)}}
         """)

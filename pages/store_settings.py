@@ -3,6 +3,7 @@ from nicegui import ui
 from core.auth import require_app_access, require_permission
 from core.qr import data_url as qr_data_url
 from core.store_ops import store_ops
+from core.store_quiz import store_quiz
 from core.theme import Theme
 from pages.store_common import store_header_actions
 
@@ -114,6 +115,73 @@ def store_settings_page():
                 reload("引き継ぎ項目を登録しました")
 
             ui.button("登録する", icon="add", on_click=add_handover).classes("w-full q-mt-md")
+
+        with ui.expansion("ちゃんはやの問題を登録", icon="quiz", value=False).classes(
+                "settings-section w-full q-mb-sm"):
+            quiz_question = ui.textarea("問題文").props("outlined autogrow").classes("w-full")
+            quiz_answer = ui.input("正解").props("outlined dense").classes("w-full")
+            quiz_wrong = [ui.input(f"間違いの選択肢 {index}").props(
+                "outlined dense").classes("w-full") for index in range(1, 4)]
+
+            def add_quiz_question():
+                try:
+                    store_quiz.add_question(
+                        quiz_question.value, quiz_answer.value,
+                        [field.value for field in quiz_wrong],
+                    )
+                except ValueError as error:
+                    notify_error(error)
+                    return
+                reload("ちゃんはやの問題を登録しました")
+
+            ui.button("問題を登録する", icon="add", on_click=add_quiz_question).classes(
+                "w-full q-mt-sm")
+
+        quiz_items = store_quiz.questions()
+        with ui.expansion(f"ちゃんはやの問題を編集　{len(quiz_items)}件", icon="edit_note",
+                          value=False).classes("settings-section w-full q-mb-sm"):
+            if not quiz_items:
+                ui.label("登録した問題はまだありません").classes(
+                    "text-[10px] text-grey-6 q-pa-sm")
+            for item in quiz_items:
+                with ui.row().classes("settings-row w-full items-center no-wrap"):
+                    with ui.column().classes("gap-0 grow min-w-0"):
+                        ui.label(item["question"]).classes("text-xs font-black")
+                        ui.label(f"正解：{item['answer']}").classes("text-[9px] text-positive")
+                    ui.button(icon="delete_outline", on_click=lambda _, selected=item:
+                              confirm_delete(
+                                  "この問題を削除しますか？", selected["question"],
+                                  lambda: store_quiz.delete_question(selected["id"]),
+                              )).props("flat round dense color=negative aria-label='削除'")
+
+        with ui.expansion("業務連絡を出す", icon="campaign", value=False).classes(
+                "settings-section w-full q-mb-sm"):
+            notice_title = ui.input("題名").props("outlined dense").classes("w-full")
+            notice_details = ui.textarea("内容").props("outlined autogrow").classes("w-full")
+
+            def add_notice():
+                try:
+                    store_quiz.add_notice(notice_title.value, notice_details.value)
+                except ValueError as error:
+                    notify_error(error)
+                    return
+                reload("業務連絡を掲載しました")
+
+            ui.button("業務連絡を掲載", icon="campaign", on_click=add_notice).classes(
+                "w-full q-mt-sm")
+
+        notice_items = store_quiz.notices()
+        if notice_items:
+            with ui.expansion(f"掲載中の業務連絡　{len(notice_items)}件", icon="notifications_active",
+                              value=False).classes("settings-section w-full q-mb-sm"):
+                for item in notice_items:
+                    with ui.row().classes("settings-row w-full items-center no-wrap"):
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(item["title"]).classes("text-xs font-black")
+                            ui.label(item.get("details", "")).classes("text-[9px] text-grey-6")
+                        ui.button("終了", on_click=lambda _, selected=item: (
+                            store_quiz.close_notice(selected["id"]), reload("掲載を終了しました")
+                        )).props("flat dense no-caps color=negative")
 
         items = store_ops.items()
         with ui.expansion(f"商品・備品の編集　{len(items)}件", icon="edit", value=False).classes(

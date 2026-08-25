@@ -44,6 +44,7 @@ def _render_future_financials_home(selected_month=None):
                 ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
                 ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),
                 ("決算分析", "assessment", "/mirai-kessan/financial-analysis"),
+                ("集計・印刷", "print", "/mirai-kessan/reports"),
             ):
                 ui.button(
                     title, icon=icon, on_click=lambda _, target=path: ui.navigate.to(target)
@@ -125,6 +126,10 @@ def _render_future_financials_home(selected_month=None):
     completed_monthly_items = len(monthly_entry_items) - len(missing_monthly_items)
     month_label = current_month.replace("-", "年") + "月"
     with content:
+        ui.button(
+            "期間集計・印刷を開く", icon="print",
+            on_click=lambda: ui.navigate.to("/mirai-kessan/reports"),
+        ).props("unelevated no-caps").classes("report-shortcut w-full q-mb-sm")
         with ui.card().classes("surface-card w-full q-pa-sm q-mb-sm"):
             with ui.row().classes("w-full items-center justify-between no-wrap"):
                 ui.button(

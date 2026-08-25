@@ -3,6 +3,7 @@ from nicegui import app, ui
 from core.auth import has_permission, require_app_access
 from core.clock import operational_date_jst, store_service_period_jst
 from core.store_ops import store_ops
+from core.store_quiz import store_quiz
 from core.theme import Theme
 from pages.store_common import app_card, store_header_actions
 
@@ -23,6 +24,17 @@ def store_dashboard_page():
                           action=store_header_actions, brand="店舗運営")
     with content:
         day = operational_date_jst()
+        notices = store_quiz.notices()
+        if notices:
+            with ui.expansion(
+                f"業務連絡　{len(notices)}件", icon="campaign", value=False,
+            ).classes("business-notice w-full q-mb-sm"):
+                for notice in notices:
+                    with ui.card().classes("business-notice-card w-full q-pa-md q-mb-xs"):
+                        ui.label(notice["title"]).classes("text-sm font-black")
+                        if notice.get("details"):
+                            ui.label(notice["details"]).classes(
+                                "text-[10px] text-grey-7 whitespace-pre-wrap q-mt-xs")
         ui.label(f"{day.month}月{day.day}日　TODAY'S OPERATION").classes(
             "today-ribbon w-full")
         with ui.card().classes("store-board w-full q-pa-lg text-white"):
@@ -186,7 +198,7 @@ def store_dashboard_page():
                      "/store-ops/manual", "text-orange-8")
             app_card("イベントスケジュール", "店舗行事と予定を共有", "event",
                      "/store-ops/events", "text-purple-7")
-            app_card("ちゃんはや", "店舗みんなの早押しクイズ", "quiz",
+            app_card("ちゃんはや", "ちゃんこで早押しクイズ", "quiz",
                      "/store-ops/chanhaya", "text-red-7")
 
         ui.add_css("""
@@ -194,6 +206,7 @@ def store_dashboard_page():
         """)
         ui.add_css("""
         .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}
+        .business-notice{border-radius:18px!important;background:linear-gradient(135deg,#FFF5D9,#FFF)!important;border:1px solid #EBCB82!important;box-shadow:0 8px 22px rgba(119,82,25,.10)!important}.business-notice .q-item{min-height:50px!important;color:#704B17;font-size:12px;font-weight:950}.business-notice-card{border-radius:13px!important;border:1px solid #F0DFC0!important;box-shadow:none!important}
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}
         .board-expansion,.board-expansion .q-expansion-item__content{transform:translateZ(0);will-change:height;contain:layout paint}.q-transition--slide-enter-active,.q-transition--slide-leave-active{transition-duration:.16s!important;transition-timing-function:cubic-bezier(.2,.75,.25,1)!important}.board-row{box-shadow:0 2px 7px rgba(8,31,23,.08)!important}
