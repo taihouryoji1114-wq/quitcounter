@@ -44,7 +44,6 @@ def _render_future_financials_home(selected_month=None):
                 ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
                 ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),
                 ("決算分析", "assessment", "/mirai-kessan/financial-analysis"),
-                ("集計・印刷", "print", "/mirai-kessan/reports"),
             ):
                 ui.button(
                     title, icon=icon, on_click=lambda _, target=path: ui.navigate.to(target)
@@ -520,7 +519,6 @@ def _render_future_financials_home(selected_month=None):
         )
         menu_card("利益シミュレーション", "計画と暫定実績を図で比較", "grid_view", "#398061", "/mirai-kessan/block-map")
         menu_card("決算分析", "決算書を入力して会社の状態を診断", "assessment", "#75599B", "/mirai-kessan/financial-analysis")
-        menu_card("集計・印刷", "期間集計と仕入れ先別レポート", "print", "#8B5D3B", "/mirai-kessan/reports")
 
         ui.add_css("""
         .quick-menu-icon{width:52px;height:52px;min-width:52px;max-width:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;box-shadow:0 7px 15px color-mix(in srgb,var(--icon-color) 28%,transparent);border:1px solid rgba(255,255,255,.28)}

@@ -60,6 +60,12 @@ def store_dashboard_page():
             def keep_group_open(item):
                 app.storage.user[f"store_board_{board_group(item)}_open"] = True
 
+            def reload_in_place():
+                ui.run_javascript("""
+                sessionStorage.setItem('storeBoardScrollY', String(window.scrollY));
+                window.location.reload();
+                """)
+
             long_press_target = {"item": None}
             with ui.dialog() as long_press_dialog, ui.card().classes(
                     "board-action-dialog q-pa-lg"):
@@ -79,7 +85,7 @@ def store_dashboard_page():
                         store_ops.reopen_handover(item["from_date"], item["id"])
                     keep_group_open(item)
                     long_press_dialog.close()
-                    ui.navigate.to("/store-ops")
+                    reload_in_place()
 
                 with ui.row().classes("w-full gap-2 q-mt-md"):
                     ui.button("やめる", on_click=long_press_dialog.close).props(
@@ -114,24 +120,25 @@ def store_dashboard_page():
                 elif item["kind"] == "request":
                     store_ops.set_order_request_completed(item["id"], True)
                 keep_group_open(item)
-                ui.navigate.to("/store-ops")
+                reload_in_place()
 
             def save_rice_choice(item, choice):
                 store_ops.set_service_prep_choice(
                     item["from_date"], item["from_period"], item["id"], choice)
                 keep_group_open(item)
-                ui.navigate.to("/store-ops")
+                reload_in_place()
 
             with ui.row().classes("w-full items-center gap-2 q-mt-sm"):
                 ui.label(f"未完了 {len(pending_items)}件").classes("board-summary pending")
                 ui.label(f"完了済み {len(done_items)}件").classes("board-summary done")
-                if done_items:
+                completed_prep_items = [item for item in done_items
+                                        if board_group(item) == "prep"]
+                if completed_prep_items:
                     def reopen_all_done():
-                        store_ops.reopen_handover_board_items(done_items)
-                        ui.notify("チェック済みを未完了へ戻しました", type="positive")
-                        ui.navigate.to("/store-ops")
+                        store_ops.reopen_handover_board_items(completed_prep_items)
+                        reload_in_place()
 
-                    ui.button("一括で左へ戻す", icon="undo", on_click=reopen_all_done).props(
+                    ui.button("仕込みを一括で左へ", icon="undo", on_click=reopen_all_done).props(
                         "flat dense no-caps").classes("board-reopen-all")
             def render_board_group(title, icon, group_name):
                 group_pending = [item for item in pending_items
@@ -221,6 +228,11 @@ def store_dashboard_page():
         """)
         ui.run_javascript("""
         requestAnimationFrame(() => {
+          const savedY = sessionStorage.getItem('storeBoardScrollY');
+          if (savedY !== null) {
+            sessionStorage.removeItem('storeBoardScrollY');
+            setTimeout(() => window.scrollTo({top: Number(savedY), behavior: 'auto'}), 80);
+          }
           document.querySelectorAll('.board-longpress').forEach(element => {
             if (element.dataset.longpressReady) return;
             element.dataset.longpressReady = '1';
