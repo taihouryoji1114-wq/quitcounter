@@ -87,11 +87,41 @@ def purchase_page():
             amount = ui.number(
                 "仕入れ合計金額", min=1, step=1
             ).props("outlined prefix=¥ inputmode=numeric").classes("w-full q-mb-sm")
+            simple_price_mode = ui.toggle(
+                {"included": "税込合計", "excluded": "税抜合計"}, value="included"
+            ).props("spread no-caps").classes("w-full q-mb-sm")
             simple_tax_rate = ui.select(
                 {"8": "8％（食品・通常はこちら）", "10": "10％", "1": "1％（制度開始後）"},
                 value="8",
                 label="消費税率",
             ).props("outlined").classes("w-full q-mb-sm")
+            simple_result = ui.label().classes(
+                "w-full rounded-xl bg-green-50 text-green-900 q-pa-md font-bold q-mb-sm"
+            )
+
+            def calculate_simple_total():
+                if not amount.value:
+                    simple_result.set_text("金額を入力すると支払合計を表示します")
+                    return
+                simple_amounts = {
+                    "amount_1": amount.value if simple_tax_rate.value == "1" else 0,
+                    "amount_8": amount.value if simple_tax_rate.value == "8" else 0,
+                    "amount_10": amount.value if simple_tax_rate.value == "10" else 0,
+                }
+                try:
+                    result = purchases.calculate_tax_breakdown(
+                        price_mode=simple_price_mode.value, **simple_amounts)
+                except ValueError:
+                    simple_result.set_text("金額を入力すると支払合計を表示します")
+                    return
+                simple_result.set_text(
+                    f"消費税 ¥{result['tax_1'] + result['tax_8'] + result['tax_10']:,}　"
+                    f"支払合計 ¥{result['total']:,}")
+
+            amount.on("update:model-value", lambda _: calculate_simple_total())
+            simple_price_mode.on("update:model-value", lambda _: calculate_simple_total())
+            simple_tax_rate.on("update:model-value", lambda _: calculate_simple_total())
+            calculate_simple_total()
 
             tax_panel = ui.column().classes("w-full gap-2 q-mb-sm")
             tax_panel.bind_visibility_from(
@@ -101,6 +131,12 @@ def purchase_page():
                 entry_mode, "value", backward=lambda value: value == "simple"
             )
             simple_tax_rate.bind_visibility_from(
+                entry_mode, "value", backward=lambda value: value == "simple"
+            )
+            simple_price_mode.bind_visibility_from(
+                entry_mode, "value", backward=lambda value: value == "simple"
+            )
+            simple_result.bind_visibility_from(
                 entry_mode, "value", backward=lambda value: value == "simple"
             )
             with tax_panel:
@@ -242,7 +278,7 @@ def purchase_page():
                             "amount_10": amount.value if simple_tax_rate.value == "10" else 0,
                         }
                         breakdown = purchases.calculate_tax_breakdown(
-                            price_mode="included", **simple_amounts
+                            price_mode=simple_price_mode.value, **simple_amounts
                         )
                     if entry_mode.value == "tax" and breakdown is None:
                         return
@@ -282,34 +318,37 @@ def purchase_page():
                 ui.label(f"¥{purchases.daily_total(day):,}").classes(
                     "text-2xl font-bold metric-value q-mt-xs"
                 )
-            with ui.element("div").classes("grid grid-cols-3 gap-2 w-full q-mb-md"):
-                with ui.card().classes("surface-card q-pa-md"):
+            with ui.element("div").classes("purchase-total-grid w-full q-mb-md"):
+                with ui.card().classes("surface-card purchase-total-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・原価").classes(
                         "text-xs text-grey-6"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='cost'):,}"
-                    ).classes(
-                        "text-xl font-bold metric-value q-mt-xs"
-                    )
-                with ui.card().classes("surface-card q-pa-md"):
+                    ).classes("purchase-total-value metric-value q-mt-xs")
+                with ui.card().classes("surface-card purchase-total-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・営業用消耗品").classes(
                         "text-xs text-grey-6"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='operating_supply'):,}"
-                    ).classes(
-                        "text-xl font-bold metric-value q-mt-xs"
-                    )
-                with ui.card().classes("surface-card q-pa-md"):
+                    ).classes("purchase-total-value metric-value q-mt-xs")
+                with ui.card().classes("surface-card purchase-total-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・一般経費").classes(
                         "text-xs text-grey-6"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='expense'):,}"
-                    ).classes("text-xl font-bold metric-value q-mt-xs")
+                    ).classes("purchase-total-value metric-value q-mt-xs")
 
         totals()
+        ui.add_css("""
+        .purchase-total-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+        .purchase-total-card{min-width:0!important;overflow:hidden}
+        .purchase-total-card .text-xs{max-width:100%;overflow-wrap:anywhere;line-height:1.35}
+        .purchase-total-value{max-width:100%;font-size:clamp(13px,4.1vw,20px);font-weight:900;white-space:nowrap;letter-spacing:-.04em}
+        @media(max-width:420px){.purchase-total-grid{grid-template-columns:1fr}.purchase-total-value{font-size:22px}}
+        """)
         def refresh_selected_day(value=None):
             if value:
                 selected_day[0] = str(value)

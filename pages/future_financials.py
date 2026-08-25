@@ -566,18 +566,7 @@ def future_financials_opening():
     if current_role() not in {"owner", "executive"}:
         ui.navigate.to("/mirai-kessan/input")
         return
-    Theme.page("未来決算", app_name="mirai-kessan")
-    with ui.element("div").classes("future-opening").on(
-        "click", lambda: ui.navigate.to("/mirai-kessan/dashboard")
-    ):
-        with ui.element("div").classes("future-opening-mark"):
-            ui.icon("insights").classes("text-5xl")
-        ui.label("未来決算").classes("text-4xl font-black q-mt-lg")
-        ui.label("数字から、次の一手を決める").classes("text-sm opacity-70 q-mt-xs")
-    ui.add_css("""
-    .future-opening{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;cursor:pointer;overflow:hidden;background:radial-gradient(circle at 70% 25%,rgba(210,162,91,.38),transparent 30%),linear-gradient(145deg,#0C2D23,#1D5B44 67%,#866133)}.future-opening:before,.future-opening:after{content:"";position:absolute;width:300px;height:300px;border-radius:50%;border:1px solid rgba(255,255,255,.1);animation:orbit 8s linear infinite}.future-opening:after{width:470px;height:470px;animation-duration:13s;animation-direction:reverse}
-    .future-opening-mark{z-index:1;width:104px;height:104px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25);box-shadow:0 24px 60px rgba(0,0,0,.2);animation:float 2.8s ease-in-out infinite}.future-opening .text-4xl,.future-opening .text-sm{z-index:1}@keyframes float{50%{transform:translateY(-9px) scale(1.03);box-shadow:0 32px 72px rgba(0,0,0,.28)}}@keyframes orbit{to{transform:rotate(360deg)}}
-    """)
+    _render_future_financials_home()
 
 
 @ui.page("/mirai-kessan/month/{selected_month}")

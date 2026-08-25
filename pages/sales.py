@@ -82,34 +82,85 @@ def sales_page():
                 "同じ日をもう一度保存すると、その日の金額を更新します。"
             ).classes("text-[10px] text-grey-6 q-mb-sm")
 
+            with ui.dialog() as sales_confirm_dialog, ui.card().classes(
+                    "w-[92vw] max-w-md q-pa-lg rounded-3xl"):
+                ui.label("保存前の最終確認").classes("text-xl font-black")
+                confirm_date = ui.label().classes("text-sm text-grey-7 q-mt-xs")
+                with ui.element("div").classes("sales-confirm-grid w-full q-mt-md"):
+                    with ui.element("div").classes("sales-confirm-cell lunch"):
+                        ui.label("ランチ").classes("text-[10px] text-grey-7")
+                        confirm_lunch = ui.label().classes("text-lg font-black")
+                    with ui.element("div").classes("sales-confirm-cell dinner"):
+                        ui.label("ディナー").classes("text-[10px] text-grey-7")
+                        confirm_dinner = ui.label().classes("text-lg font-black")
+                confirm_total = ui.label().classes(
+                    "w-full text-center text-2xl font-black q-mt-md")
+                confirm_payment = ui.label().classes(
+                    "w-full text-center text-xs text-grey-7")
+
+                def commit_sales():
+                    record_date = selected_day[0]
+                    try:
+                        financials.set_daily_sales(
+                            record_date,
+                            lunch_sales=lunch_sales.value,
+                            dinner_sales=dinner_sales.value,
+                            lunch_customers=lunch_customers.value,
+                            dinner_customers=dinner_customers.value,
+                            cash_sales=cash_sales.value,
+                            credit_sales=credit_sales.value,
+                            paypay_sales=paypay_sales.value,
+                            electronic_money_sales=electronic_money_sales.value,
+                            travel_agency_sales=travel_agency_sales.value,
+                            tabelog_points_sales=tabelog_points_sales.value,
+                            hotpepper_points_sales=hotpepper_points_sales.value,
+                        )
+                    except ValueError as error:
+                        ui.notify(f"保存できませんでした: {error}", type="negative")
+                        return
+                    sales_confirm_dialog.close()
+                    summary.refresh()
+                    history.refresh()
+                    sales_calendar.refresh()
+                    ui.notify("売上を保存しました", type="positive")
+
+                with ui.row().classes("w-full gap-2 q-mt-lg"):
+                    ui.button("戻って直す", on_click=sales_confirm_dialog.close).props(
+                        "flat no-caps").classes("grow")
+                    ui.button("確認して保存", icon="save", on_click=commit_sales).props(
+                        "unelevated no-caps").classes("grow")
+
             def save_sales():
                 record_date = selected_day[0]
-                try:
-                    financials.set_daily_sales(
-                        record_date,
-                        lunch_sales=lunch_sales.value,
-                        dinner_sales=dinner_sales.value,
-                        lunch_customers=lunch_customers.value,
-                        dinner_customers=dinner_customers.value,
-                        cash_sales=cash_sales.value,
-                        credit_sales=credit_sales.value,
-                        paypay_sales=paypay_sales.value,
-                        electronic_money_sales=electronic_money_sales.value,
-                        travel_agency_sales=travel_agency_sales.value,
-                        tabelog_points_sales=tabelog_points_sales.value,
-                        hotpepper_points_sales=hotpepper_points_sales.value,
+                lunch = int(lunch_sales.value or 0)
+                dinner = int(dinner_sales.value or 0)
+                payment_total = sum(int(field.value or 0) for field in (
+                    cash_sales, credit_sales, paypay_sales, electronic_money_sales,
+                    travel_agency_sales, tabelog_points_sales, hotpepper_points_sales,
+                ))
+                sales_total = lunch + dinner
+                if sales_total != payment_total:
+                    difference = payment_total - sales_total
+                    ui.notify(
+                        f"保存できません：決済内訳が売上より{abs(difference):,}円"
+                        f"{'多い' if difference > 0 else '少ない'}です",
+                        type="negative",
                     )
-                except ValueError as error:
-                    ui.notify(f"保存できませんでした: {error}", type="negative")
                     return
-                summary.refresh()
-                history.refresh()
-                sales_calendar.refresh()
-                ui.notify("売上を保存しました", type="positive")
+                confirm_date.set_text(f"対象日：{record_date.replace('-', '/')}　※日付も確認")
+                confirm_lunch.set_text(f"¥{lunch:,}")
+                confirm_dinner.set_text(f"¥{dinner:,}")
+                confirm_total.set_text(f"売上合計　¥{sales_total:,}")
+                confirm_payment.set_text(f"決済内訳合計　¥{payment_total:,}（一致）")
+                sales_confirm_dialog.open()
 
             ui.button("この日の売上を保存", icon="save", on_click=save_sales).classes(
                 "w-full"
             )
+            ui.add_css("""
+            .sales-confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+            .sales-confirm-cell{padding:12px;border-radius:14px}.sales-confirm-cell.lunch{background:#FFF5E8}.sales-confirm-cell.dinner{background:#F1EEFF}
+            """)
 
         with ui.expansion("決済手数料率を設定", icon="percent").classes(
             "surface-card w-full q-mb-md"

@@ -19,7 +19,6 @@ def store_dashboard_page():
     store_ops.ensure_service_checklist(business_date, period)
     board = store_ops.service_handover_board(business_date, period)
     can_manage = has_permission("store_manage")
-    board_open = bool(app.storage.user.get("store_handover_board_open", False))
     content = Theme.shell("店舗運営", "今日必要なことだけ、ひと目で",
                           action=store_header_actions, brand="店舗運営")
     with content:
@@ -39,6 +38,16 @@ def store_dashboard_page():
             pending_items = [item for item in board_items if not item.get("completed", False)]
             done_items = [item for item in board_items if item.get("completed", False)]
 
+            def board_group(item):
+                if item["kind"] == "note":
+                    return "note"
+                if item["kind"] == "request":
+                    return "request"
+                return "prep"
+
+            def keep_group_open(item):
+                app.storage.user[f"store_board_{board_group(item)}_open"] = True
+
             long_press_target = {"item": None}
             with ui.dialog() as long_press_dialog, ui.card().classes(
                     "board-action-dialog q-pa-lg"):
@@ -56,7 +65,7 @@ def store_dashboard_page():
                             item["from_date"], item["from_period"], [item["id"]])
                     elif item["kind"] == "note":
                         store_ops.reopen_handover(item["from_date"], item["id"])
-                    app.storage.user["store_handover_board_open"] = True
+                    keep_group_open(item)
                     long_press_dialog.close()
                     ui.navigate.to("/store-ops")
 
@@ -92,79 +101,81 @@ def store_dashboard_page():
                     store_ops.confirm_handover(item["from_date"], item["id"])
                 elif item["kind"] == "request":
                     store_ops.set_order_request_completed(item["id"], True)
-                app.storage.user["store_handover_board_open"] = True
+                keep_group_open(item)
                 ui.navigate.to("/store-ops")
 
             def save_rice_choice(item, choice):
                 store_ops.set_service_prep_choice(
                     item["from_date"], item["from_period"], item["id"], choice)
-                app.storage.user["store_handover_board_open"] = True
+                keep_group_open(item)
                 ui.navigate.to("/store-ops")
-
-            def remember_board_state(event):
-                app.storage.user["store_handover_board_open"] = bool(event.value)
 
             with ui.row().classes("w-full items-center gap-2 q-mt-sm"):
                 ui.label(f"未完了 {len(pending_items)}件").classes("board-summary pending")
                 ui.label(f"完了済み {len(done_items)}件").classes("board-summary done")
-            with ui.expansion("引き継ぎを開く", icon="view_column", value=board_open,
-                              on_value_change=remember_board_state).classes(
-                    "board-expansion w-full q-mt-sm"):
-                with ui.element("div").classes("board-lanes w-full"):
-                    with ui.column().classes("board-lane gap-1"):
-                        ui.label("未完了").classes("board-lane-title")
-                        if not pending_items:
-                            ui.label("ありません").classes("board-lane-empty")
-                        pending_groups = (
-                            ("作業・発注", [item for item in pending_items if item["kind"] != "note"]),
-                            ("自由引き継ぎ", [item for item in pending_items if item["kind"] == "note"]),
-                        )
-                        for group_label, group_items in pending_groups:
-                            if not group_items:
-                                continue
-                            ui.label(group_label).classes("board-section-title")
-                            for item in group_items:
-                                row = ui.card().classes("board-row w-full q-pa-sm")
-                                if item["kind"] == "request":
-                                    row.classes("board-longpress").on(
-                                        "contextmenu", lambda _, value=item: open_long_press(value))
-                                with row:
-                                    ui.label(item["area"]).classes("board-area")
-                                    ui.label(item["name"]).classes("board-name")
-                                    if item.get("choice_mode"):
-                                        with ui.row().classes("board-choice-row w-full gap-1 q-mt-xs"):
-                                            ui.button("あり", on_click=lambda _, value=item:
-                                                      save_rice_choice(value, "あり")).props(
-                                                          "unelevated dense no-caps color=positive").classes("grow")
-                                            ui.button("なし", on_click=lambda _, value=item:
-                                                      save_rice_choice(value, "なし")).props(
-                                                          "outline dense no-caps color=primary").classes("grow")
-                                    elif item["kind"] == "request" and not can_manage:
-                                        ui.label("管理者対応").classes("board-manager-only")
-                                    elif item["kind"] != "check_result":
-                                        ui.button(icon="check", on_click=lambda _, value=item:
-                                                  complete_item(value)).props(
-                                                      "unelevated round dense aria-label='完了'").classes(
-                                                          "board-check")
-                    with ui.column().classes("board-lane board-lane-done gap-1"):
-                        ui.label("チェック済み").classes("board-lane-title")
-                        if not done_items:
-                            ui.label("まだありません").classes("board-lane-empty")
-                        done_groups = (
-                            ("作業・発注", [item for item in done_items if item["kind"] != "note"]),
-                            ("自由引き継ぎ", [item for item in done_items if item["kind"] == "note"]),
-                        )
-                        for group_label, group_items in done_groups:
-                            if not group_items:
-                                continue
-                            ui.label(group_label).classes("board-section-title")
-                            for item in group_items:
-                                row = ui.card().classes(
-                                    "board-row board-row-done board-longpress w-full q-pa-sm").on(
-                                        "contextmenu", lambda _, value=item: open_long_press(value))
-                                with row:
-                                    ui.icon("check_circle").classes("text-positive text-sm")
-                                    ui.label(item["name"]).classes("board-name grow")
+            def render_board_group(title, icon, group_name):
+                group_pending = [item for item in pending_items
+                                 if board_group(item) == group_name]
+                group_done = [item for item in done_items
+                              if board_group(item) == group_name]
+                state_key = f"store_board_{group_name}_open"
+
+                def remember_group_state(event):
+                    app.storage.user[state_key] = bool(event.value)
+
+                expansion_title = f"{title}　未完了 {len(group_pending)}"
+                with ui.expansion(
+                    expansion_title, icon=icon,
+                    value=bool(app.storage.user.get(state_key, False)),
+                    on_value_change=remember_group_state,
+                ).classes("board-expansion w-full q-mt-sm"):
+                    with ui.element("div").classes("board-lanes w-full"):
+                        render_board_lane(group_pending, False)
+                        render_board_lane(group_done, True)
+
+            def render_board_lane(items, completed):
+                lane_classes = "board-lane board-lane-done gap-1" if completed else "board-lane gap-1"
+                with ui.column().classes(lane_classes):
+                    ui.label("チェック済み" if completed else "未完了").classes(
+                        "board-lane-title")
+                    if not items:
+                        ui.label("まだありません" if completed else "ありません").classes(
+                            "board-lane-empty")
+                    for item in items:
+                        if completed:
+                            row = ui.card().classes(
+                                "board-row board-row-done board-longpress w-full q-pa-sm").on(
+                                    "contextmenu", lambda _, value=item: open_long_press(value))
+                            with row:
+                                ui.icon("check_circle").classes("text-positive text-sm")
+                                ui.label(item["name"]).classes("board-name grow")
+                            continue
+                        row = ui.card().classes("board-row w-full q-pa-sm")
+                        if item["kind"] == "request":
+                            row.classes("board-longpress").on(
+                                "contextmenu", lambda _, value=item: open_long_press(value))
+                        with row:
+                            ui.label(item["area"]).classes("board-area")
+                            ui.label(item["name"]).classes("board-name")
+                            if item.get("choice_mode"):
+                                with ui.row().classes("board-choice-row w-full gap-1 q-mt-xs"):
+                                    ui.button("あり", on_click=lambda _, value=item:
+                                              save_rice_choice(value, "あり")).props(
+                                                  "unelevated dense no-caps color=positive").classes("grow")
+                                    ui.button("なし", on_click=lambda _, value=item:
+                                              save_rice_choice(value, "なし")).props(
+                                                  "outline dense no-caps color=primary").classes("grow")
+                            elif item["kind"] == "request" and not can_manage:
+                                ui.label("管理者対応").classes("board-manager-only")
+                            elif item["kind"] != "check_result":
+                                ui.button(icon="check", on_click=lambda _, value=item:
+                                          complete_item(value)).props(
+                                              "unelevated round dense aria-label='完了'").classes(
+                                                  "board-check")
+
+            render_board_group("厨房の仕込み引き継ぎ", "restaurant", "prep")
+            render_board_group("自由引き継ぎ", "edit_note", "note")
+            render_board_group("発注引き継ぎ", "shopping_cart", "request")
 
         with ui.element("div").classes("store-app-grid w-full q-mt-md"):
             app_card("シフト提出", "半月ごとの勤務希望", "calendar_month",
