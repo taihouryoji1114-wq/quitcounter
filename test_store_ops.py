@@ -267,6 +267,42 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual({item["status"] for item in self.manager.service_prep_items(
             "2026-08-20", "dinner")}, {"incomplete"})
 
+    def test_service_context_changes_only_when_manually_advanced(self):
+        self.assertEqual(
+            self.manager.active_service_context("2026-08-20", "lunch"),
+            ("2026-08-20", "lunch"),
+        )
+        self.assertEqual(
+            self.manager.active_service_context("2026-08-22", "dinner"),
+            ("2026-08-20", "lunch"),
+        )
+        self.assertEqual(self.manager.advance_service_context(),
+                         ("2026-08-20", "dinner"))
+        self.assertEqual(self.manager.advance_service_context(),
+                         ("2026-08-21", "lunch"))
+
+    def test_manual_service_advance_keeps_completed_lane(self):
+        prep = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.ensure_service_checklist("2026-08-19", "dinner")
+        self.manager.set_service_prep_status("2026-08-19", "dinner", prep["id"], "done")
+        self.manager.active_service_context("2026-08-20", "lunch")
+        lunch_board = self.manager.service_handover_board("2026-08-20", "lunch")
+        self.assertTrue(lunch_board["items"][0]["completed"])
+        self.manager.advance_service_context()
+        self.manager.advance_service_context()
+        next_board = self.manager.service_handover_board("2026-08-21", "lunch")
+        self.assertTrue(next_board["items"][0]["completed"])
+
+    def test_completed_board_items_can_be_reopened_together(self):
+        prep = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.ensure_service_checklist("2026-08-20", "lunch")
+        self.manager.set_service_prep_status("2026-08-20", "lunch", prep["id"], "done")
+        board = self.manager.service_handover_board("2026-08-20", "dinner")
+        self.assertTrue(board["items"][0]["completed"])
+        self.assertEqual(self.manager.reopen_handover_board_items(board["items"]), 1)
+        reopened = self.manager.service_handover_board("2026-08-20", "dinner")
+        self.assertFalse(reopened["items"][0]["completed"])
+
     def test_purchase_plan_is_saved_and_blank_values_are_removed(self):
         first = self.manager.add_item("白菜", "野菜仕入れ", "個")
         second = self.manager.add_item("ラップ", "備品", "本")

@@ -14,8 +14,8 @@ def store_dashboard_page():
         return
     Theme.page("店舗運営", app_name="store-ops")
     store_ops.move_kitchen_handovers_to_prep()
-    business_date = operational_date_jst().isoformat()
-    period = store_service_period_jst()
+    business_date, period = store_ops.active_service_context(
+        operational_date_jst().isoformat(), store_service_period_jst())
     period_label = "ランチ" if period == "lunch" else "ディナー"
     store_ops.ensure_service_checklist(business_date, period)
     board = store_ops.service_handover_board(business_date, period)
@@ -125,6 +125,14 @@ def store_dashboard_page():
             with ui.row().classes("w-full items-center gap-2 q-mt-sm"):
                 ui.label(f"未完了 {len(pending_items)}件").classes("board-summary pending")
                 ui.label(f"完了済み {len(done_items)}件").classes("board-summary done")
+                if done_items:
+                    def reopen_all_done():
+                        store_ops.reopen_handover_board_items(done_items)
+                        ui.notify("チェック済みを未完了へ戻しました", type="positive")
+                        ui.navigate.to("/store-ops")
+
+                    ui.button("一括で左へ戻す", icon="undo", on_click=reopen_all_done).props(
+                        "flat dense no-caps").classes("board-reopen-all")
             def render_board_group(title, icon, group_name):
                 group_pending = [item for item in pending_items
                                  if board_group(item) == group_name]
@@ -205,7 +213,7 @@ def store_dashboard_page():
         body{background:linear-gradient(180deg,rgba(244,247,244,.68),rgba(239,238,232,.82)),url('/static/store_ops_home_bg_v3.png') center/cover fixed!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{position:relative;overflow:hidden;border:0!important;border-radius:29px!important;background:radial-gradient(circle at 95% 0%,rgba(234,190,102,.48),transparent 34%),linear-gradient(145deg,rgba(16,47,38,.96),rgba(40,96,71,.95) 62%,rgba(85,122,74,.95) 120%)!important;box-shadow:0 20px 46px rgba(20,66,49,.28)!important}.store-board:after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(255,255,255,.09);border-radius:50%;right:-70px;top:-90px;pointer-events:none}.board-refresh{min-height:37px!important;color:#245B43!important;background:#fff!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:999px!important;padding:3px 13px!important;font-size:10px!important;font-weight:900!important;box-shadow:0 6px 16px rgba(5,30,21,.2)!important}.board-summary{font-size:9px;font-weight:900;padding:5px 9px;border-radius:999px}.board-summary.pending{background:rgba(255,255,255,.18)}.board-summary.done{background:rgba(147,219,177,.22)}.board-expansion{border-radius:17px!important;background:rgba(7,31,24,.16)!important;border:1px solid rgba(255,255,255,.1)!important}.board-expansion .q-item{min-height:42px;color:#fff;font-size:11px;font-weight:900}.board-expansion .q-expansion-item__content{padding:4px 9px 10px}.board-lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}.board-lane{min-width:0;padding:7px;border-radius:13px;background:rgba(4,28,20,.16)}.board-lane-done{background:rgba(205,235,216,.10)}.board-lane-title{font-size:9px;font-weight:900;opacity:.84;padding:2px}.board-section-title{width:100%;margin-top:5px;padding:5px 4px 2px;border-top:1px solid rgba(255,255,255,.16);font-size:7px;font-weight:900;letter-spacing:.06em;opacity:.76}.board-row{position:relative!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:3px!important;min-width:0;border-radius:11px!important;background:rgba(255,255,255,.95)!important;color:#20362D!important;box-shadow:0 4px 12px rgba(8,31,23,.10)!important}.board-row-done{flex-direction:row!important;align-items:center!important;background:rgba(232,244,236,.94)!important}.board-area{color:#6E8077;font-size:7px;font-weight:900}.board-name{max-width:100%;font-size:10px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}.board-check{position:absolute!important;right:4px;bottom:4px;min-height:27px!important;min-width:27px!important;background:#246A4E!important;color:white!important}.board-manager-only{font-size:7px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:3px 5px;border-radius:999px}.board-lane-empty{font-size:9px;opacity:.65;padding:10px 2px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;backdrop-filter:blur(9px)}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.95),rgba(255,255,255,.92))!important}.store-app-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}
         """)
         ui.add_css("""
-        .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}
+        .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}.board-reopen-all{margin-left:auto!important;color:#fff!important;background:rgba(255,255,255,.14)!important;border-radius:999px!important;font-size:8px!important;font-weight:900!important}
         .business-notice{border-radius:18px!important;background:linear-gradient(135deg,#FFF5D9,#FFF)!important;border:1px solid #EBCB82!important;box-shadow:0 8px 22px rgba(119,82,25,.10)!important}.business-notice .q-item{min-height:50px!important;color:#704B17;font-size:12px;font-weight:950}.business-notice-card{border-radius:13px!important;border:1px solid #F0DFC0!important;box-shadow:none!important}
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}

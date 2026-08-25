@@ -13,8 +13,8 @@ def checklist_page():
         return
     Theme.page("今日のチェック表｜店舗運営", app_name="store-ops")
     store_ops.move_kitchen_handovers_to_prep()
-    record_date = operational_date_jst().isoformat()
-    period = store_service_period_jst()
+    record_date, period = store_ops.active_service_context(
+        operational_date_jst().isoformat(), store_service_period_jst())
     period_label = "ランチ" if period == "lunch" else "ディナー"
     store_ops.ensure_service_checklist(record_date, period)
     all_prep_items = store_ops.service_prep_items(record_date, period)
@@ -26,8 +26,15 @@ def checklist_page():
                           back_to="/store-ops", action=store_header_actions,
                           brand="店舗運営")
     with content:
-        ui.label(f"{period_label}営業中　15:30にディナー用へ、午前2:00に翌日ランチ用へ切り替わります").classes(
-            "cutoff-note w-full")
+        with ui.row().classes("cutoff-note w-full items-center justify-between gap-2"):
+            ui.label(f"{record_date.replace('-', '/')}　{period_label}営業").classes("font-black")
+
+            def advance_service():
+                store_ops.advance_service_context()
+                ui.navigate.to("/store-ops/checklist")
+
+            ui.button("次の営業へ切り替え", icon="skip_next", on_click=advance_service).props(
+                "unelevated dense no-caps").classes("manual-next")
         completion_target = {"kind": "", "id": "", "name": ""}
         with ui.dialog() as confirm_dialog, ui.card().classes("confirm-card q-pa-lg"):
             ui.label("完了にしますか？").classes("text-xl font-black")
@@ -145,5 +152,5 @@ def checklist_page():
                 )).props("unelevated no-caps color=warning").classes("w-full q-mt-sm")
 
         ui.add_css("""
-        .cutoff-note{padding:10px 12px;border-radius:13px;background:#EEF5F1;color:#527060;font-size:10px;font-weight:800}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check-item{padding:13px!important;border-radius:18px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}.check-item.attention{border:2px solid #E2A63B!important}.check-item.order{background:#F4F7FB!important}.check-name{font-size:13px;font-weight:900;line-height:1.25}.check-area{font-size:9px;color:#7A8780;margin-top:3px}.confirm-card{width:min(92vw,420px)!important;border-radius:24px!important}.all-done{border-radius:24px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.completed-list{border:1px solid #E1E9E4;border-radius:18px;background:#fff}.completed-row{padding:9px 4px;border-bottom:1px solid #EEF1EF}@media(max-width:360px){.check-grid{grid-template-columns:1fr}}
+        .cutoff-note{padding:10px 12px;border-radius:13px;background:#EEF5F1;color:#527060;font-size:10px;font-weight:800}.manual-next{background:#2E7255!important;font-size:9px!important}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.check-item{padding:13px!important;border-radius:18px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}.check-item.attention{border:2px solid #E2A63B!important}.check-item.order{background:#F4F7FB!important}.check-name{font-size:13px;font-weight:900;line-height:1.25}.check-area{font-size:9px;color:#7A8780;margin-top:3px}.confirm-card{width:min(92vw,420px)!important;border-radius:24px!important}.all-done{border-radius:24px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.completed-list{border:1px solid #E1E9E4;border-radius:18px;background:#fff}.completed-row{padding:9px 4px;border-bottom:1px solid #EEF1EF}@media(max-width:360px){.check-grid{grid-template-columns:1fr}}
         """)

@@ -530,6 +530,56 @@ class StoreOperationsManager:
             day[period] = {"opened_at": datetime.now().isoformat(timespec="minutes")}
             self._data_manager.save()
 
+    def active_service_context(self, default_date, default_period):
+        """Return the manually controlled checklist date and service period."""
+        context = self._data_manager.data.get("store_active_service_context", {})
+        record_date = str(context.get("date", ""))
+        period = str(context.get("period", ""))
+        try:
+            self._date(record_date)
+            self._service_period(period)
+        except (TypeError, ValueError):
+            record_date = str(default_date)
+            period = self._service_period(default_period)
+            self._data_manager.data["store_active_service_context"] = {
+                "date": record_date, "period": period,
+            }
+            self._data_manager.save()
+        self.ensure_service_checklist(record_date, period)
+        return record_date, period
+
+    def advance_service_context(self):
+        """Move to the next service only when a staff member explicitly requests it."""
+        context = self._data_manager.data.get("store_active_service_context", {})
+        record_date = str(context.get("date", ""))
+        period = self._service_period(str(context.get("period", "lunch")))
+        day = self._date(record_date)
+        # Keep both lanes exactly as staff left them. The next service starts from
+        # this snapshot instead of rebuilding every template as uncompleted.
+        board = self.service_handover_board(record_date, period)
+        for item in self.service_prep_items(
+                board["source_date"], board["source_period"]):
+            if item.get("quantity_mode"):
+                self.set_service_prep_quantity(
+                    record_date, period, item["id"], item.get("quantity", 0))
+            elif item.get("choice_mode"):
+                self.set_service_prep_choice(
+                    record_date, period, item["id"], item.get("choice", ""))
+            else:
+                self.set_service_prep_status(
+                    record_date, period, item["id"], item.get("status", "incomplete"))
+        if period == "lunch":
+            next_date, next_period = record_date, "dinner"
+        else:
+            next_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
+            next_period = "lunch"
+        self._data_manager.data["store_active_service_context"] = {
+            "date": next_date, "period": next_period,
+        }
+        self.ensure_service_checklist(next_date, next_period)
+        self._data_manager.save()
+        return next_date, next_period
+
     def service_prep_items(self, record_date, period):
         self._date(record_date)
         period = self._service_period(period)
@@ -682,6 +732,24 @@ class StoreOperationsManager:
                           "completed": completed})
         return {"source_date": source_date, "source_period": source_period,
                 "source_label": source_label, "items": items}
+
+    def reopen_handover_board_items(self, items):
+        """Move every completed handover-board item back to the pending lane."""
+        changed = 0
+        for item in items or []:
+            if not item.get("completed"):
+                continue
+            kind = item.get("kind")
+            if kind in {"prep", "check_result"}:
+                changed += self.reset_service_prep_items(
+                    item.get("from_date"), item.get("from_period"), [item.get("id")])
+            elif kind == "note":
+                self.reopen_handover(item.get("from_date"), item.get("id"))
+                changed += 1
+            elif kind == "request":
+                self.set_order_request_completed(item.get("id"), False)
+                changed += 1
+        return changed
 
     def previous_day_board(self, record_date):
         """前日のチェック残り・自由引き継ぎ・発注依頼を返す。"""

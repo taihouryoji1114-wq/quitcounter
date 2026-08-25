@@ -1,11 +1,13 @@
 from collections import defaultdict
 from datetime import date
+from pathlib import Path
 
 from nicegui import ui
 
 from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.financials import financials
+from core.financial_report_pdf import PAYMENT_COLUMNS, create_financial_report_pdf
 from core.purchases import purchases
 from core.theme import Theme
 
@@ -29,48 +31,11 @@ def financial_reports_page():
         back_to="/mirai-kessan/dashboard",
     )
     with content:
-        with ui.card().classes("surface-card report-controls w-full q-pa-lg q-mb-md"):
-            with ui.element("div").classes("report-date-grid w-full"):
-                start_date = ui.input("開始日", value=start_default).props(
-                    "type=date outlined")
-                end_date = ui.input("終了日", value=end_default).props(
-                    "type=date outlined")
-
-            def update_report():
-                try:
-                    start = date.fromisoformat(str(start_date.value))
-                    end = date.fromisoformat(str(end_date.value))
-                except ValueError:
-                    ui.notify("日付を正しく入力してください", type="negative")
-                    return
-                if start > end:
-                    ui.notify("開始日は終了日以前にしてください", type="negative")
-                    return
-                report.refresh()
-
-            with ui.row().classes("w-full gap-2 q-mt-md"):
-                ui.button("集計する", icon="calculate", on_click=update_report).props(
-                    "unelevated no-caps").classes("grow")
-                ui.button("印刷・PDF", icon="print", on_click=lambda: ui.run_javascript(
-                    "window.print()"  # nosec: fixed browser action
-                )).props("outline no-caps").classes("grow")
-
-        @ui.refreshable
-        def report():
-            start = str(start_date.value)
-            end = str(end_date.value)
+        def collect_report_data(start, end):
             sales_records = [item for item in financials.sales_records()
                              if _inside(item.get("date"), start, end)]
             purchase_records = [item for item in purchases.records()
                                 if _inside(item.get("date"), start, end)]
-            sales_total = sum(int(item.get("amount", 0) or 0) for item in sales_records)
-            cost_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
-                             if item.get("kind", "cost") == "cost")
-            supply_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
-                               if item.get("kind") == "operating_supply")
-            expense_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
-                                if item.get("kind") == "expense")
-            gross_profit = sales_total - cost_total
             supplier_values = defaultdict(lambda: {
                 "count": 0, "cost": 0, "supply": 0, "expense": 0, "total": 0})
             for item in purchase_records:
@@ -82,6 +47,94 @@ def financial_reports_page():
                 kind = item.get("kind", "cost")
                 row[{"cost": "cost", "operating_supply": "supply",
                      "expense": "expense"}.get(kind, "expense")] += value
+            return sales_records, purchase_records, supplier_values
+
+        def selected_dates():
+            try:
+                start = date.fromisoformat(str(start_date.value))
+                end = date.fromisoformat(str(end_date.value))
+            except ValueError as error:
+                raise ValueError("日付を正しく入力してください") from error
+            if start > end:
+                raise ValueError("開始日は終了日以前にしてください")
+            return start.isoformat(), end.isoformat()
+
+        with ui.card().classes("surface-card report-controls w-full q-pa-lg q-mb-md"):
+            with ui.element("div").classes("report-date-grid w-full"):
+                start_date = ui.input("開始日", value=start_default).props(
+                    "type=date outlined")
+                end_date = ui.input("終了日", value=end_default).props(
+                    "type=date outlined")
+
+            def update_report():
+                try:
+                    selected_dates()
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                report.refresh()
+
+            def download_pdf():
+                try:
+                    start, end = selected_dates()
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                sales_records, purchase_records, suppliers = collect_report_data(start, end)
+                sales_total = sum(int(item.get("amount", 0) or 0) for item in sales_records)
+                cost_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
+                                 if item.get("kind", "cost") == "cost")
+                supply_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
+                                   if item.get("kind") == "operating_supply")
+                expense_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
+                                    if item.get("kind") == "expense")
+                rates = financials.get_payment_fee_rates()
+                fee_rate_fields = {
+                    "credit_sales": "credit", "paypay_sales": "paypay",
+                    "electronic_money_sales": "electronic_money",
+                    "travel_agency_sales": "travel_agency",
+                }
+                fee_values = {
+                    field: round(sum(int(row.get(field, 0) or 0) for row in sales_records)
+                                 * rates.get(fee_rate_fields.get(field, ""), 0) / 100)
+                    for _, field in PAYMENT_COLUMNS
+                }
+                output_path = Path("/tmp") / f"未来決算_{start}_{end}.pdf"
+                create_financial_report_pdf(
+                    output_path, start, end,
+                    (("売上", sales_total), ("原価", cost_total),
+                     ("粗利", sales_total - cost_total),
+                     ("営業用消耗品", supply_total), ("一般経費", expense_total)),
+                    sorted(suppliers.items(), key=lambda pair: pair[1]["total"], reverse=True),
+                    sales_records, fee_values,
+                )
+                ui.download(str(output_path), filename=output_path.name)
+
+            with ui.row().classes("w-full gap-2 q-mt-md"):
+                ui.button("集計する", icon="calculate", on_click=update_report).props(
+                    "unelevated no-caps").classes("grow")
+                ui.button("PDFとして保存", icon="picture_as_pdf", on_click=download_pdf).props(
+                    "unelevated no-caps color=negative").classes("grow")
+                ui.button("紙に印刷", icon="print", on_click=lambda: ui.run_javascript(
+                    "window.print()"  # nosec: fixed browser action
+                )).props("outline no-caps").classes("grow")
+
+        @ui.refreshable
+        def report():
+            start = str(start_date.value)
+            end = str(end_date.value)
+            sales_records, purchase_records, supplier_values = collect_report_data(start, end)
+            sales_total = sum(int(item.get("amount", 0) or 0) for item in sales_records)
+            cost_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
+                             if item.get("kind", "cost") == "cost")
+            supply_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
+                               if item.get("kind") == "operating_supply")
+            expense_total = sum(int(item.get("total", 0) or 0) for item in purchase_records
+                                if item.get("kind") == "expense")
+            gross_profit = sales_total - cost_total
+            payment_totals = {field: sum(int(item.get(field, 0) or 0)
+                                                for item in sales_records)
+                              for _, field in PAYMENT_COLUMNS}
 
             with ui.element("section").classes("print-report w-full"):
                 ui.label("未来決算　期間集計レポート").classes("report-title")
@@ -99,7 +152,22 @@ def financial_reports_page():
                             ui.label(f"¥{value:,}").classes("report-metric-value")
                 with ui.row().classes("w-full gap-3 q-mt-sm"):
                     ui.label(f"売上入力日数　{len(sales_records)}日").classes("report-note")
-                    ui.label(f"仕入れ明細　{len(purchase_records)}件").classes("report-note")
+                    ui.label(f"仕入れ記録　{len(purchase_records)}件").classes("report-note")
+
+                ui.label("決済方法別集計").classes("report-section-title")
+                with ui.element("div").classes("report-table-wrap"):
+                    with ui.element("table").classes("report-table"):
+                        with ui.element("thead"), ui.element("tr"):
+                            for title in ("決済方法", "期間合計"):
+                                with ui.element("th"):
+                                    ui.label(title)
+                        with ui.element("tbody"):
+                            for label, field in PAYMENT_COLUMNS:
+                                with ui.element("tr"):
+                                    with ui.element("td"):
+                                        ui.label(label)
+                                    with ui.element("td"):
+                                        ui.label(f"¥{payment_totals[field]:,}")
 
                 ui.label("仕入れ先別集計").classes("report-section-title")
                 with ui.element("div").classes("report-table-wrap"):
@@ -128,12 +196,13 @@ def financial_reports_page():
                 with ui.element("div").classes("report-table-wrap"):
                     with ui.element("table").classes("report-table"):
                         with ui.element("thead"), ui.element("tr"):
-                            for title in ("日付", "ランチ", "ディナー", "売上合計"):
+                            for title in ("日付", "ランチ", "ディナー", "現金", "クレジット",
+                                          "PayPay", "電子マネー", "旅行社", "ポイント", "売上合計"):
                                 with ui.element("th"):
                                     ui.label(title)
                         with ui.element("tbody"):
                             if not sales_records:
-                                with ui.element("tr"), ui.element("td").props("colspan=4"):
+                                with ui.element("tr"), ui.element("td").props("colspan=10"):
                                     ui.label("この期間の売上記録はありません")
                             for item in sorted(sales_records, key=lambda row: str(row.get("date"))):
                                 with ui.element("tr"):
@@ -141,33 +210,13 @@ def financial_reports_page():
                                         str(item.get("date", "")).replace("-", "/"),
                                         f"¥{int(item.get('lunch_sales', 0) or 0):,}",
                                         f"¥{int(item.get('dinner_sales', 0) or 0):,}",
+                                        f"¥{int(item.get('cash_sales', 0) or 0):,}",
+                                        f"¥{int(item.get('credit_sales', 0) or 0):,}",
+                                        f"¥{int(item.get('paypay_sales', 0) or 0):,}",
+                                        f"¥{int(item.get('electronic_money_sales', 0) or 0):,}",
+                                        f"¥{int(item.get('travel_agency_sales', 0) or 0):,}",
+                                        f"¥{int(item.get('tabelog_points_sales', 0) or 0) + int(item.get('hotpepper_points_sales', 0) or 0):,}",
                                         f"¥{int(item.get('amount', 0) or 0):,}",
-                                    ):
-                                        with ui.element("td"):
-                                            ui.label(text)
-
-                ui.label("仕入れ明細").classes("report-section-title")
-                with ui.element("div").classes("report-table-wrap"):
-                    with ui.element("table").classes("report-table"):
-                        with ui.element("thead"), ui.element("tr"):
-                            for title in ("日付", "仕入れ先", "区分", "金額"):
-                                with ui.element("th"):
-                                    ui.label(title)
-                        with ui.element("tbody"):
-                            if not purchase_records:
-                                with ui.element("tr"), ui.element("td").props("colspan=4"):
-                                    ui.label("この期間の仕入れ記録はありません")
-                            kind_labels = {
-                                "cost": "原価", "operating_supply": "営業用消耗品",
-                                "expense": "一般経費",
-                            }
-                            for item in sorted(purchase_records, key=lambda row: str(row.get("date"))):
-                                with ui.element("tr"):
-                                    for text in (
-                                        str(item.get("date", "")).replace("-", "/"),
-                                        str(item.get("supplier") or "仕入れ先未入力"),
-                                        kind_labels.get(item.get("kind", "cost"), "一般経費"),
-                                        f"¥{int(item.get('total', 0) or 0):,}",
                                     ):
                                         with ui.element("td"):
                                             ui.label(text)
