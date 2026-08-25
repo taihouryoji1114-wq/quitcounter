@@ -23,6 +23,7 @@ import pages.financial_analysis
 import pages.consulting
 import pages.staffing
 import pages.store_operations
+import pages.store_settings
 import pages.store_dashboard
 import pages.store_checklist
 import pages.store_sections

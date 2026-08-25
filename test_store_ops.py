@@ -83,6 +83,16 @@ class StoreOperationsManagerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.add_item("醤油")
 
+    def test_inventory_item_can_be_edited(self):
+        item = self.manager.add_item("ラップ", "備品", "本")
+        updated = self.manager.update_item(
+            item["id"], "業務用ラップ", "消耗品", "箱", "仕入れ先A", "simple")
+        self.assertEqual(updated["name"], "業務用ラップ")
+        self.assertEqual(updated["category"], "消耗品")
+        self.assertEqual(updated["unit"], "箱")
+        self.assertEqual(updated["supplier"], "仕入れ先A")
+        self.assertEqual(updated["tracking_mode"], "simple")
+
     def test_new_items_default_to_vegetable_purchasing_category(self):
         item = self.manager.add_item("長ねぎ")
         self.assertEqual(item["category"], "野菜仕入れ")
@@ -118,6 +128,12 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.prep_templates(), [])
         self.assertEqual(
             self.data.data["store_prep_records"]["2026-08-14"][item["id"]], "done")
+
+    def test_prep_template_can_be_edited(self):
+        item = self.manager.add_prep_template("鶏団子", "厨房")
+        updated = self.manager.update_prep_template(item["id"], "つくね", "デシャップ")
+        self.assertEqual(updated["name"], "つくね")
+        self.assertEqual(updated["area"], "デシャップ")
 
     def test_prep_templates_can_be_reordered(self):
         first = self.manager.add_prep_template("唐揚げ", "厨房")
@@ -156,6 +172,13 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.handover_templates(), [])
         self.assertTrue(
             self.data.data["store_handover_checks"]["2026-08-14"][item["id"]])
+
+    def test_handover_template_can_be_edited(self):
+        item = self.manager.add_handover_template("予約席を確認", "ホール")
+        updated = self.manager.update_handover_template(
+            item["id"], "予約人数を確認", "デシャップ")
+        self.assertEqual(updated["name"], "予約人数を確認")
+        self.assertEqual(updated["area"], "デシャップ")
 
     def test_handover_can_be_manually_sent_to_next_day_prep(self):
         item = self.manager.add_handover_template("唐揚げを仕込む", "厨房", "その他")

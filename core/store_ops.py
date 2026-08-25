@@ -168,6 +168,29 @@ class StoreOperationsManager:
         self._event("deleted", item)
         self._data_manager.save()
 
+    def update_item(self, item_id, name, category, unit="個", supplier="",
+                    tracking_mode="count"):
+        item = self._find(item_id)
+        name = str(name or "").strip()
+        if not name:
+            raise ValueError("商品名を入力してください。")
+        if any(value["id"] != item_id and value["name"] == name
+               for value in self.items()):
+            raise ValueError("同じ名前の商品が登録されています。")
+        if tracking_mode not in {"simple", "count"}:
+            tracking_mode = "count"
+        item.update({
+            "name": name,
+            "category": str(category or "その他").strip(),
+            "unit": str(unit or "個").strip(),
+            "supplier": str(supplier or "").strip(),
+            "tracking_mode": tracking_mode,
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        self._event("updated", item)
+        self._data_manager.save()
+        return dict(item)
+
     def set_status(self, item_id, status):
         if status not in self.STATUSES:
             raise ValueError("在庫状態が正しくありません。")
@@ -416,6 +439,22 @@ class StoreOperationsManager:
                 self._data_manager.save()
                 return
         raise ValueError("仕込み項目が見つかりません。")
+
+    def update_prep_template(self, item_id, name, area="厨房"):
+        values = self._data_manager.data.setdefault("store_prep_templates", [])
+        item = next((value for value in values if isinstance(value, dict)
+                     and value.get("id") == item_id and value.get("active", True)), None)
+        if not item:
+            raise ValueError("仕込み項目が見つかりません。")
+        name = str(name or "").strip()
+        if not name:
+            raise ValueError("仕込み名を入力してください。")
+        if any(value.get("id") != item_id and value.get("name") == name
+               and value.get("active", True) for value in values if isinstance(value, dict)):
+            raise ValueError("同じ仕込み項目が登録されています。")
+        item.update(name=name, area=str(area or "厨房").strip())
+        self._data_manager.save()
+        return dict(item)
 
     def move_prep_template(self, item_id, direction):
         """登録済みの仕込み項目を1つ上または下へ移動する。"""
@@ -752,6 +791,24 @@ class StoreOperationsManager:
                 self._data_manager.save()
                 return
         raise ValueError("引き継ぎ項目が見つかりません。")
+
+    def update_handover_template(self, template_id, name, area="厨房"):
+        values = self._data_manager.data.setdefault("store_handover_templates", [])
+        item = next((value for value in values if isinstance(value, dict)
+                     and value.get("id") == template_id and value.get("active", True)), None)
+        if not item:
+            raise ValueError("引き継ぎ項目が見つかりません。")
+        name = str(name or "").strip()
+        area = self._handover_area(area)
+        if not name:
+            raise ValueError("チェック項目を入力してください。")
+        if any(value.get("id") != template_id and value.get("name") == name
+               and value.get("area") == area and value.get("active", True)
+               for value in values if isinstance(value, dict)):
+            raise ValueError("同じチェック項目が登録されています。")
+        item.update(name=name, area=area)
+        self._data_manager.save()
+        return dict(item)
 
     def handover_checks(self, record_date):
         self._date(record_date)

@@ -10,7 +10,7 @@ MENU_ITEMS = (
     ("温度・衛生", "health_and_safety", "/store-ops/hygiene"),
     ("自由引き継ぎ", "campaign", "/store-ops/handover"),
     ("発注依頼", "add_shopping_cart", "/store-ops/order-requests"),
-    ("登録・設定", "settings", "/store-ops/manage#store-settings-panel"),
+    ("登録・設定", "settings", "/store-ops/settings"),
 )
 
 
