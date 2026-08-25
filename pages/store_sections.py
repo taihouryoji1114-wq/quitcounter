@@ -1,6 +1,6 @@
 from nicegui import ui
 
-from core.auth import current_role, require_app_access
+from core.auth import current_role, has_permission, require_app_access
 from core.clock import operational_date_jst
 from core.store_ops import store_ops
 from core.theme import Theme
@@ -48,6 +48,7 @@ def order_requests_page():
     requests = store_ops.order_requests()
     open_requests = [item for item in requests if not item.get("completed", False)]
     completed_requests = [item for item in requests if item.get("completed", False)]
+    can_manage = has_permission("store_manage")
     content = section_shell("発注依頼", "気づいたその場で、発注してほしい物を共有")
     with content:
         message = ui.textarea("発注してほしい物").props(
@@ -72,20 +73,24 @@ def order_requests_page():
                         ui.label(request["message"]).classes("text-sm font-black")
                         ui.label(str(request.get("created_at", ""))[:16].replace("T", " ")).classes(
                             "text-[9px] text-grey-6 q-mt-xs")
-                    ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
-                        store_ops.set_order_request_completed(item_id, True),
-                        ui.navigate.to("/store-ops/order-requests")
-                    )).props("unelevated dense no-caps color=positive")
+                    if can_manage:
+                        ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
+                            store_ops.set_order_request_completed(item_id, True),
+                            ui.navigate.to("/store-ops/order-requests")
+                        )).props("unelevated dense no-caps color=positive")
+                    else:
+                        ui.label("管理者対応").classes("request-manager-badge")
         if completed_requests:
             with ui.expansion(f"対応済み　{len(completed_requests)}件", icon="task_alt",
                               value=False).classes("request-completed w-full q-mt-lg"):
                 for request in completed_requests:
                     with ui.row().classes("w-full items-center no-wrap q-py-sm"):
                         ui.label(request["message"]).classes("text-xs text-grey-7 grow")
-                        ui.button("戻す", icon="undo", on_click=lambda _, item_id=request["id"]: (
-                            store_ops.set_order_request_completed(item_id, False),
-                            ui.navigate.to("/store-ops/order-requests")
-                        )).props("flat dense no-caps")
+                        if can_manage:
+                            ui.button("戻す", icon="undo", on_click=lambda _, item_id=request["id"]: (
+                                store_ops.set_order_request_completed(item_id, False),
+                                ui.navigate.to("/store-ops/order-requests")
+                            )).props("flat dense no-caps")
                         if current_role() == "owner":
                             ui.button(icon="delete_outline", on_click=lambda _, item_id=request["id"]: (
                                 store_ops.delete_order_request(item_id),
@@ -95,6 +100,7 @@ def order_requests_page():
         .request-card{border:1px solid #E1E9E4!important;border-radius:18px!important;box-shadow:none!important}
         .request-empty{padding:22px;border:1px dashed #C9D4CD;border-radius:18px;text-align:center;color:#7C8982;font-size:11px}
         .request-completed{border:1px solid #E1E9E4;border-radius:18px;background:#fff}
+        .request-manager-badge{font-size:8px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:6px 8px;border-radius:999px;white-space:nowrap}
         """)
 
 

@@ -198,6 +198,23 @@ class StoreOperationsManagerTest(unittest.TestCase):
         board = self.manager.service_handover_board("2026-08-20", "dinner")
         result = [item for item in board["items"] if item["kind"] == "check_result"]
         self.assertEqual([item["name"] for item in result], ["余り米：なし"])
+        self.assertTrue(result[0]["completed"])
+
+    def test_service_board_moves_completed_items_to_completed_lane(self):
+        prep = self.manager.add_prep_template("唐揚げ", "厨房")
+        self.manager.ensure_service_checklist("2026-08-20", "lunch")
+        self.manager.set_service_prep_status("2026-08-20", "lunch", prep["id"], "done")
+        request = self.manager.add_order_request("ラップ 2本")
+        self.manager.set_order_request_completed(request["id"], True)
+        board = self.manager.service_handover_board("2026-08-20", "dinner")
+        completed = [item for item in board["items"] if item.get("completed")]
+        self.assertIn("唐揚げ", {item["name"] for item in completed})
+
+    def test_old_completed_notes_do_not_fill_current_board(self):
+        note = self.manager.add_handover("2026-08-10", "古い引き継ぎ", "ホール")
+        self.manager.confirm_handover("2026-08-10", note["id"])
+        board = self.manager.service_handover_board("2026-08-20", "lunch")
+        self.assertNotIn("古い引き継ぎ", {item["name"] for item in board["items"]})
 
     def test_completed_service_items_can_be_bulk_reset(self):
         normal = self.manager.add_prep_template("唐揚げ", "厨房")

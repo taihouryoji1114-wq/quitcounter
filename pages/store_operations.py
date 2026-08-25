@@ -1,29 +1,24 @@
 from nicegui import ui
 
-from core.auth import current_role, log_out, require_app_access
+from core.auth import current_role, has_permission, require_app_access, require_permission
 from core.clock import today_jst
 from core.qr import data_url as qr_data_url
 from core.store_ops import store_ops
 from core.theme import Theme
+from pages.store_common import store_header_actions
 
 
 @ui.page("/store-ops/manage")
 def store_operations_page():
     if not require_app_access("store_ops"):
         return
-    Theme.page("店舗運営｜R-BASE", app_name="store-ops")
+    if not require_permission("store_manage", "/store-ops"):
+        return
+    Theme.page("登録・設定｜店舗運営", app_name="store-ops")
     is_owner = current_role() == "owner"
-    def logout_action():
-        with ui.row().classes("gap-0"):
-            if current_role() == "owner":
-                ui.button(icon="apps", on_click=lambda: ui.navigate.to("/")).props(
-                    "flat round aria-label='R-BASEへ戻る'").classes("text-grey-8")
-            ui.button(icon="logout", on_click=lambda: log_out("/store-ops/login")).props(
-                "flat round").classes("text-grey-8")
-
     content = Theme.shell(
-        "店舗運営", "不足に気づき、そのまま発注へ",
-        action=logout_action, brand="店舗運営",
+        "登録・設定", "商品とチェック項目を管理",
+        back_to="/store-ops", action=store_header_actions, brand="店舗運営",
     )
     items = store_ops.items()
     today = today_jst().isoformat()
@@ -536,9 +531,10 @@ def store_operations_page():
                     reload("引き継ぎを追加しました")
                 ui.button("引き継ぎを追加", icon="add", on_click=add_handover).classes("w-full")
 
-        if is_owner:
-            with ui.expansion("店舗運営の設定", icon="settings", value=False).classes(
-                "store-panel settings-panel w-full q-mt-sm"):
+        if has_permission("store_manage"):
+            with ui.expansion("店舗運営の設定", icon="settings", value=True).props(
+                    "id=store-settings-panel").classes(
+                        "store-panel settings-panel w-full q-mt-sm"):
                 ui.label("普段は使わない登録機能をまとめています").classes(
                     "text-[10px] text-grey-6 q-mb-sm")
                 with ui.column().classes("w-full gap-2"):

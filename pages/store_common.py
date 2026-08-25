@@ -1,6 +1,6 @@
 from nicegui import app, ui
 
-from core.auth import current_role, log_out
+from core.auth import current_role, has_permission, log_out
 
 
 MENU_ITEMS = (
@@ -10,7 +10,7 @@ MENU_ITEMS = (
     ("温度・衛生", "health_and_safety", "/store-ops/hygiene"),
     ("自由引き継ぎ", "campaign", "/store-ops/handover"),
     ("発注依頼", "add_shopping_cart", "/store-ops/order-requests"),
-    ("登録・設定", "settings", "/store-ops/manage"),
+    ("登録・設定", "settings", "/store-ops/manage#store-settings-panel"),
 )
 
 
@@ -34,6 +34,8 @@ def open_store_menu():
             "flat no-caps align=left").classes("w-full")
         for label, icon, path in MENU_ITEMS:
             if path == "/store-ops/purchase-list" and current_role() != "owner":
+                continue
+            if label == "登録・設定" and not has_permission("store_manage"):
                 continue
             ui.button(label, icon=icon, on_click=lambda _, target=path: ui.navigate.to(target)).props(
                 "flat no-caps align=left").classes("w-full")

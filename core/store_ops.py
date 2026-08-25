@@ -589,7 +589,7 @@ class StoreOperationsManager:
         return changed
 
     def service_handover_board(self, record_date, period):
-        """Unfinished work, free notes and open order requests for the active service."""
+        """Return the active handover board, including today's completed lane."""
         day = self._date(record_date)
         period = self._service_period(period)
         if period == "dinner":
@@ -608,9 +608,8 @@ class StoreOperationsManager:
                     items.append({"id": prep["id"], "kind": "check_result",
                                   "name": f"{prep['name']}：{prep['choice']}",
                                   "area": prep.get("area", "厨房"),
-                                  "from_date": source_date, "from_period": source_period})
-                    continue
-                if prep["status"] == "done":
+                                  "from_date": source_date, "from_period": source_period,
+                                  "completed": True})
                     continue
                 detail = prep["name"]
                 if prep.get("quantity_mode"):
@@ -618,20 +617,29 @@ class StoreOperationsManager:
                 items.append({"id": prep["id"], "kind": "prep", "name": detail,
                               "area": prep.get("area", "厨房"), "from_date": source_date,
                               "from_period": source_period,
-                              "quantity_mode": prep.get("quantity_mode", False)})
+                              "quantity_mode": prep.get("quantity_mode", False),
+                              "completed": prep["status"] == "done"})
         handover_days = self._data_manager.data.get("store_handovers", {})
         for note_date in sorted(handover_days):
             if note_date > record_date:
                 continue
             for note in self.handovers(note_date):
-                if not note.get("confirmed", False):
+                confirmed = bool(note.get("confirmed", False))
+                # Old confirmed notes do not need to fill the completed lane forever.
+                if not confirmed or note_date == source_date:
                     items.append({"id": note["id"], "kind": "note",
                                   "name": note.get("message", "引き継ぎ"),
-                                  "area": note.get("area", "厨房"), "from_date": note_date})
-        for request in self.order_requests(open_only=True):
+                                  "area": note.get("area", "厨房"), "from_date": note_date,
+                                  "completed": confirmed})
+        for request in self.order_requests():
+            completed = bool(request.get("completed", False))
+            completed_date = str(request.get("completed_at", ""))[:10]
+            if completed and completed_date not in {record_date, source_date}:
+                continue
             items.append({"id": request["id"], "kind": "request",
                           "name": request.get("message", "発注依頼"), "area": "発注依頼",
-                          "from_date": str(request.get("created_at", ""))[:10]})
+                          "from_date": str(request.get("created_at", ""))[:10],
+                          "completed": completed})
         return {"source_date": source_date, "source_period": source_period,
                 "source_label": source_label, "items": items}
 
@@ -795,6 +803,7 @@ class StoreOperationsManager:
         for item in self._data_manager.data.setdefault("store_handovers", {}).setdefault(record_date, []):
             if isinstance(item, dict) and item.get("id") == handover_id:
                 item["confirmed"] = True
+                item["confirmed_at"] = datetime.now().isoformat(timespec="minutes")
                 self._data_manager.save()
                 return
         raise ValueError("引き継ぎが見つかりません。")
