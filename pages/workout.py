@@ -111,57 +111,44 @@ def workout():
 
         nutrition_summary()
 
-        ui.label("栄養の振り返り").classes("text-xl font-bold q-mb-sm")
+        with ui.expansion("栄養の振り返り", icon="insights", value=False).classes(
+                "surface-card w-full q-mb-md"):
 
-        @ui.refreshable
-        def nutrition_history():
-            week_start = today - timedelta(days=today.weekday())
-            month_start = today.replace(day=1)
-            past_dates = [
-                record["date"]
-                for record in nutrition.get_meal_records(user_id=page_user_id)
-                if record.get("date", "") <= today.isoformat()
-            ]
-            first_date = min(past_dates) if past_dates else today.isoformat()
-            periods = (
-                ("今週", week_start.isoformat()),
-                ("今月", month_start.isoformat()),
-                ("記録開始から", first_date),
-            )
-            expenditure = nutrition_settings.estimated_daily_expenditure(
-                page_user_id
-            )
-            with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
-                for index, (label, start_date) in enumerate(periods):
-                    totals = nutrition.period_summary(
-                        start_date, today.isoformat(), page_user_id
-                    )
-                    if index:
-                        ui.separator().classes("q-my-md")
-                    ui.label(label).classes("text-lg font-bold")
-                    ui.label(
-                        f"{start_date.replace('-', '/')} 〜 {today.isoformat().replace('-', '/')}"
-                    ).classes("text-xs text-grey-6 q-mb-sm")
-                    with ui.element("div").classes(
-                        "grid grid-cols-3 gap-2 w-full"
-                    ):
-                        with ui.column().classes("gap-0"):
-                            ui.label("摂取").classes("text-xs text-grey-6")
-                            ui.label(f"{totals['calories']:,}").classes(
-                                "text-lg font-bold metric-value"
-                            )
-                            ui.label("kcal").classes("text-xs text-grey-6")
-                        with ui.column().classes("gap-0"):
-                            ui.label("タンパク質").classes("text-xs text-grey-6")
-                            ui.label(f"{totals['protein']:,}").classes(
-                                "text-lg font-bold metric-value"
-                            )
-                            ui.label("g").classes("text-xs text-grey-6")
-                        with ui.column().classes("gap-0"):
-                            ui.label("推定収支").classes("text-xs text-grey-6")
+            @ui.refreshable
+            def nutrition_history():
+                week_start = today - timedelta(days=today.weekday())
+                month_start = today.replace(day=1)
+                past_dates = [
+                    record["date"]
+                    for record in nutrition.get_meal_records(user_id=page_user_id)
+                    if record.get("date", "") <= today.isoformat()
+                ]
+                first_date = min(past_dates) if past_dates else today.isoformat()
+                periods = (
+                    ("今週", week_start.isoformat()),
+                    ("今月", month_start.isoformat()),
+                    ("記録開始から", first_date),
+                )
+                expenditure = nutrition_settings.estimated_daily_expenditure(
+                    page_user_id
+                )
+                with ui.column().classes("w-full gap-0 q-pa-sm"):
+                    for index, (label, start_date) in enumerate(periods):
+                        totals = nutrition.period_summary(
+                            start_date, today.isoformat(), page_user_id
+                        )
+                        if index:
+                            ui.separator().classes("q-my-sm")
+                        with ui.row().classes("w-full items-center no-wrap"):
+                            with ui.column().classes("gap-0 min-w-0 grow"):
+                                ui.label(label).classes("font-bold")
+                                ui.label(
+                                    f"{start_date.replace('-', '/')} 〜 "
+                                    f"{today.isoformat().replace('-', '/')}"
+                                ).classes("text-xs text-grey-6")
                             if expenditure is None:
-                                ui.label("未設定").classes("text-sm font-bold text-grey-6")
-                                ui.label("設定画面へ").classes("text-xs text-grey-6")
+                                ui.label("推定収支 未設定").classes(
+                                    "text-sm font-bold text-grey-6")
                             else:
                                 estimated_burn = calculate_period_expenditure(
                                     expenditure,
@@ -170,23 +157,15 @@ def workout():
                                     now=now_jst(),
                                 )
                                 balance = totals["calories"] - estimated_burn
-                                ui.label(f"{balance:+,.0f}").classes(
-                                    "text-lg font-bold metric-value "
-                                    + (
-                                        "text-negative"
-                                        if balance > 0 else "text-positive"
-                                    )
+                                ui.label(f"{balance:+,.0f} kcal").classes(
+                                    "text-base font-bold metric-value "
+                                    + ("text-negative" if balance > 0 else "text-positive")
                                 )
-                                ui.label("kcal").classes("text-xs text-grey-6")
-                if expenditure is not None:
-                    ui.label(
-                        "今日の消費分は、現在時刻までで按分した推定値です。"
-                    ).classes("text-[10px] text-grey-6 q-mt-md")
 
-        nutrition_history()
+            nutrition_history()
 
-        with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
-            ui.label("食品を登録").classes("section-kicker q-mb-sm")
+        with ui.expansion("食品を登録", icon="add_circle_outline", value=False).classes(
+                "surface-card w-full q-mb-md"):
             food_name = ui.input("食品名").props("outlined").classes(
                 "w-full q-mb-sm"
             )

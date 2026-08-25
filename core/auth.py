@@ -129,7 +129,9 @@ def selected_user_id():
 
     users = data.users.get_users()
     account_user_id = app.storage.user.get("account_user_id")
-    if account_user_id in users:
+    # A partner account is tied to its own profile.  The owner, however, is
+    # allowed to inspect either household profile from the Habitory home.
+    if current_role() != "owner" and account_user_id in users:
         return account_user_id
     stored = app.storage.user.get("selected_user_id")
     if stored in users:
