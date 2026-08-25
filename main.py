@@ -28,7 +28,9 @@ import pages.store_dashboard
 import pages.store_checklist
 import pages.store_sections
 import pages.store_events
+import pages.store_chanhaya
 import pages.shift_submission
+import pages.financial_reports
 import pages.purchase_list
 import pages.schedule
 import pages.attendance
