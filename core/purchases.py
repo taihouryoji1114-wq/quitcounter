@@ -376,7 +376,15 @@ class PurchaseManager:
         # the automatic calculation instead of silently overwriting it.
         if value in (None, "", 0, 0.0, "0") and calculated > 0:
             return calculated
-        return self._validate_nonnegative(value, label)
+        stated = self._validate_nonnegative(value, label)
+        # Invoice tax is rounded once per tax rate, so a discrepancy larger than
+        # one yen means either the taxable subtotal or the copied tax is wrong.
+        if calculated > 0 and abs(stated - calculated) > 1:
+            raise ValueError(
+                f"{label}が対象額と合いません。自動計算は{calculated:,}円です。"
+                "対象額を確認するか、記載税額を空欄にしてください。"
+            )
+        return stated
 
     @staticmethod
     def _validate_tax_breakdown(breakdown, total):

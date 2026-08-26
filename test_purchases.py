@@ -79,6 +79,22 @@ class PurchaseManagerTest(unittest.TestCase):
         self.assertEqual(breakdown["tax_10"], 1000)
         self.assertEqual(breakdown["total"], 22100)
 
+    def test_stated_tax_with_large_mismatch_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "自動計算は1,360円"):
+            self.purchases.calculate_tax_breakdown(
+                amount_8=17000,
+                price_mode="excluded",
+                stated_tax_8=1788,
+            )
+
+    def test_one_yen_invoice_rounding_difference_is_allowed(self):
+        breakdown = self.purchases.calculate_tax_breakdown(
+            amount_8=10800,
+            price_mode="included",
+            stated_tax_8=799,
+        )
+        self.assertEqual(breakdown["tax_8"], 799)
+
     def test_blank_optional_tax_serialized_as_zero_does_not_override_calculation(self):
         breakdown = self.purchases.calculate_tax_breakdown(
             amount_10=1100,

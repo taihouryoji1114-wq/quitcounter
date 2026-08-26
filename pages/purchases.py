@@ -499,16 +499,28 @@ def purchase_page(request: Request):
                                     ).props("outlined").classes("w-full")
                                     edit_tax_8 = ui.number(
                                         "納品書記載の8％税額",
-                                        value=existing.get("tax_8"), min=0, step=1,
+                                        placeholder=(
+                                            f"自動計算（現在 ¥{int(existing.get('tax_8', 0)):,}）"
+                                        ),
+                                        min=0, step=1,
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                     edit_tax_10 = ui.number(
                                         "納品書記載の10％税額",
-                                        value=existing.get("tax_10"), min=0, step=1,
+                                        placeholder=(
+                                            f"自動計算（現在 ¥{int(existing.get('tax_10', 0)):,}）"
+                                        ),
+                                        min=0, step=1,
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                     edit_tax_1 = ui.number(
                                         "納品書記載の1％税額",
-                                        value=existing.get("tax_1"), min=0, step=1,
+                                        placeholder=(
+                                            f"自動計算（現在 ¥{int(existing.get('tax_1', 0)):,}）"
+                                        ),
+                                        min=0, step=1,
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
+                                    ui.label(
+                                        "税額欄は空欄のままで自動計算します。納品書の税額が1円違う時だけ入力してください。"
+                                    ).classes("text-[10px] text-grey-6")
                                 edit_invoice = ui.select(
                                     {
                                         "registered": "インボイスあり",
