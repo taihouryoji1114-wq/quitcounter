@@ -29,6 +29,12 @@ class StoreQuizManagerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.add_question("問題", "同じ", ["同じ", "違う1", "違う2"])
 
+    def test_question_pack_is_added_only_once(self):
+        questions = (("黒豚は何グラム？", "150グラム", ["50グラム", "75グラム", "200グラム"]),)
+        self.assertEqual(self.manager.seed_question_pack("basic", questions), 1)
+        self.assertEqual(self.manager.seed_question_pack("basic", questions), 0)
+        self.assertEqual(len(self.manager.questions()), 1)
+
     def test_notice_only_returns_active_items(self):
         item = self.manager.add_notice("本日の業務連絡", "予約があります")
         self.assertEqual(self.manager.notices()[0]["details"], "予約があります")
