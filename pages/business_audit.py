@@ -60,6 +60,9 @@ def business_audit_page():
                                 ui.label(issue["title"]).classes("text-sm font-black")
                                 ui.label(issue["detail"]).classes("text-[10px] text-grey-7")
                             ui.icon("chevron_right").classes("text-grey-5")
+                ui.label("項目を押すと、該当日・該当月の入力画面を直接開きます").classes(
+                    "text-[9px] text-grey-6 q-mt-sm"
+                )
 
         month_input.on("change", audit_view.refresh)
         ui.button("もう一度チェック", icon="refresh", on_click=audit_view.refresh).props(

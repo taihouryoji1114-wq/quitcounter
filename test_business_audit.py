@@ -26,7 +26,7 @@ class BusinessAuditManagerTest(unittest.TestCase):
         self.assertIn("売上が未入力です", titles)
         self.assertIn("ランチ・ディナー合計が売上と一致しません", titles)
         self.assertIn("決済内訳が売上と一致しません", titles)
-        self.assertEqual(result["missing"], 2)
+        self.assertEqual(titles.count("売上が未入力です"), 2)
 
     def test_finds_duplicate_purchase_and_tax_mismatch(self):
         row = {
@@ -45,6 +45,27 @@ class BusinessAuditManagerTest(unittest.TestCase):
         }
         result = self.audit.inspect("2026-08", "2026-08-01")
         self.assertTrue(any("時刻が片方だけ" in item["title"] for item in result["issues"]))
+
+    def test_links_issues_to_exact_record_date(self):
+        self.data.data["business_sales"] = [{
+            "id": "sale-1", "date": "2026-08-01", "amount": 0,
+        }]
+        result = self.audit.inspect("2026-08", "2026-08-01")
+        sale_issue = next(item for item in result["issues"] if item["title"] == "売上が0円です")
+        self.assertEqual(sale_issue["path"], "/mirai-kessan/sales?date=2026-08-01")
+
+    def test_finds_unsaved_monthly_costs(self):
+        result = self.audit.inspect("2026-08", "2026-07-31")
+        titles = [item["title"] for item in result["issues"]]
+        self.assertIn("月次費用がまだ保存されていません", titles)
+        self.assertIn("広告費がまだ保存されていません", titles)
+
+        self.data.data["business_monthly_operations"] = {"2026-08": {}}
+        self.data.data["business_monthly_advertising"] = {"2026-08": {}}
+        result = self.audit.inspect("2026-08", "2026-07-31")
+        titles = [item["title"] for item in result["issues"]]
+        self.assertNotIn("月次費用がまだ保存されていません", titles)
+        self.assertNotIn("広告費がまだ保存されていません", titles)
 
 
 if __name__ == "__main__":

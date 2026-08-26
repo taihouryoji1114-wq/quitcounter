@@ -1,5 +1,6 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
+from fastapi import Request
 from nicegui import ui
 
 from core.auth import require_app_access, require_permission
@@ -9,7 +10,7 @@ from core.theme import Theme
 
 
 @ui.page("/mirai-kessan/staffing")
-def staffing_page():
+def staffing_page(request: Request):
     if not require_app_access("future_financials"):
         return
     if not require_permission("future_dashboard", "/mirai-kessan/input"):
@@ -205,7 +206,11 @@ def staffing_page():
         plan_date.on("change", lambda: render_simple_plan(plan_date.value))
         render_simple_plan(tomorrow)
 
-        selected = today_jst().isoformat()
+        requested_day = str(request.query_params.get("date", ""))
+        try:
+            selected = date.fromisoformat(requested_day).isoformat()
+        except ValueError:
+            selected = today_jst().isoformat()
         with ui.expansion("勤務・出勤を入力", icon="schedule", value=False).classes(
             "staff-panel w-full q-mt-sm"):
             date_input = ui.input("日付", value=selected).props("outlined dense type=date").classes("w-full")

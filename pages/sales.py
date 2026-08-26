@@ -1,6 +1,7 @@
 import calendar
 from datetime import date
 
+from fastapi import Request
 from nicegui import ui
 
 from core.auth import require_app_access, require_permission
@@ -10,15 +11,20 @@ from core.theme import Theme
 
 
 @ui.page("/mirai-kessan/sales")
-def sales_page():
+def sales_page(request: Request):
     if not require_app_access("future_financials"):
         return
     if not require_permission("future_input", "/mirai-kessan/login"):
         return
     Theme.page("売上入力｜未来決算", app_name="mirai-kessan")
     today = today_jst()
-    selected_day = [today.isoformat()]
-    viewed_month = [today.strftime("%Y-%m")]
+    requested_day = str(request.query_params.get("date", ""))
+    try:
+        initial_day = date.fromisoformat(requested_day).isoformat()
+    except ValueError:
+        initial_day = today.isoformat()
+    selected_day = [initial_day]
+    viewed_month = [initial_day[:7]]
     content = Theme.shell(
         "売上入力",
         "その日の売上を、1回入力するだけ",
@@ -382,4 +388,5 @@ def sales_page():
                                     ui.label(label).classes("text-[10px] text-grey-7")
                                     ui.label(f"¥{value:,}").classes("text-xs font-bold")
 
-        history()
+        # 自動チェックから開いた場合は、該当日の既存データも最初から表示する。
+        select_sales_day(initial_day)

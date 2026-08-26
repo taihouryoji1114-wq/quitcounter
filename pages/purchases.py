@@ -1,3 +1,6 @@
+from datetime import date
+
+from fastapi import Request
 from nicegui import ui
 
 from core.auth import require_app_access, require_permission
@@ -7,14 +10,19 @@ from core.theme import Theme
 
 
 @ui.page("/mirai-kessan/shiire")
-def purchase_page():
+def purchase_page(request: Request):
     if not require_app_access("future_financials"):
         return
     if not require_permission("future_input", "/mirai-kessan/login"):
         return
     Theme.page("仕入れノート", app_name="mirai-kessan")
     today = today_jst()
-    selected_day = [today.isoformat()]
+    requested_day = str(request.query_params.get("date", ""))
+    try:
+        initial_day = date.fromisoformat(requested_day).isoformat()
+    except ValueError:
+        initial_day = today.isoformat()
+    selected_day = [initial_day]
     content = Theme.shell(
         "仕入れノート",
         "普段は合計だけ、必要な時だけ税率別に記録",
@@ -25,7 +33,7 @@ def purchase_page():
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
             ui.label("仕入れを入力").classes("section-kicker q-mb-md")
             purchase_date = ui.input(
-                "日付", value=today.isoformat()
+                "日付", value=initial_day
             ).props("type=date outlined").classes("w-full q-mb-sm")
             supplier = ui.input(
                 "仕入れ先", placeholder="例：○○市場"
