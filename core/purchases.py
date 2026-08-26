@@ -204,6 +204,52 @@ class PurchaseManager:
         self._data_manager.save()
         return changed
 
+    def repair_zero_tax_breakdowns_20260826(self):
+        """Repair taxable amounts whose calculated tax was overwritten by a blank UI value.
+
+        Some number inputs can submit an empty optional tax field as numeric zero.  Older
+        records affected by that behaviour have a positive taxable amount but zero tax.
+        """
+        migration_key = "repair_zero_tax_breakdowns_20260826"
+        completed = self._data_manager.data.setdefault("business_migrations", [])
+        if migration_key in completed:
+            return 0
+        changed = 0
+        for record in self._data_manager.data.get("business_purchases", []):
+            breakdown = record.get("tax_breakdown")
+            if not isinstance(breakdown, dict):
+                continue
+            rates_to_repair = [
+                rate for rate in (1, 8, 10)
+                if int(breakdown.get(f"amount_{rate}", 0) or 0) > 0
+                and int(breakdown.get(f"tax_{rate}", 0) or 0) == 0
+            ]
+            if not rates_to_repair:
+                continue
+            repaired = self.calculate_tax_breakdown(
+                amount_1=breakdown.get("amount_1", 0),
+                amount_8=breakdown.get("amount_8", 0),
+                amount_10=breakdown.get("amount_10", 0),
+                exempt=breakdown.get("exempt", 0),
+                price_mode=breakdown.get("price_mode", "included"),
+                rounding=breakdown.get("rounding", "floor"),
+                stated_tax_1=(
+                    breakdown.get("tax_1") if 1 not in rates_to_repair else None
+                ),
+                stated_tax_8=(
+                    breakdown.get("tax_8") if 8 not in rates_to_repair else None
+                ),
+                stated_tax_10=(
+                    breakdown.get("tax_10") if 10 not in rates_to_repair else None
+                ),
+            )
+            record["tax_breakdown"] = repaired
+            record["total"] = repaired["total"]
+            changed += 1
+        completed.append(migration_key)
+        self._data_manager.save()
+        return changed
+
     def suppliers(self):
         hidden = set(self._data_manager.data.get("business_hidden_suppliers", []))
         result = []
@@ -325,7 +371,10 @@ class PurchaseManager:
         return int(value.quantize(Decimal("1"), rounding=modes[rounding]))
 
     def _optional_tax(self, value, calculated, label):
-        if value in (None, ""):
+        # NiceGUI may serialize an untouched optional number field as 0.  A positive
+        # taxable amount cannot legitimately have zero consumption tax, so retain
+        # the automatic calculation instead of silently overwriting it.
+        if value in (None, "", 0, 0.0, "0") and calculated > 0:
             return calculated
         return self._validate_nonnegative(value, label)
 
@@ -350,3 +399,4 @@ from core.data import data  # noqa: E402
 
 purchases = PurchaseManager(data)
 purchases.migrate_kojiro_tax_20260810()
+purchases.repair_zero_tax_breakdowns_20260826()

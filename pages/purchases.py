@@ -111,10 +111,11 @@ def purchase_page(request: Request):
                 if not amount.value:
                     simple_result.set_text("金額を入力すると支払合計を表示します")
                     return
+                selected_rate = str(simple_tax_rate.value)
                 simple_amounts = {
-                    "amount_1": amount.value if simple_tax_rate.value == "1" else 0,
-                    "amount_8": amount.value if simple_tax_rate.value == "8" else 0,
-                    "amount_10": amount.value if simple_tax_rate.value == "10" else 0,
+                    "amount_1": amount.value if selected_rate == "1" else 0,
+                    "amount_8": amount.value if selected_rate == "8" else 0,
+                    "amount_10": amount.value if selected_rate == "10" else 0,
                 }
                 try:
                     result = purchases.calculate_tax_breakdown(
@@ -280,10 +281,11 @@ def purchase_page(request: Request):
                     if entry_mode.value == "tax":
                         breakdown = calculate_breakdown(True)
                     else:
+                        selected_rate = str(simple_tax_rate.value)
                         simple_amounts = {
-                            "amount_1": amount.value if simple_tax_rate.value == "1" else 0,
-                            "amount_8": amount.value if simple_tax_rate.value == "8" else 0,
-                            "amount_10": amount.value if simple_tax_rate.value == "10" else 0,
+                            "amount_1": amount.value if selected_rate == "1" else 0,
+                            "amount_8": amount.value if selected_rate == "8" else 0,
+                            "amount_10": amount.value if selected_rate == "10" else 0,
                         }
                         breakdown = purchases.calculate_tax_breakdown(
                             price_mode=simple_price_mode.value, **simple_amounts
@@ -542,10 +544,11 @@ def purchase_page(request: Request):
                                             edited_total = edited_breakdown["total"]
                                         else:
                                             edited_total = edit_total.value
+                                            selected_rate = str(edit_simple_tax_rate.value)
                                             simple_amounts = {
-                                                "amount_1": edited_total if edit_simple_tax_rate.value == "1" else 0,
-                                                "amount_8": edited_total if edit_simple_tax_rate.value == "8" else 0,
-                                                "amount_10": edited_total if edit_simple_tax_rate.value == "10" else 0,
+                                                "amount_1": edited_total if selected_rate == "1" else 0,
+                                                "amount_8": edited_total if selected_rate == "8" else 0,
+                                                "amount_10": edited_total if selected_rate == "10" else 0,
                                             }
                                             edited_breakdown = purchases.calculate_tax_breakdown(
                                                 price_mode="included", **simple_amounts

@@ -79,6 +79,36 @@ class PurchaseManagerTest(unittest.TestCase):
         self.assertEqual(breakdown["tax_10"], 1000)
         self.assertEqual(breakdown["total"], 22100)
 
+    def test_blank_optional_tax_serialized_as_zero_does_not_override_calculation(self):
+        breakdown = self.purchases.calculate_tax_breakdown(
+            amount_10=1100,
+            price_mode="included",
+            stated_tax_10=0,
+        )
+        self.assertEqual(breakdown["tax_10"], 100)
+
+    def test_zero_tax_record_migration_repairs_existing_ten_percent_entry(self):
+        record = self.purchases.add(
+            "2026-08-26",
+            "資材店",
+            1100,
+            tax_breakdown={
+                "price_mode": "included",
+                "rounding": "floor",
+                "amount_1": 0,
+                "amount_8": 0,
+                "amount_10": 1100,
+                "exempt": 0,
+                "tax_1": 0,
+                "tax_8": 0,
+                "tax_10": 0,
+                "total": 1100,
+            },
+        )
+        self.assertEqual(self.purchases.repair_zero_tax_breakdowns_20260826(), 1)
+        self.assertEqual(record["tax_breakdown"]["tax_10"], 100)
+        self.assertEqual(self.purchases.repair_zero_tax_breakdowns_20260826(), 0)
+
     def test_one_percent_rate_can_be_recorded(self):
         included = self.purchases.calculate_tax_breakdown(
             amount_1=10100, price_mode="included"
