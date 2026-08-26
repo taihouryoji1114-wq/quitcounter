@@ -23,6 +23,7 @@ def chanhaya_page():
         back_to="/store-ops", action=store_header_actions, brand="店舗運営",
     )
     with content:
+        ui.add_css(".app-shell>div:nth-child(2){color:#FFE477!important;-webkit-text-fill-color:#FFE477!important;text-shadow:0 2px 12px rgba(255,208,70,.34)}")
         @ui.refreshable
         def game():
             if not state["questions"]:

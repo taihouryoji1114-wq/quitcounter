@@ -58,13 +58,7 @@ def create_financial_report_pdf(path, report):
     ratio_table = Table([ratio_row], colWidths=[20 * mm, 17 * mm] * len(ratio_labels))
     ratio_table.setStyle(_table_style(header=False, accent="#F1F4F2"))
     story.extend([ratio_table, Spacer(1, 4 * mm), Paragraph("利益ブロック", heading)])
-    profit_rows = [("売上", report["sales_total"]), ("− 原価", -report["cost_total"]),
-                   ("＝ 粗利", report["gross_profit"]), ("− 人件費", -report["personnel"]),
-                   ("− その他営業経費", -(report["operating_expenses"] - report["personnel"])),
-                   ("＝ 営業利益", report["operating_profit"])]
-    profit_table = Table([[Paragraph(label, normal), Paragraph(f"¥{value:,}", right)]
-                          for label, value in profit_rows], colWidths=[58 * mm, 42 * mm], hAlign="LEFT")
-    profit_table.setStyle(_table_style(header=False, accent="#F5F7F5"))
+    profit_table = _profit_block(report, normal, center)
     expense_rows = [[Paragraph("項目", center), Paragraph("期間配賦額", center)]]
     for label, value in report["expense_breakdown"]:
         expense_rows.append([Paragraph(label, normal), Paragraph(f"¥{value:,}", right)])
@@ -117,6 +111,77 @@ def create_financial_report_pdf(path, report):
         canvas.drawRightString(A4[0] - 11 * mm, 6 * mm, f"{document.page}ページ"); canvas.restoreState()
     doc.build(story, onFirstPage=page_number, onLaterPages=page_number)
     return path
+
+
+def _profit_block(report, normal, center):
+    """Render the same area-based structure used by the provisional dashboard."""
+    sales = max(int(report["sales_total"]), 1)
+    cost = max(int(report["cost_total"]), 0)
+    gross = max(int(report["gross_profit"]), 0)
+    total_height = 58 * mm
+    cost_height = max(8 * mm, total_height * cost / sales)
+    gross_height = max(8 * mm, total_height - cost_height)
+    if cost_height + gross_height > total_height:
+        scale = total_height / (cost_height + gross_height)
+        cost_height *= scale; gross_height *= scale
+
+    tiny = ParagraphStyle("profit-block-tiny", parent=center, fontSize=6.1, leading=7.1)
+
+    def label(text, value, note="", style=None):
+        parts = [f"<b>{text}</b>", f"¥{int(value):,}"]
+        if note:
+            parts.append(f"<font size='6'>{note}</font>")
+        return Paragraph("<br/>".join(parts), style or center)
+
+    def percent(key):
+        value = report["ratios"].get(key)
+        return "—" if value is None else f"{value * 100:.1f}%"
+
+    def compact_label(text, value):
+        return Paragraph(f"<b>{text}</b>　¥{int(value):,}", tiny)
+
+    personnel = max(int(report["personnel"]), 0)
+    other = max(int(report["operating_expenses"]) - personnel, 0)
+    profit = abs(int(report["operating_profit"]))
+    pieces = [
+        ("人件費", personnel, "#4A9FD0"),
+        ("その他営業経費", other, "#909A95"),
+        ("営業利益" if report["operating_profit"] >= 0 else "営業損失",
+         profit, "#4B77B7" if report["operating_profit"] >= 0 else "#C85C57"),
+    ]
+    piece_total = max(sum(value for _, value, _ in pieces), 1)
+    piece_heights = [max(5 * mm, gross_height * value / piece_total) for _, value, _ in pieces]
+    piece_scale = gross_height / sum(piece_heights)
+    piece_heights = [height * piece_scale for height in piece_heights]
+    breakdown = Table(
+        [[compact_label(title, value)] for title, value, _ in pieces],
+        colWidths=[58 * mm], rowHeights=piece_heights,
+    )
+    breakdown.setStyle(TableStyle([
+        ("BACKGROUND", (0, index), (0, index), colors.HexColor(color))
+        for index, (_, _, color) in enumerate(pieces)
+    ] + [("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+         ("LEFTPADDING", (0, 0), (-1, -1), 2), ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+         ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
+
+    grid = Table([
+        [label("売上", report["sales_total"], "100%"),
+         label("仕入れ・原価", report["cost_total"], f"原価率 {percent('cost_rate')}"), ""],
+        ["", label("粗利", report["gross_profit"], f"粗利率 {percent('gross_margin')}"), breakdown],
+    ], colWidths=[58 * mm] * 3, rowHeights=[cost_height, gross_height])
+    grid.setStyle(TableStyle([
+        ("SPAN", (0, 0), (0, 1)), ("SPAN", (1, 0), (2, 0)),
+        ("BACKGROUND", (0, 0), (0, 1), colors.HexColor("#355F4C")),
+        ("BACKGROUND", (1, 0), (2, 0), colors.HexColor("#82988D")),
+        ("BACKGROUND", (1, 1), (1, 1), colors.HexColor("#4F8C70")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return grid
 
 
 def _table_style(header=True, accent="#EDF2EF", total_row=False):

@@ -59,6 +59,22 @@ def financial_reports_page():
                 ui.button("紙に印刷", icon="print", on_click=lambda: ui.run_javascript("window.print()" )).props(
                     "outline no-caps").classes("grow")
 
+        with ui.card().classes("surface-card report-controls w-full q-pa-md q-mb-md"):
+            ui.label("経営資料セット").classes("text-base font-black")
+            ui.label("用途の違う資料は分けて、必要なものだけ確認・印刷します").classes("text-[10px] text-grey-6 q-mb-sm")
+            with ui.element("div").classes("report-links"):
+                for title, caption, icon, path in (
+                    ("期間実績", "売上・利益・決済・仕入", "summarize", "/mirai-kessan/reports"),
+                    ("経営コンサル", "問題の優先順位と次の行動", "psychology", "/mirai-kessan/consulting"),
+                    ("決算分析", "会社の収益性と安全性", "assessment", "/mirai-kessan/financial-analysis"),
+                    ("人件費管理", "総負担額・比率・勤務状況", "groups", "/mirai-kessan/staffing"),
+                ):
+                    with ui.card().classes("report-link-card q-pa-sm cursor-pointer").on(
+                        "click", lambda _, target=path: ui.navigate.to(target)):
+                        ui.icon(icon).classes("text-primary text-lg")
+                        ui.label(title).classes("text-xs font-black")
+                        ui.label(caption).classes("text-[8px] text-grey-6")
+
         @ui.refreshable
         def report_view():
             values = build_financial_report(str(start_date.value), str(end_date.value))
@@ -86,15 +102,7 @@ def financial_reports_page():
                             ui.label("—" if value is None else f"{value * 100:.1f}%").classes("ratio-value")
 
                 ui.label("利益ブロック").classes("report-section-title")
-                with ui.element("div").classes("profit-flow"):
-                    for label, value, style in (
-                        ("売上", values["sales_total"], "sales"), ("原価", -values["cost_total"], "cost"),
-                        ("粗利", values["gross_profit"], "gross"), ("人件費", -values["personnel"], "personnel"),
-                        ("その他営業経費", -(values["operating_expenses"] - values["personnel"]), "expense"),
-                        ("営業利益", values["operating_profit"], "profit"),
-                    ):
-                        with ui.element("div").classes(f"profit-step {style}"):
-                            ui.label(label); ui.label(f"¥{value:,}").classes("profit-value")
+                render_profit_block(values)
 
                 ui.label("営業経費の内訳").classes("report-section-title")
                 expense_rows = list(values["expense_breakdown"])
@@ -162,8 +170,47 @@ def render_two_column_table(rows, first, second, total):
             table_row((total[0], money(total[1])), "total-row")
 
 
+def render_profit_block(values):
+    sales = max(int(values["sales_total"]), 0)
+    if not sales:
+        ui.label("売上を入力すると表示されます").classes("text-xs text-grey-6 q-pa-md")
+        return
+    cost = max(int(values["cost_total"]), 0)
+    gross = max(int(values["gross_profit"]), 0)
+    gross_base = max(gross, 1)
+    other = max(int(values["operating_expenses"]) - int(values["personnel"]), 0)
+    breakdown = (
+        ("人件費", int(values["personnel"]), "#4A9FD0"),
+        ("その他営業経費", other, "#909A95"),
+        ("営業利益" if values["operating_profit"] >= 0 else "営業損失",
+         abs(int(values["operating_profit"])), "#4B77B7" if values["operating_profit"] >= 0 else "#C85C57"),
+    )
+
+    def block(title, value, color, note="", classes=""):
+        with ui.element("div").classes(f"report-money-box {classes}").style(f"background:{color}"):
+            ui.label(title).classes("report-block-title")
+            ui.label(f"¥{value:,}").classes("report-block-value")
+            if note:
+                ui.label(note).classes("report-block-note")
+
+    cost_share = max(cost / sales, .02)
+    gross_share = max(gross / sales, .02)
+    with ui.element("div").classes("report-block-map").style(
+        f"grid-template-rows:{cost_share}fr {gross_share}fr"):
+        block("売上", sales, "#355F4C", "100%", "report-sales")
+        block("仕入れ・原価", cost, "#82988D", f"原価率 {cost / sales * 100:.1f}%", "report-cost")
+        block("粗利", int(values["gross_profit"]), "#4F8C70",
+              f"粗利率 {values['gross_profit'] / sales * 100:.1f}%", "report-gross")
+        with ui.element("div").classes("report-breakdown"):
+            for title, value, color in breakdown:
+                with ui.element("div").classes("report-money-box").style(
+                    f"background:{color};flex:{max(value / gross_base, .02)}"):
+                    ui.label(title).classes("report-block-title")
+                    ui.label(f"¥{value:,}").classes("report-block-value")
+
+
 REPORT_CSS = """
-.report-date-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.print-report{padding:24px;border-radius:24px;background:#fff;border:1px solid #E3E6E2}.report-title{font-size:24px;font-weight:950;color:#173B2E}.report-period{font-size:11px;color:#6C7771;margin-top:4px}.report-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.report-metric{min-width:0;padding:11px 9px;border-radius:13px;background:#F1F4F2}.report-metric.sales{background:#E8F2EC}.report-metric.cost{background:#FFF0E9}.report-metric.gross{background:#EAF3FF}.report-metric.personnel{background:#EAF4FB}.report-metric.profit{background:#E8F0FB}.report-metric-label{font-size:8px;font-weight:850;color:#647069}.report-metric-value{font-size:clamp(11px,3vw,17px);font-weight:950;white-space:nowrap;letter-spacing:-.05em}.report-section-title{margin-top:24px;margin-bottom:8px;font-size:17px;font-weight:950}.ratio-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.ratio-card{padding:9px;border-radius:11px;background:#F3F6F4;font-size:8px;font-weight:850;color:#647069}.ratio-value{font-size:15px;font-weight:950;color:#1D3C30;margin-top:2px}.profit-flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}.profit-step{padding:10px 6px;border-radius:10px;color:#fff;background:#557666;font-size:8px;font-weight:850}.profit-step.cost{background:#879A90}.profit-step.gross{background:#4F8C70}.profit-step.personnel{background:#4A9FD0}.profit-step.expense{background:#8E9792}.profit-step.profit{background:#4B77B7}.profit-value{font-size:11px;font-weight:950;white-space:nowrap}.report-table-wrap{width:100%;overflow-x:auto}.report-table{width:100%;border-collapse:collapse;font-size:9px}.compact-table{max-width:450px}.report-table th,.report-table td{padding:8px 7px;border:1px solid #DDE2DE;text-align:right;white-space:nowrap}.report-table th{background:#EDF2EF;color:#43554C;font-weight:900}.report-table th:first-child,.report-table td:first-child{text-align:left}.report-table td:last-child{font-weight:900}.total-row td{background:#DDEAE2!important;border-top:2px solid #597566!important;font-weight:950!important}
-@media(max-width:520px){.report-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ratio-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.profit-flow{grid-template-columns:repeat(2,minmax(0,1fr))}.report-metric-value{font-size:16px}.print-report{padding:15px}.report-date-grid{grid-template-columns:1fr}}
-@media print{@page{size:A4 portrait;margin:10mm}body{background:#fff!important}.report-controls,.q-header,.q-drawer,.q-btn{display:none!important}.app-shell{width:100%!important;max-width:none!important;padding:0!important}.app-shell>div:first-child,.app-shell>div:nth-child(2),.app-shell>div:nth-child(3){display:none!important}.print-report{border:0!important;padding:0!important}.report-table-wrap{overflow:visible}.report-table{font-size:7pt}.report-table tr{break-inside:avoid}.report-section-title{break-after:avoid}.profit-flow,.ratio-grid,.report-metrics{break-inside:avoid}}
+.report-date-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.report-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.report-link-card{min-width:0;border-radius:14px!important;box-shadow:none!important;background:#F5F7F5!important}.print-report{padding:24px;border-radius:24px;background:#fff;border:1px solid #E3E6E2}.report-title{font-size:24px;font-weight:950;color:#173B2E}.report-period{font-size:11px;color:#6C7771;margin-top:4px}.report-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.report-metric{min-width:0;padding:11px 9px;border-radius:13px;background:#F1F4F2}.report-metric.sales{background:#E8F2EC}.report-metric.cost{background:#FFF0E9}.report-metric.gross{background:#EAF3FF}.report-metric.personnel{background:#EAF4FB}.report-metric.profit{background:#E8F0FB}.report-metric-label{font-size:8px;font-weight:850;color:#647069}.report-metric-value{font-size:clamp(11px,3vw,17px);font-weight:950;white-space:nowrap;letter-spacing:-.05em}.report-section-title{margin-top:24px;margin-bottom:8px;font-size:17px;font-weight:950}.ratio-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.ratio-card{padding:9px;border-radius:11px;background:#F3F6F4;font-size:8px;font-weight:850;color:#647069}.ratio-value{font-size:15px;font-weight:950;color:#1D3C30;margin-top:2px}.report-block-map{height:280px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}.report-money-box{min-height:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}.report-sales{grid-column:1;grid-row:1/3}.report-cost{grid-column:2/4;grid-row:1}.report-gross{grid-column:2;grid-row:2}.report-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}.report-block-title{font-size:9px;font-weight:900;line-height:1.1}.report-block-value{font-size:11px;font-weight:950;line-height:1.15;margin-top:2px;white-space:nowrap}.report-block-note{font-size:7px;opacity:.9;margin-top:2px}.report-table-wrap{width:100%;overflow-x:auto}.report-table{width:100%;border-collapse:collapse;font-size:9px}.compact-table{max-width:450px}.report-table th,.report-table td{padding:8px 7px;border:1px solid #DDE2DE;text-align:right;white-space:nowrap}.report-table th{background:#EDF2EF;color:#43554C;font-weight:900}.report-table th:first-child,.report-table td:first-child{text-align:left}.report-table td:last-child{font-weight:900}.total-row td{background:#DDEAE2!important;border-top:2px solid #597566!important;font-weight:950!important}
+@media(max-width:520px){.report-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ratio-grid,.report-links{grid-template-columns:repeat(2,minmax(0,1fr))}.report-metric-value{font-size:16px}.print-report{padding:15px}.report-date-grid{grid-template-columns:1fr}.report-block-map{height:250px}}
+@media print{@page{size:A4 portrait;margin:10mm}body{background:#fff!important}.report-controls,.q-header,.q-drawer,.q-btn{display:none!important}.app-shell{width:100%!important;max-width:none!important;padding:0!important}.app-shell>div:first-child,.app-shell>div:nth-child(2),.app-shell>div:nth-child(3){display:none!important}.print-report{border:0!important;padding:0!important}.report-table-wrap{overflow:visible}.report-table{font-size:7pt}.report-table tr{break-inside:avoid}.report-section-title{break-after:avoid}.report-block-map,.ratio-grid,.report-metrics{break-inside:avoid}.report-block-map{height:68mm}}
 """
