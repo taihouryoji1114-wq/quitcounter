@@ -126,6 +126,10 @@ def _render_future_financials_home(selected_month=None):
     month_label = current_month.replace("-", "年") + "月"
     with content:
         ui.button(
+            "入力を自動チェック", icon="fact_check",
+            on_click=lambda: ui.navigate.to("/mirai-kessan/audit"),
+        ).props("unelevated no-caps").classes("audit-shortcut w-full q-mb-sm")
+        ui.button(
             "期間集計・印刷を開く", icon="print",
             on_click=lambda: ui.navigate.to("/mirai-kessan/reports"),
         ).props("unelevated no-caps").classes("report-shortcut w-full q-mb-sm")
@@ -328,6 +332,7 @@ def _render_future_financials_home(selected_month=None):
                     "text-xs text-grey-6 text-center q-pa-md"
                 )
         ui.add_css("""
+        .audit-shortcut{background:linear-gradient(135deg,#1E5A45,#33785F)!important;color:#fff!important;min-height:48px!important;border-radius:16px!important;font-weight:900!important}
         .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
         .metric-value,.rounded-xl .font-bold{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .actual-box-map{width:calc(100% + 12px)!important;margin-left:-6px;margin-right:-6px;height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}.actual-money-box{min-height:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}.actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}.actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}.actual-cost-block>.actual-money-box,.actual-gross-block>.actual-money-box{width:100%}.actual-gross-block{grid-column:2;grid-row:2;min-height:0;display:flex}.actual-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}.actual-block-title{font-size:9px;font-weight:800;line-height:1.1}.actual-block-value{font-size:10px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap}.actual-block-note{font-size:7px;line-height:1.1;margin-top:2px;opacity:.9;white-space:nowrap}

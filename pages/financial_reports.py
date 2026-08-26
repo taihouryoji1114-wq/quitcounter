@@ -281,7 +281,6 @@ def staffing_report_page():
     gross = sales - cost
     personnel_rate = summary["company_cost"] / sales if sales else None
     distribution = summary["company_cost"] / gross if gross > 0 else None
-    progress = staffing.attendance_progress(month, today.isoformat())
     with content, ui.element("section").classes("print-report management-report w-full"):
         report_heading("未来決算　人件費管理報告書", f"対象月　{month.replace('-', '/')}　{today.day}日現在",
                        "給与だけでなく、交通費と会社負担の保険料まで含めて判断します。")
@@ -307,13 +306,6 @@ def staffing_report_page():
                     table_row((row[0], *[money(value) for value in row[1:]]))
                 table_row(("合計", money(summary["gross_wages"]), money(summary["transportation"]),
                            money(summary["employer_insurance"]), money(summary["company_cost"])), "total-row")
-        ui.label("社員の出勤チェック状況").classes("report-section-title")
-        with ui.element("div").classes("attendance-grid"):
-            for name, item in progress.items():
-                with ui.element("div").classes("attendance-card"):
-                    ui.label(name).classes("font-black")
-                    ui.label(f"{item['checked_count']}日チェック済み").classes("text-sm font-black text-primary")
-                    ui.label("最終：" + (item["latest_date"].replace("-", "/") if item["latest_date"] else "未チェック")).classes("text-[10px] text-grey-6")
 
 
 def money(value):

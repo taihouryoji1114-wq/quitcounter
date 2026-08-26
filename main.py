@@ -31,6 +31,7 @@ import pages.store_events
 import pages.store_chanhaya
 import pages.shift_submission
 import pages.financial_reports
+import pages.business_audit
 import pages.purchase_list
 import pages.schedule
 import pages.attendance
