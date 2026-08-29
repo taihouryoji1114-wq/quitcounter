@@ -8,7 +8,7 @@ from core.theme import Theme
 from pages.store_common import store_header_actions
 
 
-CATEGORIES = ["野菜仕入れ", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"]
+CATEGORIES = ["野菜仕入れ", "冷食", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"]
 AREAS = ["厨房", "デシャップ", "ホール"]
 STORE_LOGIN_URL = "https://quitcounter.onrender.com/store-ops/login"
 

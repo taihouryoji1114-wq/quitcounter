@@ -21,6 +21,17 @@ class StoreOperationsManager:
 
     def __init__(self, data_manager=None):
         self._data_manager = data_manager or data
+        self._migrate_inventory_categories()
+
+    def _migrate_inventory_categories(self):
+        """Move legacy food items to vegetables before reusing the label as 冷食."""
+        changed = False
+        for item in self._data_manager.data.get("store_inventory_items", []):
+            if isinstance(item, dict) and item.get("category") == "食材":
+                item["category"] = "野菜仕入れ"
+                changed = True
+        if changed:
+            self._data_manager.save()
 
     def items(self, active_only=True):
         values = self._data_manager.data.get("store_inventory_items", [])

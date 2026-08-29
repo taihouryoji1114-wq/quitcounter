@@ -151,7 +151,7 @@ def store_operations_page():
                 ui.label("商品を登録").classes("text-xl font-black")
                 ui.button(icon="close", on_click=add_dialog.close).props("flat round")
             name = ui.input("商品・備品名").props("outlined dense").classes("w-full")
-            category = ui.select(["野菜仕入れ", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"],
+            category = ui.select(["野菜仕入れ", "冷食", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"],
                                  value="野菜仕入れ", label="分類").props("outlined dense").classes("w-full q-mt-xs")
             unit = ui.select(
                 list(store_ops.INVENTORY_UNITS), value="個", label="管理単位",
@@ -340,7 +340,7 @@ def store_operations_page():
             for item in items:
                 display_category = category_aliases.get(item["category"], item["category"])
                 grouped_items.setdefault(display_category, []).append(item)
-            category_order = ["野菜仕入れ", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"]
+            category_order = ["野菜仕入れ", "冷食", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"]
             for category_name in sorted(grouped_items, key=lambda value: (
                     category_order.index(value) if value in category_order else 99, value)):
                 category_items = grouped_items[category_name]

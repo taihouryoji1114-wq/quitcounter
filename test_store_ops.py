@@ -97,6 +97,17 @@ class StoreOperationsManagerTest(unittest.TestCase):
         item = self.manager.add_item("長ねぎ")
         self.assertEqual(item["category"], "野菜仕入れ")
 
+    def test_legacy_food_items_move_to_vegetable_purchasing(self):
+        self.data.data["store_inventory_items"] = [{
+            "id": "legacy-food", "name": "白菜", "category": "食材", "active": True,
+        }]
+
+        migrated = StoreOperationsManager(self.data).items()[0]
+
+        self.assertEqual(migrated["category"], "野菜仕入れ")
+        self.assertEqual(
+            self.data.data["store_inventory_items"][0]["category"], "野菜仕入れ")
+
     def test_hygiene_is_complete_only_with_all_temperatures_and_checks(self):
         checks = {"receiving": True, "equipment": True, "toilet": True, "handwash": True}
         self.manager.save_hygiene("2026-08-14", {
