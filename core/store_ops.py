@@ -691,22 +691,25 @@ class StoreOperationsManager:
         sessions = self._data_manager.data.get("store_checklist_sessions", {})
         source_started = source_period in sessions.get(source_date, {})
         items = []
-        if source_started:
-            for prep in self.service_prep_items(source_date, source_period):
+        prep_date, prep_period = (source_date, source_period) if source_started else (
+            record_date, period)
+        if source_started or self.prep_templates():
+            for prep in self.service_prep_items(prep_date, prep_period):
                 if prep.get("choice_mode") and prep.get("choice"):
                     items.append({"id": prep["id"], "kind": "check_result",
                                   "name": f"{prep['name']}：{prep['choice']}",
                                   "area": prep.get("area", "厨房"),
-                                  "from_date": source_date, "from_period": source_period,
+                                  "from_date": prep_date, "from_period": prep_period,
                                   "completed": True})
                     continue
                 detail = prep["name"]
                 if prep.get("quantity_mode"):
                     detail = f"{detail}（残り{prep.get('quantity', 0)}・2個必要）"
                 items.append({"id": prep["id"], "kind": "prep", "name": detail,
-                              "area": prep.get("area", "厨房"), "from_date": source_date,
-                              "from_period": source_period,
+                              "area": prep.get("area", "厨房"), "from_date": prep_date,
+                              "from_period": prep_period,
                               "quantity_mode": prep.get("quantity_mode", False),
+                              "quantity": prep.get("quantity", 0),
                               "choice_mode": prep.get("choice_mode", False),
                               "completed": prep["status"] == "done"})
         handover_days = self._data_manager.data.get("store_handovers", {})

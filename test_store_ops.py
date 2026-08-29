@@ -121,6 +121,18 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.prep_items("2026-08-14")[0]["status"], "done")
         self.assertEqual(self.manager.prep_items("2026-08-15")[0]["status"], "incomplete")
 
+    def test_first_service_uses_current_prep_items_on_live_board(self):
+        item = self.manager.add_prep_template("サバ", "厨房")
+        self.manager.set_service_prep_quantity("2026-08-20", "lunch", item["id"], 1)
+
+        board = self.manager.service_handover_board("2026-08-20", "lunch")
+        prep = next(entry for entry in board["items"] if entry["kind"] == "prep")
+
+        self.assertEqual(prep["name"], "サバ（残り1・2個必要）")
+        self.assertEqual(prep["quantity"], 1)
+        self.assertEqual(prep["from_date"], "2026-08-20")
+        self.assertEqual(prep["from_period"], "lunch")
+
     def test_deleted_prep_template_is_hidden_but_record_remains(self):
         item = self.manager.add_prep_template("鶏団子", "厨房")
         self.manager.set_prep_status("2026-08-14", item["id"], "done")

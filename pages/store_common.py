@@ -4,7 +4,6 @@ from core.auth import current_role, has_permission, log_out
 
 
 MENU_ITEMS = (
-    ("今日のチェック表", "checklist", "/store-ops/checklist"),
     ("在庫確認", "inventory_2", "/store-ops/inventory"),
     ("仕入れリスト", "shopping_basket", "/store-ops/purchase-list"),
     ("温度・衛生", "health_and_safety", "/store-ops/hygiene"),

@@ -40,13 +40,23 @@ def store_dashboard_page():
         with ui.card().classes("store-board w-full q-pa-lg text-white"):
             with ui.row().classes("w-full items-start justify-between no-wrap"):
                 with ui.column().classes("gap-0"):
-                    ui.label(f"{board['source_label']}から{period_label}へ").classes(
+                    ui.label(f"{business_date.replace('-', '/')}　{period_label}営業").classes(
                         "text-[10px] opacity-80 tracking-wide")
-                    ui.label("引き継ぎボード").classes("text-2xl font-black")
-                ui.button("最新に更新", icon="refresh", on_click=lambda: ui.navigate.to(
+                    ui.label("厨房ライブボード").classes("board-title font-black")
+                ui.button("更新", icon="refresh", on_click=lambda: ui.navigate.to(
                     "/store-ops")).props("unelevated no-caps aria-label='最新の状態に更新'").classes(
                         "board-refresh")
-            board_items = board["items"]
+            board_items = list(board["items"])
+            order_checks = store_ops.daily_order_checks(business_date)
+            order_attention = store_ops.daily_order_attention(business_date)
+            for destination in store_ops.DAILY_ORDER_DESTINATIONS:
+                board_items.append({
+                    "id": destination, "kind": "order_check",
+                    "name": f"{destination}へ発注", "area": "今日の発注",
+                    "from_date": business_date, "from_period": period,
+                    "completed": bool(order_checks[destination]),
+                    "attention": bool(order_attention[destination]),
+                })
             pending_items = [item for item in board_items if not item.get("completed", False)]
             done_items = [item for item in board_items if item.get("completed", False)]
 
@@ -78,6 +88,9 @@ def store_dashboard_page():
                         return
                     if item["kind"] == "request":
                         store_ops.delete_order_request(item["id"])
+                    elif item["kind"] == "order_check":
+                        store_ops.set_daily_order_check(item["from_date"], item["id"], False)
+                        store_ops.set_daily_order_attention(item["from_date"], item["id"], False)
                     elif item["kind"] in {"prep", "check_result"}:
                         store_ops.reset_service_prep_items(
                             item["from_date"], item["from_period"], [item["id"]])
@@ -119,6 +132,8 @@ def store_dashboard_page():
                     store_ops.confirm_handover(item["from_date"], item["id"])
                 elif item["kind"] == "request":
                     store_ops.set_order_request_completed(item["id"], True)
+                elif item["kind"] == "order_check":
+                    store_ops.set_daily_order_check(item["from_date"], item["id"], True)
                 keep_group_open(item)
                 reload_in_place()
 
@@ -127,6 +142,37 @@ def store_dashboard_page():
                     item["from_date"], item["from_period"], item["id"], choice)
                 keep_group_open(item)
                 reload_in_place()
+
+            def save_prep_quantity(item, field):
+                store_ops.set_service_prep_quantity(
+                    item["from_date"], item["from_period"], item["id"], field.value)
+                keep_group_open(item)
+                reload_in_place()
+
+            switch_target = {"next": None}
+            with ui.dialog() as switch_dialog, ui.card().classes(
+                    "board-action-dialog q-pa-lg"):
+                ui.label("次の営業へ切り替えますか？").classes("text-lg font-black")
+                switch_message = ui.label().classes("text-xs text-grey-7 q-mt-xs")
+
+                def advance_service():
+                    store_ops.advance_service_context()
+                    switch_dialog.close()
+                    ui.navigate.to("/store-ops")
+
+                with ui.row().classes("w-full gap-2 q-mt-md"):
+                    ui.button("まだ切り替えない", on_click=switch_dialog.close).props(
+                        "flat no-caps").classes("grow")
+                    ui.button("切り替える", icon="skip_next", on_click=advance_service).props(
+                        "unelevated no-caps color=primary").classes("grow")
+
+            def ask_advance_service():
+                unfinished = sum(1 for item in board_items
+                                 if board_group(item) == "prep" and not item.get("completed"))
+                next_label = "ディナー" if period == "lunch" else "翌日のランチ"
+                switch_message.set_text(
+                    f"未完了が{unfinished}件あります。状態を残したまま{next_label}へ進みます。")
+                switch_dialog.open()
 
             with ui.row().classes("w-full items-center gap-2 q-mt-sm"):
                 ui.label(f"未完了 {len(pending_items)}件").classes("board-summary pending")
@@ -140,6 +186,10 @@ def store_dashboard_page():
 
                     ui.button("仕込みを一括で左へ", icon="undo", on_click=reopen_all_done).props(
                         "flat dense no-caps").classes("board-reopen-all")
+            ui.button(
+                "ディナーへ切り替える" if period == "lunch" else "本日の営業を締める",
+                icon="east", on_click=ask_advance_service,
+            ).props("unelevated no-caps").classes("service-switch w-full q-mt-sm")
             def render_board_group(title, icon, group_name):
                 group_pending = [item for item in pending_items
                                  if board_group(item) == group_name]
@@ -192,6 +242,18 @@ def store_dashboard_page():
                                     ui.button("なし", on_click=lambda _, value=item:
                                               save_rice_choice(value, "なし")).props(
                                                   "outline dense no-caps color=primary").classes("grow")
+                            elif item.get("quantity_mode"):
+                                quantity = ui.number(
+                                    value=max(0, int(item.get("quantity", 0) or 0)),
+                                    min=0, step=1, suffix="個",
+                                ).props("outlined dense inputmode=numeric").classes(
+                                    "board-quantity w-full q-mt-xs")
+                                ui.button(
+                                    "個数を保存", icon="save",
+                                    on_click=lambda _, value=item, field=quantity:
+                                        save_prep_quantity(value, field),
+                                ).props("unelevated dense no-caps").classes(
+                                    "board-quantity-save w-full")
                             elif item["kind"] == "request" and not can_manage:
                                 ui.label("管理者対応").classes("board-manager-only")
                             elif item["kind"] != "check_result":
@@ -200,7 +262,7 @@ def store_dashboard_page():
                                               "unelevated round dense aria-label='完了'").classes(
                                                   "board-check")
 
-            render_board_group("厨房の仕込み引き継ぎ", "restaurant", "prep")
+            render_board_group("今日の作業・仕込み", "restaurant", "prep")
             render_board_group("自由引き継ぎ", "edit_note", "note")
             render_board_group("発注引き継ぎ", "shopping_cart", "request")
 
@@ -217,10 +279,10 @@ def store_dashboard_page():
                      "/store-ops/chanhaya", "text-red-7")
 
         ui.add_css("""
-        body{background:linear-gradient(180deg,rgba(244,247,244,.68),rgba(239,238,232,.82)),url('/static/store_ops_home_bg_v3.png') center/cover fixed!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{position:relative;overflow:hidden;border:0!important;border-radius:29px!important;background:radial-gradient(circle at 95% 0%,rgba(234,190,102,.48),transparent 34%),linear-gradient(145deg,rgba(16,47,38,.96),rgba(40,96,71,.95) 62%,rgba(85,122,74,.95) 120%)!important;box-shadow:0 20px 46px rgba(20,66,49,.28)!important}.store-board:after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(255,255,255,.09);border-radius:50%;right:-70px;top:-90px;pointer-events:none}.board-refresh{min-height:37px!important;color:#245B43!important;background:#fff!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:999px!important;padding:3px 13px!important;font-size:10px!important;font-weight:900!important;box-shadow:0 6px 16px rgba(5,30,21,.2)!important}.board-summary{font-size:9px;font-weight:900;padding:5px 9px;border-radius:999px}.board-summary.pending{background:rgba(255,255,255,.18)}.board-summary.done{background:rgba(147,219,177,.22)}.board-expansion{border-radius:17px!important;background:rgba(7,31,24,.16)!important;border:1px solid rgba(255,255,255,.1)!important}.board-expansion .q-item{min-height:42px;color:#fff;font-size:11px;font-weight:900}.board-expansion .q-expansion-item__content{padding:4px 9px 10px}.board-lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}.board-lane{min-width:0;padding:7px;border-radius:13px;background:rgba(4,28,20,.16)}.board-lane-done{background:rgba(205,235,216,.10)}.board-lane-title{font-size:9px;font-weight:900;opacity:.84;padding:2px}.board-section-title{width:100%;margin-top:5px;padding:5px 4px 2px;border-top:1px solid rgba(255,255,255,.16);font-size:7px;font-weight:900;letter-spacing:.06em;opacity:.76}.board-row{position:relative!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:3px!important;min-width:0;border-radius:11px!important;background:rgba(255,255,255,.95)!important;color:#20362D!important;box-shadow:0 4px 12px rgba(8,31,23,.10)!important}.board-row-done{flex-direction:row!important;align-items:center!important;background:rgba(232,244,236,.94)!important}.board-area{color:#6E8077;font-size:7px;font-weight:900}.board-name{max-width:100%;font-size:10px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}.board-check{position:absolute!important;right:4px;bottom:4px;min-height:27px!important;min-width:27px!important;background:#246A4E!important;color:white!important}.board-manager-only{font-size:7px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:3px 5px;border-radius:999px}.board-lane-empty{font-size:9px;opacity:.65;padding:10px 2px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;backdrop-filter:blur(9px)}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.95),rgba(255,255,255,.92))!important}.store-app-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}
+        body{background:linear-gradient(180deg,rgba(244,247,244,.68),rgba(239,238,232,.82)),url('/static/store_ops_home_bg_v3.png') center/cover fixed!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{position:relative;overflow:hidden;border:0!important;border-radius:29px!important;background:radial-gradient(circle at 95% 0%,rgba(234,190,102,.48),transparent 34%),linear-gradient(145deg,rgba(16,47,38,.96),rgba(40,96,71,.95) 62%,rgba(85,122,74,.95) 120%)!important;box-shadow:0 20px 46px rgba(20,66,49,.28)!important}.store-board:after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(255,255,255,.09);border-radius:50%;right:-70px;top:-90px;pointer-events:none}.board-title{font-size:23px;line-height:1.12;white-space:nowrap}.board-refresh{min-height:37px!important;color:#245B43!important;background:#fff!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:999px!important;padding:3px 13px!important;font-size:10px!important;font-weight:900!important;box-shadow:0 6px 16px rgba(5,30,21,.2)!important}.board-summary{font-size:9px;font-weight:900;padding:5px 9px;border-radius:999px}.board-summary.pending{background:rgba(255,255,255,.18)}.board-summary.done{background:rgba(147,219,177,.22)}.board-expansion{border-radius:17px!important;background:rgba(7,31,24,.16)!important;border:1px solid rgba(255,255,255,.1)!important}.board-expansion .q-item{min-height:42px;color:#fff;font-size:11px;font-weight:900}.board-expansion .q-expansion-item__content{padding:4px 9px 10px}.board-lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}.board-lane{min-width:0;padding:7px;border-radius:13px;background:rgba(4,28,20,.16)}.board-lane-done{background:rgba(205,235,216,.10)}.board-lane-title{font-size:9px;font-weight:900;opacity:.84;padding:2px}.board-section-title{width:100%;margin-top:5px;padding:5px 4px 2px;border-top:1px solid rgba(255,255,255,.16);font-size:7px;font-weight:900;letter-spacing:.06em;opacity:.76}.board-row{position:relative!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:3px!important;min-width:0;border-radius:11px!important;background:rgba(255,255,255,.95)!important;color:#20362D!important;box-shadow:0 4px 12px rgba(8,31,23,.10)!important}.board-row-done{flex-direction:row!important;align-items:center!important;background:rgba(232,244,236,.94)!important}.board-area{color:#6E8077;font-size:7px;font-weight:900}.board-name{max-width:100%;font-size:10px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}.board-check{position:absolute!important;right:4px;bottom:4px;min-height:27px!important;min-width:27px!important;background:#246A4E!important;color:white!important}.board-manager-only{font-size:7px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:3px 5px;border-radius:999px}.board-lane-empty{font-size:9px;opacity:.65;padding:10px 2px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;backdrop-filter:blur(9px)}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.95),rgba(255,255,255,.92))!important}.store-app-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}@media(max-width:390px){.store-board{padding:17px!important}.board-title{font-size:20px}.board-refresh{padding:2px 10px!important}}
         """)
         ui.add_css("""
-        .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}.board-reopen-all{margin-left:auto!important;color:#173E30!important;background:#F5D780!important;border:1px solid #FFEAB0!important;border-radius:999px!important;font-size:9px!important;font-weight:950!important;box-shadow:0 4px 12px rgba(4,24,17,.24)!important}
+        .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}.board-reopen-all{margin-left:auto!important;color:#173E30!important;background:#F5D780!important;border:1px solid #FFEAB0!important;border-radius:999px!important;font-size:9px!important;font-weight:950!important;box-shadow:0 4px 12px rgba(4,24,17,.24)!important}.service-switch{min-height:40px!important;border-radius:14px!important;background:rgba(255,255,255,.96)!important;color:#245B43!important;font-size:10px!important;font-weight:950!important}.board-quantity .q-field__control{min-height:34px!important;height:34px!important;background:#fff;border-radius:9px!important}.board-quantity-save{min-height:29px!important;margin-top:3px!important;border-radius:9px!important;background:#246A4E!important;font-size:8px!important}
         .business-notice{border-radius:18px!important;background:linear-gradient(135deg,#FFF5D9,#FFF)!important;border:1px solid #EBCB82!important;box-shadow:0 8px 22px rgba(119,82,25,.10)!important}.business-notice .q-item{min-height:50px!important;color:#704B17;font-size:12px;font-weight:950}.business-notice-card{border-radius:13px!important;border:1px solid #F0DFC0!important;box-shadow:none!important}
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}

@@ -11,6 +11,9 @@ from pages.store_common import store_header_actions
 def checklist_page():
     if not require_app_access("store_ops"):
         return
+    # 旧ブックマークから開いても、統合後の厨房ライブボードへ案内する。
+    ui.navigate.to("/store-ops")
+    return
     Theme.page("今日のチェック表｜店舗運営", app_name="store-ops")
     store_ops.move_kitchen_handovers_to_prep()
     record_date, period = store_ops.active_service_context(

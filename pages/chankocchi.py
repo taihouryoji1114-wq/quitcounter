@@ -65,7 +65,7 @@ def chankocchi_page():
 
     def store_reward():
         if not has_store_activity(data.data, today_jst_string()):
-            ui.notify('今日のチェック表を終えると受け取れます', type='info'); return
+            ui.notify('厨房ライブボードの仕事を終えると受け取れます', type='info'); return
         try:
             claim_store_reward(profile, today_jst_string()); save(); render.refresh()
         except ValueError as error:
@@ -122,7 +122,7 @@ def chankocchi_page():
                 ui.linear_progress(progress).props('rounded color=deep-orange-5').classes('q-mt-sm')
             with ui.card().classes('store-link w-full'):
                 ui.label('今日のお仕事').classes('font-black')
-                ui.label('チェック表と、今後追加するタスクの実績をサーバーで確認します').classes('text-[10px] opacity-80')
+                ui.label('厨房ライブボードと、今後追加するタスクの実績を確認します').classes('text-[10px] opacity-80')
                 with ui.row().classes('w-full gap-2 q-mt-sm'):
                     ui.button('店舗運営へ', icon='storefront', on_click=open_store).props('flat no-caps').classes('grow store-open')
                     reward_label = '受取済' if today_claimed else '+10枚' if store_done else '未達成'
