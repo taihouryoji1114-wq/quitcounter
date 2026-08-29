@@ -158,6 +158,38 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(updated["name"], "つくね")
         self.assertEqual(updated["area"], "デシャップ")
 
+    def test_prep_template_can_use_configured_subchecks_and_note(self):
+        item = self.manager.add_prep_template(
+            "唐揚げ", "厨房", ["血抜き", "味付け", "粉付け"], True)
+
+        initial = self.manager.service_prep_items("2026-08-29", "lunch")[0]
+        self.assertEqual(initial["check_items"], ["血抜き", "味付け", "粉付け"])
+        self.assertEqual(initial["status"], "incomplete")
+        self.assertTrue(initial["note_enabled"])
+
+        self.manager.set_service_prep_subchecks(
+            "2026-08-29", "lunch", item["id"], ["血抜き", "味付け"])
+        self.manager.set_service_prep_note(
+            "2026-08-29", "lunch", item["id"], "粉付けだけ未完了")
+        partial = self.manager.service_prep_items("2026-08-29", "lunch")[0]
+        self.assertEqual(partial["status"], "incomplete")
+        self.assertEqual(partial["note"], "粉付けだけ未完了")
+
+        self.manager.set_service_prep_subchecks(
+            "2026-08-29", "lunch", item["id"], ["血抜き", "味付け", "粉付け"])
+        complete = self.manager.service_prep_items("2026-08-29", "lunch")[0]
+        self.assertEqual(complete["status"], "done")
+
+    def test_existing_prep_templates_keep_normal_completion_by_default(self):
+        item = self.manager.add_prep_template("鶏団子", "厨房")
+        saved = self.manager.prep_templates()[0]
+        self.assertEqual(saved["check_items"], [])
+        self.assertFalse(saved["note_enabled"])
+        self.manager.set_service_prep_status(
+            "2026-08-29", "lunch", item["id"], "done")
+        self.assertEqual(
+            self.manager.service_prep_items("2026-08-29", "lunch")[0]["status"], "done")
+
     def test_prep_templates_can_be_reordered(self):
         first = self.manager.add_prep_template("唐揚げ", "厨房")
         second = self.manager.add_prep_template("つくね", "厨房")

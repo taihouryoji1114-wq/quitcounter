@@ -75,6 +75,8 @@ def store_dashboard_page():
             def reload_in_place():
                 ui.run_javascript("""
                 sessionStorage.setItem('storeBoardScrollY', String(window.scrollY));
+                document.querySelectorAll('.board-ticket-rail').forEach((rail, index) =>
+                  sessionStorage.setItem(`storeBoardRail${index}`, String(rail.scrollLeft)));
                 window.location.reload();
                 """)
 
@@ -119,7 +121,9 @@ def store_dashboard_page():
                 long_press_confirm.props(f"color={'negative' if deleting else 'warning'}")
                 long_press_dialog.open()
 
-            def complete_item(item):
+            summary_state = {"pending": len(pending_items), "done": len(done_items)}
+
+            def complete_item(item, row=None, number_label=None, action=None):
                 if item["kind"] == "request" and not has_permission("store_manage"):
                     ui.notify("発注依頼の完了は管理者のみ行えます", type="warning")
                     return
@@ -137,7 +141,19 @@ def store_dashboard_page():
                 elif item["kind"] == "order_check":
                     store_ops.set_daily_order_check(item["from_date"], item["id"], True)
                 keep_group_open(item)
-                reload_in_place()
+                if row is None:
+                    reload_in_place()
+                    return
+                item["completed"] = True
+                row.classes(add="board-ticket-completed board-longpress")
+                if number_label:
+                    number_label.set_text("完了")
+                if action:
+                    action.set_visibility(False)
+                summary_state["pending"] = max(0, summary_state["pending"] - 1)
+                summary_state["done"] += 1
+                pending_summary.set_text(f"未完了 {summary_state['pending']}件")
+                done_summary.set_text(f"完了済み {summary_state['done']}件")
 
             def save_rice_choice(item, choice):
                 store_ops.set_service_prep_choice(
@@ -177,17 +193,10 @@ def store_dashboard_page():
                 switch_dialog.open()
 
             with ui.row().classes("w-full items-center gap-2 q-mt-sm"):
-                ui.label(f"未完了 {len(pending_items)}件").classes("board-summary pending")
-                ui.label(f"完了済み {len(done_items)}件").classes("board-summary done")
-                completed_prep_items = [item for item in done_items
-                                        if board_group(item) == "prep"]
-                if completed_prep_items:
-                    def reopen_all_done():
-                        store_ops.reopen_handover_board_items(completed_prep_items)
-                        reload_in_place()
-
-                    ui.button("仕込みを一括で左へ", icon="undo", on_click=reopen_all_done).props(
-                        "flat dense no-caps").classes("board-reopen-all")
+                pending_summary = ui.label(f"未完了 {len(pending_items)}件").classes(
+                    "board-summary pending")
+                done_summary = ui.label(f"完了済み {len(done_items)}件").classes(
+                    "board-summary done")
             ui.button(
                 "ディナーへ切り替える" if period == "lunch" else "本日の営業を締める",
                 icon="east", on_click=ask_advance_service,
@@ -231,15 +240,46 @@ def store_dashboard_page():
                                         ui.label(item["name"]).classes("board-name grow")
                                 continue
                             row = ui.card().classes("board-row board-ticket q-pa-md")
-                            if item["kind"] == "request":
+                            if item["kind"] in {"request", "prep", "order_check"}:
                                 row.classes("board-longpress").on(
                                     "contextmenu", lambda _, value=item: open_long_press(value))
                             with row:
                                 with ui.row().classes("w-full items-center justify-between no-wrap"):
                                     ui.label(item["area"]).classes("board-area")
-                                    ui.label(f"{index}/{len(items)}").classes("ticket-number")
+                                    ticket_number = ui.label(f"{index}/{len(items)}").classes("ticket-number")
                                 ui.label(item["name"]).classes("board-name")
-                                if item.get("choice_mode"):
+                                if item.get("check_items"):
+                                    check_fields = []
+                                    for check_text in item["check_items"]:
+                                        field = ui.checkbox(
+                                            check_text,
+                                            value=check_text in item.get("checked_items", []),
+                                        ).classes("board-subcheck w-full")
+                                        check_fields.append((check_text, field))
+
+                                    def save_subchecks(_, value=item, fields=check_fields,
+                                                       card=row, label=ticket_number):
+                                        checked = [text for text, field in fields if field.value]
+                                        store_ops.set_service_prep_subchecks(
+                                            value["from_date"], value["from_period"],
+                                            value["id"], checked)
+                                        complete = len(checked) == len(fields)
+                                        if complete and not value.get("completed"):
+                                            complete_item(value, card, label)
+                                        elif not complete and value.get("completed"):
+                                            value["completed"] = False
+                                            card.classes(remove="board-ticket-completed")
+                                            label.set_text("確認中")
+                                            summary_state["pending"] += 1
+                                            summary_state["done"] = max(0, summary_state["done"] - 1)
+                                            pending_summary.set_text(
+                                                f"未完了 {summary_state['pending']}件")
+                                            done_summary.set_text(
+                                                f"完了済み {summary_state['done']}件")
+
+                                    for _, field in check_fields:
+                                        field.on_value_change(save_subchecks)
+                                elif item.get("choice_mode"):
                                     with ui.row().classes("board-choice-row w-full gap-2 q-mt-sm"):
                                         ui.button("あり", on_click=lambda _, value=item:
                                                   save_rice_choice(value, "あり")).props(
@@ -262,10 +302,30 @@ def store_dashboard_page():
                                 elif item["kind"] == "request" and not can_manage:
                                     ui.label("管理者対応").classes("board-manager-only")
                                 elif item["kind"] != "check_result":
-                                    ui.button("完了", icon="check", on_click=lambda _, value=item:
-                                              complete_item(value)).props(
+                                    action_holder = {}
+                                    complete_button = ui.button(
+                                        "完了", icon="check",
+                                        on_click=lambda _, value=item, card=row,
+                                        label=ticket_number, holder=action_holder: complete_item(
+                                            value, card, label, holder.get("button")),
+                                    ).props(
                                                   "unelevated no-caps aria-label='完了'").classes(
                                                       "board-ticket-complete w-full q-mt-sm")
+                                    action_holder["button"] = complete_button
+                                if item.get("note_enabled"):
+                                    note = ui.textarea(
+                                        "補足メモ", value=item.get("note", ""),
+                                    ).props("outlined autogrow dense").classes(
+                                        "board-note w-full q-mt-sm")
+                                    ui.button(
+                                        "メモを保存", icon="save",
+                                        on_click=lambda _, value=item, field=note: (
+                                            store_ops.set_service_prep_note(
+                                                value["from_date"], value["from_period"],
+                                                value["id"], field.value),
+                                            ui.notify("メモを保存しました", type="positive"),
+                                        ),
+                                    ).props("flat dense no-caps").classes("board-note-save")
 
             render_board_group("今日の作業・仕込み", "restaurant", "prep")
 
@@ -298,12 +358,12 @@ def store_dashboard_page():
         body{background:linear-gradient(180deg,rgba(244,247,244,.68),rgba(239,238,232,.82)),url('/static/store_ops_home_bg_v3.png') center/cover fixed!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{position:relative;overflow:hidden;border:0!important;border-radius:29px!important;background:radial-gradient(circle at 95% 0%,rgba(234,190,102,.48),transparent 34%),linear-gradient(145deg,rgba(16,47,38,.96),rgba(40,96,71,.95) 62%,rgba(85,122,74,.95) 120%)!important;box-shadow:0 20px 46px rgba(20,66,49,.28)!important}.store-board:after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(255,255,255,.09);border-radius:50%;right:-70px;top:-90px;pointer-events:none}.board-title{font-size:23px;line-height:1.12;white-space:nowrap}.board-refresh{min-height:37px!important;color:#245B43!important;background:#fff!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:999px!important;padding:3px 13px!important;font-size:10px!important;font-weight:900!important;box-shadow:0 6px 16px rgba(5,30,21,.2)!important}.board-summary{font-size:9px;font-weight:900;padding:5px 9px;border-radius:999px}.board-summary.pending{background:rgba(255,255,255,.18)}.board-summary.done{background:rgba(147,219,177,.22)}.board-expansion{border-radius:17px!important;background:rgba(7,31,24,.16)!important;border:1px solid rgba(255,255,255,.1)!important}.board-expansion .q-item{min-height:42px;color:#fff;font-size:11px;font-weight:900}.board-expansion .q-expansion-item__content{padding:4px 9px 10px}.board-lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}.board-lane{min-width:0;padding:7px;border-radius:13px;background:rgba(4,28,20,.16)}.board-lane-done{background:rgba(205,235,216,.10)}.board-lane-title{font-size:9px;font-weight:900;opacity:.84;padding:2px}.board-section-title{width:100%;margin-top:5px;padding:5px 4px 2px;border-top:1px solid rgba(255,255,255,.16);font-size:7px;font-weight:900;letter-spacing:.06em;opacity:.76}.board-row{position:relative!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:3px!important;min-width:0;border-radius:11px!important;background:rgba(255,255,255,.95)!important;color:#20362D!important;box-shadow:0 4px 12px rgba(8,31,23,.10)!important}.board-row-done{flex-direction:row!important;align-items:center!important;background:rgba(232,244,236,.94)!important}.board-area{color:#6E8077;font-size:7px;font-weight:900}.board-name{max-width:100%;font-size:10px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}.board-check{position:absolute!important;right:4px;bottom:4px;min-height:27px!important;min-width:27px!important;background:#246A4E!important;color:white!important}.board-manager-only{font-size:7px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:3px 5px;border-radius:999px}.board-lane-empty{font-size:9px;opacity:.65;padding:10px 2px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;backdrop-filter:blur(9px)}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.95),rgba(255,255,255,.92))!important}.store-app-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}@media(max-width:390px){.store-board{padding:17px!important}.board-title{font-size:20px}.board-refresh{padding:2px 10px!important}}
         """)
         ui.add_css("""
-        .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}.board-reopen-all{margin-left:auto!important;color:#173E30!important;background:#F5D780!important;border:1px solid #FFEAB0!important;border-radius:999px!important;font-size:9px!important;font-weight:950!important;box-shadow:0 4px 12px rgba(4,24,17,.24)!important}.service-switch{min-height:40px!important;border-radius:14px!important;background:rgba(255,255,255,.96)!important;color:#245B43!important;font-size:10px!important;font-weight:950!important}.board-quantity .q-field__control{min-height:34px!important;height:34px!important;background:#fff;border-radius:9px!important}.board-quantity-save{min-height:29px!important;margin-top:3px!important;border-radius:9px!important;background:#246A4E!important;font-size:8px!important}
+        .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}.service-switch{min-height:40px!important;border-radius:14px!important;background:rgba(255,255,255,.96)!important;color:#245B43!important;font-size:10px!important;font-weight:950!important}.board-quantity .q-field__control{min-height:34px!important;height:34px!important;background:#fff;border-radius:9px!important}.board-quantity-save{min-height:29px!important;margin-top:3px!important;border-radius:9px!important;background:#246A4E!important;font-size:8px!important}
         .business-notice{border-radius:18px!important;background:linear-gradient(135deg,#FFF5D9,#FFF)!important;border:1px solid #EBCB82!important;box-shadow:0 8px 22px rgba(119,82,25,.10)!important}.business-notice .q-item{min-height:50px!important;color:#704B17;font-size:12px;font-weight:950}.business-notice-card{border-radius:13px!important;border:1px solid #F0DFC0!important;box-shadow:none!important}
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}
         .board-expansion .q-expansion-item__content{contain:content}.board-expansion .q-transition--slide-enter-active,.board-expansion .q-transition--slide-leave-active{transition:none!important;animation:none!important}.board-row{box-shadow:0 2px 7px rgba(8,31,23,.08)!important}
-        .board-lane{display:flex!important;width:100%!important;padding:8px 3px 5px!important;background:transparent!important;gap:5px!important}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.board-ticket-rail{display:flex;gap:11px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding:3px;padding:3px 3px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.board-ticket-rail::-webkit-scrollbar{display:none}.board-ticket{flex:0 0 calc(88% - 4px);min-height:144px!important;scroll-snap-align:start;justify-content:center!important;border:1px solid rgba(255,255,255,.88)!important;box-shadow:0 9px 22px rgba(3,27,19,.22)!important}.board-ticket .board-area{font-size:9px}.board-ticket .board-name{font-size:15px;line-height:1.4}.ticket-number{font-size:8px;font-weight:900;color:#71827A}.board-ticket-complete{min-height:38px!important;border-radius:11px!important;background:#246A4E!important;font-size:10px!important;font-weight:950!important}.board-ticket-completed{color:#51390A!important;background:linear-gradient(145deg,#FFF4B8,#EACB63)!important;border:1px solid #F8DC79!important}.board-ticket-completed .ticket-number{color:#8A671B}.ticket-complete-icon{color:#9B7319}.board-ticket-completed .board-name{text-decoration:none}.board-ticket-rail>.board-lane-empty{flex:0 0 100%;text-align:center}@media(min-width:700px){.board-ticket{flex-basis:calc(48% - 5px);min-height:156px!important}}
+        .board-lane{display:flex!important;width:100%!important;padding:8px 3px 5px!important;background:transparent!important;gap:5px!important}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.board-ticket-rail{display:flex;gap:11px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scroll-behavior:smooth;scroll-padding:3px;padding:3px 3px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}.board-ticket-rail::-webkit-scrollbar{display:none}.board-ticket{flex:0 0 calc(72% - 4px);min-height:144px!important;scroll-snap-align:start;justify-content:center!important;border:1px solid rgba(255,255,255,.88)!important;box-shadow:0 9px 22px rgba(3,27,19,.22)!important;transition:background .22s ease,color .22s ease,transform .18s ease!important}.board-ticket .board-area{font-size:9px}.board-ticket .board-name{font-size:15px;line-height:1.4}.ticket-number{font-size:8px;font-weight:900;color:#71827A}.board-ticket-complete{min-height:38px!important;border-radius:11px!important;background:#246A4E!important;font-size:10px!important;font-weight:950!important}.board-ticket-completed{color:#51390A!important;background:linear-gradient(145deg,#FFF4B8,#EACB63)!important;border:1px solid #F8DC79!important}.board-ticket-completed .ticket-number{color:#8A671B}.ticket-complete-icon{color:#9B7319}.board-ticket-completed .board-name{text-decoration:none}.board-ticket-rail>.board-lane-empty{flex:0 0 100%;text-align:center}.board-subcheck{font-size:10px;font-weight:800}.board-note .q-field__control{background:rgba(255,255,255,.88);border-radius:10px}.board-note-save{align-self:flex-end;color:#246A4E!important;font-size:8px!important}@media(min-width:700px){.board-ticket{flex-basis:calc(42% - 5px);min-height:156px!important}}
         """)
         ui.run_javascript("""
         requestAnimationFrame(() => {
@@ -312,6 +372,13 @@ def store_dashboard_page():
             sessionStorage.removeItem('storeBoardScrollY');
             setTimeout(() => window.scrollTo({top: Number(savedY), behavior: 'auto'}), 80);
           }
+          document.querySelectorAll('.board-ticket-rail').forEach((rail, index) => {
+            const savedX = sessionStorage.getItem(`storeBoardRail${index}`);
+            if (savedX !== null) {
+              sessionStorage.removeItem(`storeBoardRail${index}`);
+              rail.scrollLeft = Number(savedX);
+            }
+          });
           document.querySelectorAll('.board-longpress').forEach(element => {
             if (element.dataset.longpressReady) return;
             element.dataset.longpressReady = '1';

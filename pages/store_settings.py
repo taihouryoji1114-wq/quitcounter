@@ -89,10 +89,16 @@ def store_settings_page():
             prep_name = ui.input("仕込み項目").props("outlined dense").classes("w-full")
             prep_area = ui.select(AREAS, value="厨房", label="場所").props(
                 "outlined dense").classes("w-full q-mt-xs")
+            prep_checks = ui.textarea(
+                "カード内の個別チェック（必要な場合だけ・1行に1つ）"
+            ).props("outlined autogrow").classes("w-full q-mt-xs")
+            prep_note = ui.switch("この仕込みで補足メモを使う", value=False).classes(
+                "w-full q-mt-xs")
 
             def add_prep():
                 try:
-                    store_ops.add_prep_template(prep_name.value, prep_area.value)
+                    store_ops.add_prep_template(
+                        prep_name.value, prep_area.value, prep_checks.value, prep_note.value)
                 except ValueError as error:
                     notify_error(error)
                     return
@@ -244,10 +250,20 @@ def store_settings_page():
                             edit_name = ui.input("項目名", value=selected["name"]).props("outlined dense").classes("w-full")
                             edit_area = ui.select(AREAS, value=selected.get("area", "厨房"), label="場所").props(
                                 "outlined dense").classes("w-full")
+                            edit_checks = ui.textarea(
+                                "カード内の個別チェック（1行に1つ）",
+                                value="\n".join(selected.get("check_items", [])),
+                            ).props("outlined autogrow").classes("w-full")
+                            edit_note = ui.switch(
+                                "この仕込みで補足メモを使う",
+                                value=bool(selected.get("note_enabled", False)),
+                            ).classes("w-full")
 
                             def save():
                                 try:
-                                    store_ops.update_prep_template(selected["id"], edit_name.value, edit_area.value)
+                                    store_ops.update_prep_template(
+                                        selected["id"], edit_name.value, edit_area.value,
+                                        edit_checks.value, edit_note.value)
                                 except ValueError as error:
                                     notify_error(error)
                                     return

@@ -94,6 +94,70 @@ class ShiftSubmissionManager:
                 if staff in self.STAFF and isinstance(record, dict)
                 and record.get("status") == "pending"}
 
+    def auto_schedule(self, year, month, half, lunch_required=3, dinner_required=4,
+                      thick_days=None, deputy_rest_priority=True,
+                      employee_rest_priority=False):
+        """Create a fair, editable draft from submitted availability.
+
+        This never writes attendance records. It is deliberately a proposal so
+        an owner can inspect shortages and adjust the roster before using it.
+        """
+        period = self.period(year, month, half)
+        submissions = self.period_submissions(year, month, half)
+        try:
+            lunch_required = max(0, int(lunch_required))
+            dinner_required = max(0, int(dinner_required))
+        except (TypeError, ValueError) as error:
+            raise ValueError("必要人数は数字で入力してください。") from error
+        thick = {int(value) for value in (thick_days or [])
+                 if str(value).strip().isdigit()}
+        assigned = {name: 0 for name in self.STAFF}
+        days = {}
+
+        def priority(name):
+            penalty = 0
+            if deputy_rest_priority and name == "副社長":
+                penalty += 100
+            if employee_rest_priority and name == "社員A":
+                penalty += 30
+            return assigned[name] + penalty, assigned[name], self.STAFF.index(name)
+
+        for day in range(period["start"], period["end"] + 1):
+            extra = 1 if day in thick else 0
+            day_plan = {name: {"lunch": False, "dinner": False, "time": ""}
+                        for name in self.STAFF}
+            shortages = {}
+            for meal, required in (("lunch", lunch_required + extra),
+                                   ("dinner", dinner_required + extra)):
+                label = "ランチ" if meal == "lunch" else "ディナー"
+                candidates = []
+                for name, record in submissions.items():
+                    value = self._day_value(record.get("days", {}).get(str(day), {}))
+                    if value["type"] not in {label, "通し"}:
+                        continue
+                    candidates.append((name, value))
+                candidates.sort(key=lambda pair: priority(pair[0]))
+                selected = candidates[:required]
+                for name, value in selected:
+                    day_plan[name][meal] = True
+                    day_plan[name]["time"] = (
+                        f"{value['start'] or '—'}〜{value['end'] or '—'}"
+                        if value["start"] or value["end"] else value["type"])
+                    assigned[name] += 1
+                shortages[meal] = max(0, required - len(selected))
+            days[str(day)] = {"staff": day_plan, "shortages": shortages,
+                              "thick": day in thick}
+        result = {"period": period, "days": days, "assigned": assigned,
+                  "settings": {"lunch_required": lunch_required,
+                               "dinner_required": dinner_required,
+                               "thick_days": sorted(thick),
+                               "deputy_rest_priority": bool(deputy_rest_priority),
+                               "employee_rest_priority": bool(employee_rest_priority)}}
+        self._data_manager.data.setdefault("store_auto_shift_drafts", {})[
+            period["key"]] = result
+        self._data_manager.save()
+        return result
+
     def review_change(self, staff, year, month, half, approved):
         self._staff(staff)
         period = self.period(year, month, half)

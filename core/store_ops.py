@@ -431,14 +431,26 @@ class StoreOperationsManager:
         values = self._data_manager.data.get("store_prep_templates", [])
         return [dict(value) for value in values if isinstance(value, dict) and value.get("active", True)]
 
-    def add_prep_template(self, name, area="厨房"):
+    @staticmethod
+    def _prep_options(check_items=None, note_enabled=False):
+        if isinstance(check_items, str):
+            check_items = check_items.replace("、", "\n").splitlines()
+        cleaned = []
+        for value in check_items or []:
+            text = str(value or "").strip()
+            if text and text not in cleaned:
+                cleaned.append(text[:80])
+        return cleaned[:12], bool(note_enabled)
+
+    def add_prep_template(self, name, area="厨房", check_items=None, note_enabled=False):
         name = str(name or "").strip()
         if not name:
             raise ValueError("仕込み名を入力してください。")
         if any(value.get("name") == name for value in self.prep_templates()):
             raise ValueError("同じ仕込み項目が登録されています。")
+        checks, note_enabled = self._prep_options(check_items, note_enabled)
         item = {"id": uuid4().hex, "name": name, "area": str(area or "厨房").strip(),
-                "active": True}
+                "check_items": checks, "note_enabled": note_enabled, "active": True}
         self._data_manager.data.setdefault("store_prep_templates", []).append(item)
         self._data_manager.save()
         return dict(item)
@@ -451,7 +463,8 @@ class StoreOperationsManager:
                 return
         raise ValueError("仕込み項目が見つかりません。")
 
-    def update_prep_template(self, item_id, name, area="厨房"):
+    def update_prep_template(self, item_id, name, area="厨房", check_items=None,
+                             note_enabled=False):
         values = self._data_manager.data.setdefault("store_prep_templates", [])
         item = next((value for value in values if isinstance(value, dict)
                      and value.get("id") == item_id and value.get("active", True)), None)
@@ -463,7 +476,9 @@ class StoreOperationsManager:
         if any(value.get("id") != item_id and value.get("name") == name
                and value.get("active", True) for value in values if isinstance(value, dict)):
             raise ValueError("同じ仕込み項目が登録されています。")
-        item.update(name=name, area=str(area or "厨房").strip())
+        checks, note_enabled = self._prep_options(check_items, note_enabled)
+        item.update(name=name, area=str(area or "厨房").strip(),
+                    check_items=checks, note_enabled=note_enabled)
         self._data_manager.save()
         return dict(item)
 
@@ -600,6 +615,10 @@ class StoreOperationsManager:
             record_date, {}).get(period, {})
         choices = self._data_manager.data.get("store_service_prep_choices", {}).get(
             record_date, {}).get(period, {})
+        subchecks = self._data_manager.data.get("store_service_prep_subchecks", {}).get(
+            record_date, {}).get(period, {})
+        notes = self._data_manager.data.get("store_service_prep_notes", {}).get(
+            record_date, {}).get(period, {})
         result = []
         for item in self.prep_templates():
             quantity_mode = self._is_quantity_prep(item)
@@ -613,10 +632,46 @@ class StoreOperationsManager:
                 status = "done" if choice in {"あり", "なし"} else "incomplete"
             elif status not in self.PREP_STATUSES:
                 status = "incomplete"
+            check_items = list(item.get("check_items", []))
+            checked = [value for value in subchecks.get(item["id"], [])
+                       if value in check_items]
+            if check_items:
+                status = "done" if len(checked) == len(check_items) else "incomplete"
             result.append({**item, "status": status, "quantity_mode": quantity_mode,
                            "quantity": quantity, "choice_mode": choice_mode,
-                           "choice": choice})
+                           "choice": choice, "checked_items": checked,
+                           "note": str(notes.get(item["id"], ""))})
         return result
+
+    def set_service_prep_subchecks(self, record_date, period, item_id, checked_items):
+        self._date(record_date)
+        period = self._service_period(period)
+        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
+        if not item or not item.get("check_items"):
+            raise ValueError("個別チェックを使う仕込み項目が見つかりません。")
+        allowed = list(item["check_items"])
+        checked = [value for value in (checked_items or []) if value in allowed]
+        values = self._data_manager.data.setdefault(
+            "store_service_prep_subchecks", {}).setdefault(record_date, {}).setdefault(period, {})
+        values[item_id] = checked
+        self._data_manager.save()
+        return checked
+
+    def set_service_prep_note(self, record_date, period, item_id, note):
+        self._date(record_date)
+        period = self._service_period(period)
+        item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
+        if not item or not item.get("note_enabled"):
+            raise ValueError("メモを使う仕込み項目が見つかりません。")
+        values = self._data_manager.data.setdefault(
+            "store_service_prep_notes", {}).setdefault(record_date, {}).setdefault(period, {})
+        text = str(note or "").strip()[:500]
+        if text:
+            values[item_id] = text
+        else:
+            values.pop(item_id, None)
+        self._data_manager.save()
+        return text
 
     def set_service_prep_status(self, record_date, period, item_id, status):
         self._date(record_date)
@@ -683,6 +738,9 @@ class StoreOperationsManager:
                 self._data_manager.data.setdefault(
                     "store_service_prep_records", {}).setdefault(
                         record_date, {}).setdefault(period, {})[item["id"]] = "incomplete"
+            self._data_manager.data.setdefault(
+                "store_service_prep_subchecks", {}).setdefault(
+                    record_date, {}).setdefault(period, {}).pop(item["id"], None)
             changed += 1
         if changed:
             self._data_manager.save()
@@ -722,6 +780,10 @@ class StoreOperationsManager:
                               "quantity_mode": prep.get("quantity_mode", False),
                               "quantity": prep.get("quantity", 0),
                               "choice_mode": prep.get("choice_mode", False),
+                              "check_items": list(prep.get("check_items", [])),
+                              "checked_items": list(prep.get("checked_items", [])),
+                              "note_enabled": bool(prep.get("note_enabled", False)),
+                              "note": prep.get("note", ""),
                               "completed": prep["status"] == "done"})
         handover_days = self._data_manager.data.get("store_handovers", {})
         for note_date in sorted(handover_days):

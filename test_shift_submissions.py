@@ -77,6 +77,38 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertEqual(
             self.manager.pending_changes(2026, 8, "second"), {})
 
+    def test_auto_schedule_builds_fair_draft_without_attendance_records(self):
+        for name in ("スタッフA", "スタッフB", "スタッフC"):
+            self.manager.save(name, 2099, 9, "first", {
+                "1": {"type": "通し", "start": "11:00", "end": "22:00"},
+                "2": {"type": "通し", "start": "11:00", "end": "22:00"},
+            })
+
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=2, dinner_required=2,
+            thick_days=[2], deputy_rest_priority=False)
+
+        first_day = result["days"]["1"]
+        self.assertEqual(first_day["shortages"], {"lunch": 0, "dinner": 0})
+        self.assertEqual(
+            sum(value["lunch"] for value in first_day["staff"].values()), 2)
+        self.assertEqual(
+            sum(value["dinner"] for value in first_day["staff"].values()), 2)
+        self.assertEqual(result["days"]["2"]["shortages"], {"lunch": 0, "dinner": 0})
+        self.assertNotIn("staff_attendance", self.data.data)
+        self.assertIn("2099-09-first", self.data.data["store_auto_shift_drafts"])
+
+    def test_auto_schedule_reports_shortage_and_respects_absolute_day_off(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "絶対休み", "start": "", "end": ""},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1)
+        self.assertEqual(result["days"]["1"]["shortages"], {
+            "lunch": 1, "dinner": 1,
+        })
+        self.assertFalse(result["days"]["1"]["staff"]["スタッフA"]["lunch"])
+
 
 if __name__ == "__main__":
     unittest.main()
