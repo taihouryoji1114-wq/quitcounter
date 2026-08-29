@@ -1,6 +1,6 @@
 from nicegui import app, ui
 
-from core.auth import has_permission, require_app_access
+from core.auth import current_role, has_permission, require_app_access
 from core.clock import operational_date_jst, store_service_period_jst
 from core.store_ops import store_ops
 from core.store_quiz import store_quiz
@@ -46,7 +46,9 @@ def store_dashboard_page():
                 ui.button("更新", icon="refresh", on_click=lambda: ui.navigate.to(
                     "/store-ops")).props("unelevated no-caps aria-label='最新の状態に更新'").classes(
                         "board-refresh")
-            board_items = list(board["items"])
+            # ホームは厨房作業に集中し、申し送りと発注依頼は専用カードで扱う。
+            board_items = [item for item in board["items"]
+                           if item.get("kind") in {"prep", "check_result"}]
             order_checks = store_ops.daily_order_checks(business_date)
             order_attention = store_ops.daily_order_attention(business_date)
             for destination in store_ops.DAILY_ORDER_DESTINATIONS:
@@ -206,67 +208,76 @@ def store_dashboard_page():
                     value=bool(app.storage.user.get(state_key, False)),
                     on_value_change=remember_group_state,
                 ).props("duration=0").classes("board-expansion w-full q-mt-sm"):
-                    with ui.element("div").classes("board-lanes w-full"):
-                        render_board_lane(group_pending, False)
-                        render_board_lane(group_done, True)
+                    render_board_lane(group_pending + group_done)
 
-            def render_board_lane(items, completed):
-                lane_classes = "board-lane board-lane-done gap-1" if completed else "board-lane gap-1"
-                with ui.column().classes(lane_classes):
-                    ui.label("チェック済み" if completed else "未完了").classes(
-                        "board-lane-title")
-                    if not items:
-                        ui.label("まだありません" if completed else "ありません").classes(
-                            "board-lane-empty")
-                    for item in items:
-                        if completed:
-                            row = ui.card().classes(
-                                "board-row board-row-done board-longpress w-full q-pa-sm").on(
+            def render_board_lane(items):
+                with ui.column().classes("board-lane"):
+                    with ui.row().classes("w-full items-center justify-between no-wrap"):
+                        ui.label("伝票レール").classes("board-lane-title")
+                        if len(items) > 1:
+                            ui.label(f"横にスワイプ　{len(items)}枚").classes("board-swipe-hint")
+                    with ui.element("div").classes("board-ticket-rail w-full"):
+                        if not items:
+                            ui.label("ありません").classes("board-lane-empty")
+                        for index, item in enumerate(items, 1):
+                            if item.get("completed"):
+                                row = ui.card().classes(
+                                    "board-row board-ticket board-ticket-completed board-longpress q-pa-md").on(
+                                        "contextmenu", lambda _, value=item: open_long_press(value))
+                                with row:
+                                    ui.label(f"完了　{index}/{len(items)}").classes("ticket-number")
+                                    with ui.row().classes("w-full items-center gap-2 no-wrap"):
+                                        ui.icon("check_circle").classes("ticket-complete-icon text-lg")
+                                        ui.label(item["name"]).classes("board-name grow")
+                                continue
+                            row = ui.card().classes("board-row board-ticket q-pa-md")
+                            if item["kind"] == "request":
+                                row.classes("board-longpress").on(
                                     "contextmenu", lambda _, value=item: open_long_press(value))
                             with row:
-                                ui.icon("check_circle").classes("text-positive text-sm")
-                                ui.label(item["name"]).classes("board-name grow")
-                            continue
-                        row = ui.card().classes("board-row w-full q-pa-sm")
-                        if item["kind"] == "request":
-                            row.classes("board-longpress").on(
-                                "contextmenu", lambda _, value=item: open_long_press(value))
-                        with row:
-                            ui.label(item["area"]).classes("board-area")
-                            ui.label(item["name"]).classes("board-name")
-                            if item.get("choice_mode"):
-                                with ui.row().classes("board-choice-row w-full gap-1 q-mt-xs"):
-                                    ui.button("あり", on_click=lambda _, value=item:
-                                              save_rice_choice(value, "あり")).props(
-                                                  "unelevated dense no-caps color=positive").classes("grow")
-                                    ui.button("なし", on_click=lambda _, value=item:
-                                              save_rice_choice(value, "なし")).props(
-                                                  "outline dense no-caps color=primary").classes("grow")
-                            elif item.get("quantity_mode"):
-                                quantity = ui.number(
-                                    value=max(0, int(item.get("quantity", 0) or 0)),
-                                    min=0, step=1, suffix="個",
-                                ).props("outlined dense inputmode=numeric").classes(
-                                    "board-quantity w-full q-mt-xs")
-                                ui.button(
-                                    "個数を保存", icon="save",
-                                    on_click=lambda _, value=item, field=quantity:
-                                        save_prep_quantity(value, field),
-                                ).props("unelevated dense no-caps").classes(
-                                    "board-quantity-save w-full")
-                            elif item["kind"] == "request" and not can_manage:
-                                ui.label("管理者対応").classes("board-manager-only")
-                            elif item["kind"] != "check_result":
-                                ui.button(icon="check", on_click=lambda _, value=item:
-                                          complete_item(value)).props(
-                                              "unelevated round dense aria-label='完了'").classes(
-                                                  "board-check")
+                                with ui.row().classes("w-full items-center justify-between no-wrap"):
+                                    ui.label(item["area"]).classes("board-area")
+                                    ui.label(f"{index}/{len(items)}").classes("ticket-number")
+                                ui.label(item["name"]).classes("board-name")
+                                if item.get("choice_mode"):
+                                    with ui.row().classes("board-choice-row w-full gap-2 q-mt-sm"):
+                                        ui.button("あり", on_click=lambda _, value=item:
+                                                  save_rice_choice(value, "あり")).props(
+                                                      "unelevated no-caps color=positive").classes("grow")
+                                        ui.button("なし", on_click=lambda _, value=item:
+                                                  save_rice_choice(value, "なし")).props(
+                                                      "outline no-caps color=primary").classes("grow")
+                                elif item.get("quantity_mode"):
+                                    quantity = ui.number(
+                                        value=max(0, int(item.get("quantity", 0) or 0)),
+                                        min=0, step=1, suffix="個",
+                                    ).props("outlined inputmode=numeric").classes(
+                                        "board-quantity w-full q-mt-sm")
+                                    ui.button(
+                                        "個数を保存", icon="save",
+                                        on_click=lambda _, value=item, field=quantity:
+                                            save_prep_quantity(value, field),
+                                    ).props("unelevated no-caps").classes(
+                                        "board-quantity-save w-full")
+                                elif item["kind"] == "request" and not can_manage:
+                                    ui.label("管理者対応").classes("board-manager-only")
+                                elif item["kind"] != "check_result":
+                                    ui.button("完了", icon="check", on_click=lambda _, value=item:
+                                              complete_item(value)).props(
+                                                  "unelevated no-caps aria-label='完了'").classes(
+                                                      "board-ticket-complete w-full q-mt-sm")
 
             render_board_group("今日の作業・仕込み", "restaurant", "prep")
-            render_board_group("自由引き継ぎ", "edit_note", "note")
-            render_board_group("発注引き継ぎ", "shopping_cart", "request")
 
         with ui.element("div").classes("store-app-grid w-full q-mt-md"):
+            app_card("在庫確認", "現在数をまとめて入力", "inventory_2",
+                     "/store-ops/inventory", "text-emerald-7")
+            app_card("自由引き継ぎ", "申し送りを記録・確認", "edit_note",
+                     "/store-ops/handover", "text-amber-8")
+            app_card("発注依頼", "必要な物をその場で共有", "add_shopping_cart",
+                     "/store-ops/order-requests", "text-red-7")
+            app_card("温度・衛生", "冷蔵庫温度と衛生記録", "health_and_safety",
+                     "/store-ops/hygiene", "text-cyan-8")
             app_card("シフト提出", "半月ごとの勤務希望", "calendar_month",
                      "/store-ops/shift-submission", "text-blue-7")
             app_card("清掃", "清掃状況と担当確認", "cleaning_services",
@@ -277,6 +288,11 @@ def store_dashboard_page():
                      "/store-ops/events", "text-purple-7")
             app_card("ちゃんはや", "ちゃんこで早押しクイズ", "quiz",
                      "/store-ops/chanhaya", "text-red-7")
+            if current_role() == "owner":
+                app_card("仕入れリスト", "購入する物と個数を確認", "shopping_basket",
+                         "/store-ops/purchase-list", "text-deep-orange-7")
+                app_card("登録・設定", "商品・仕込み項目を管理", "settings",
+                         "/store-ops/settings", "text-grey-8")
 
         ui.add_css("""
         body{background:linear-gradient(180deg,rgba(244,247,244,.68),rgba(239,238,232,.82)),url('/static/store_ops_home_bg_v3.png') center/cover fixed!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{position:relative;overflow:hidden;border:0!important;border-radius:29px!important;background:radial-gradient(circle at 95% 0%,rgba(234,190,102,.48),transparent 34%),linear-gradient(145deg,rgba(16,47,38,.96),rgba(40,96,71,.95) 62%,rgba(85,122,74,.95) 120%)!important;box-shadow:0 20px 46px rgba(20,66,49,.28)!important}.store-board:after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(255,255,255,.09);border-radius:50%;right:-70px;top:-90px;pointer-events:none}.board-title{font-size:23px;line-height:1.12;white-space:nowrap}.board-refresh{min-height:37px!important;color:#245B43!important;background:#fff!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:999px!important;padding:3px 13px!important;font-size:10px!important;font-weight:900!important;box-shadow:0 6px 16px rgba(5,30,21,.2)!important}.board-summary{font-size:9px;font-weight:900;padding:5px 9px;border-radius:999px}.board-summary.pending{background:rgba(255,255,255,.18)}.board-summary.done{background:rgba(147,219,177,.22)}.board-expansion{border-radius:17px!important;background:rgba(7,31,24,.16)!important;border:1px solid rgba(255,255,255,.1)!important}.board-expansion .q-item{min-height:42px;color:#fff;font-size:11px;font-weight:900}.board-expansion .q-expansion-item__content{padding:4px 9px 10px}.board-lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}.board-lane{min-width:0;padding:7px;border-radius:13px;background:rgba(4,28,20,.16)}.board-lane-done{background:rgba(205,235,216,.10)}.board-lane-title{font-size:9px;font-weight:900;opacity:.84;padding:2px}.board-section-title{width:100%;margin-top:5px;padding:5px 4px 2px;border-top:1px solid rgba(255,255,255,.16);font-size:7px;font-weight:900;letter-spacing:.06em;opacity:.76}.board-row{position:relative!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:3px!important;min-width:0;border-radius:11px!important;background:rgba(255,255,255,.95)!important;color:#20362D!important;box-shadow:0 4px 12px rgba(8,31,23,.10)!important}.board-row-done{flex-direction:row!important;align-items:center!important;background:rgba(232,244,236,.94)!important}.board-area{color:#6E8077;font-size:7px;font-weight:900}.board-name{max-width:100%;font-size:10px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}.board-check{position:absolute!important;right:4px;bottom:4px;min-height:27px!important;min-width:27px!important;background:#246A4E!important;color:white!important}.board-manager-only{font-size:7px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:3px 5px;border-radius:999px}.board-lane-empty{font-size:9px;opacity:.65;padding:10px 2px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;backdrop-filter:blur(9px)}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.95),rgba(255,255,255,.92))!important}.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.95),rgba(255,255,255,.92))!important}.store-app-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}@media(max-width:390px){.store-board{padding:17px!important}.board-title{font-size:20px}.board-refresh{padding:2px 10px!important}}
@@ -287,6 +303,7 @@ def store_dashboard_page():
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}
         .board-expansion .q-expansion-item__content{contain:content}.board-expansion .q-transition--slide-enter-active,.board-expansion .q-transition--slide-leave-active{transition:none!important;animation:none!important}.board-row{box-shadow:0 2px 7px rgba(8,31,23,.08)!important}
+        .board-lane{display:flex!important;width:100%!important;padding:8px 3px 5px!important;background:transparent!important;gap:5px!important}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.board-ticket-rail{display:flex;gap:11px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding:3px;padding:3px 3px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.board-ticket-rail::-webkit-scrollbar{display:none}.board-ticket{flex:0 0 calc(88% - 4px);min-height:144px!important;scroll-snap-align:start;justify-content:center!important;border:1px solid rgba(255,255,255,.88)!important;box-shadow:0 9px 22px rgba(3,27,19,.22)!important}.board-ticket .board-area{font-size:9px}.board-ticket .board-name{font-size:15px;line-height:1.4}.ticket-number{font-size:8px;font-weight:900;color:#71827A}.board-ticket-complete{min-height:38px!important;border-radius:11px!important;background:#246A4E!important;font-size:10px!important;font-weight:950!important}.board-ticket-completed{color:#51390A!important;background:linear-gradient(145deg,#FFF4B8,#EACB63)!important;border:1px solid #F8DC79!important}.board-ticket-completed .ticket-number{color:#8A671B}.ticket-complete-icon{color:#9B7319}.board-ticket-completed .board-name{text-decoration:none}.board-ticket-rail>.board-lane-empty{flex:0 0 100%;text-align:center}@media(min-width:700px){.board-ticket{flex-basis:calc(48% - 5px);min-height:156px!important}}
         """)
         ui.run_javascript("""
         requestAnimationFrame(() => {
