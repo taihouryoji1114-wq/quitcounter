@@ -56,9 +56,11 @@ class StaffingManagerTest(unittest.TestCase):
         self.staffing.save_simple_plan("2026-08-15", {
             "スタッフA": {"lunch": True, "dinner": False},
         }, date(2026, 8, 14))
-        planned = self.staffing.day("2026-08-15")["スタッフA"]
+        planned = self.staffing.planned_day("2026-08-15")["スタッフA"]
         self.assertEqual((planned["lunch_start"], planned["lunch_end"]), ("10:00", "15:00"))
         self.assertEqual(planned["break_minutes"], 30)
+        actual = self.staffing.day("2026-08-15")["スタッフA"]
+        self.assertEqual((actual["lunch_start"], actual["lunch_end"]), ("", ""))
 
     def test_every_hourly_staff_gets_lunch_and_dinner_templates(self):
         self.staffing.save_day("2026-08-01", {"スタッフB": {
@@ -84,6 +86,14 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(summary["gross_wages"], 6000)
         self.assertEqual(summary["planned_hourly_gross"], 6000)
         self.assertEqual(summary["forecast_gross_wages"], 12000)
+
+    def test_legacy_future_plan_is_removed_from_actual_timecard(self):
+        self.staffing.save_day("2026-08-20", {"スタッフA": {
+            "lunch_start": "10:00", "lunch_end": "15:00",
+        }})
+        self.assertTrue(self.staffing.separate_legacy_future_plans(date(2026, 8, 14)))
+        self.assertEqual(self.staffing.day("2026-08-20")["スタッフA"]["lunch_start"], "")
+        self.assertEqual(self.staffing.planned_day("2026-08-20")["スタッフA"]["lunch_start"], "10:00")
 
     def test_night_rate_and_crossing_midnight(self):
         self.staffing.save_wages({"スタッフA": 1200})

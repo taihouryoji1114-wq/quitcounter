@@ -96,7 +96,9 @@ class ShiftSubmissionManager:
 
     def auto_schedule(self, year, month, half, lunch_required=3, dinner_required=4,
                       thick_days=None, deputy_rest_priority=True,
-                      employee_rest_priority=False):
+                      employee_rest_priority=False,
+                      require_manager_or_deputy=True,
+                      align_deputy_employee=True):
         """Create a fair, editable draft from submitted availability.
 
         This never writes attendance records. It is deliberately a proposal so
@@ -138,6 +140,24 @@ class ShiftSubmissionManager:
                     candidates.append((name, value))
                 candidates.sort(key=lambda pair: priority(pair[0]))
                 selected = candidates[:required]
+                if require_manager_or_deputy and required and not any(
+                        pair[0] in {"副社長", "店長"} for pair in selected):
+                    leader = next((pair for pair in candidates
+                                   if pair[0] in {"副社長", "店長"}), None)
+                    if leader:
+                        selected[-1:] = [leader]
+                selected_names = {name for name, _value in selected}
+                pair_names = {"副社長", "社員A"}
+                if align_deputy_employee and required >= 2 and len(
+                        selected_names & pair_names) == 1:
+                    missing_name = (pair_names - selected_names).pop()
+                    missing = next((pair for pair in candidates if pair[0] == missing_name), None)
+                    if missing:
+                        replace_index = next((index for index in range(len(selected) - 1, -1, -1)
+                                              if selected[index][0] not in pair_names
+                                              and selected[index][0] != "店長"), None)
+                        if replace_index is not None:
+                            selected[replace_index] = missing
                 for name, value in selected:
                     day_plan[name][meal] = True
                     day_plan[name]["time"] = (
@@ -152,7 +172,9 @@ class ShiftSubmissionManager:
                                "dinner_required": dinner_required,
                                "thick_days": sorted(thick),
                                "deputy_rest_priority": bool(deputy_rest_priority),
-                               "employee_rest_priority": bool(employee_rest_priority)}}
+                               "employee_rest_priority": bool(employee_rest_priority),
+                               "require_manager_or_deputy": bool(require_manager_or_deputy),
+                               "align_deputy_employee": bool(align_deputy_employee)}}
         self._data_manager.data.setdefault("store_auto_shift_drafts", {})[
             period["key"]] = result
         self._data_manager.save()

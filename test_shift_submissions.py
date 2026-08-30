@@ -109,6 +109,20 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         })
         self.assertFalse(result["days"]["1"]["staff"]["スタッフA"]["lunch"])
 
+    def test_auto_schedule_keeps_a_leader_and_pairs_deputy_with_employee(self):
+        for name in ("副社長", "店長", "社員A", "スタッフA"):
+            self.manager.save(name, 2099, 9, "first", {
+                "1": {"type": "通し", "start": "11:00", "end": "22:00"},
+            })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3,
+            deputy_rest_priority=False, require_manager_or_deputy=True,
+            align_deputy_employee=True)
+        for meal in ("lunch", "dinner"):
+            staff = result["days"]["1"]["staff"]
+            self.assertTrue(staff["副社長"][meal] or staff["店長"][meal])
+            self.assertEqual(staff["副社長"][meal], staff["社員A"][meal])
+
 
 if __name__ == "__main__":
     unittest.main()

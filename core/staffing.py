@@ -144,6 +144,51 @@ class StaffingManager:
                 result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0, "attended": False, "break_minutes": 0}
         return result
 
+    def planned_day(self, record_date):
+        """Return a future roster plan without mixing it into actual timecards."""
+        self._date(record_date)
+        stored = self._data_manager.data.get("business_staff_shift_plans", {}).get(record_date, {})
+        result = self.day(record_date)
+        for name in self.HOURLY_STAFF:
+            value = stored.get(name, {}) if isinstance(stored, dict) else {}
+            result[name] = {
+                key: str(value.get(key, "") or "")
+                for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end")
+            }
+            result[name]["transportation"] = 0
+            result[name]["attended"] = False
+            result[name]["break_minutes"] = int(value.get("break_minutes", 0) or 0)
+        return result
+
+    def separate_legacy_future_plans(self, as_of=None):
+        """Move old future simple-roster values out of actual timecards once."""
+        as_of = as_of or date.today()
+        migration_key = "separated_future_shift_plans_v1"
+        migrations = self._data_manager.data.setdefault("data_migrations", {})
+        if migrations.get(migration_key):
+            return False
+        records = self._data_manager.data.setdefault("business_staff_hours", {})
+        plans = self._data_manager.data.setdefault("business_staff_shift_plans", {})
+        changed = False
+        for record_date, record in records.items():
+            if record_date <= as_of.isoformat() or not isinstance(record, dict):
+                continue
+            plan = plans.setdefault(record_date, {})
+            for name in self.HOURLY_STAFF:
+                value = record.get(name, {})
+                if not isinstance(value, dict) or not any(value.get(key) for key in (
+                        "lunch_start", "lunch_end", "dinner_start", "dinner_end")):
+                    continue
+                plan[name] = dict(value)
+                record[name] = {
+                    "lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "",
+                    "transportation": 0, "attended": False, "break_minutes": 0,
+                }
+                changed = True
+        migrations[migration_key] = datetime.now().isoformat(timespec="seconds")
+        self._data_manager.save()
+        return changed
+
     def attendance_progress(self, month, through_date=None):
         """Show which calendar days have been checked for salaried staff."""
         try:
@@ -321,7 +366,7 @@ class StaffingManager:
         if target <= as_of:
             raise ValueError("簡単シフト入力は明日以降の日付を選んでください。")
         templates = self.shift_templates(as_of)
-        values = self.day(record_date)
+        values = self.planned_day(record_date)
         for name in self.HOURLY_STAFF:
             chosen = selections.get(name, {})
             for prefix in ("lunch", "dinner"):
@@ -333,7 +378,13 @@ class StaffingManager:
                 values[name][f"{prefix}_end"] = template["end"] if enabled else ""
             values[name]["break_minutes"] = templates[name]["break_minutes"] if any(
                 bool(chosen.get(prefix, False)) for prefix in ("lunch", "dinner")) else 0
-        return self.save_day(record_date, values)
+        cleaned = {name: {
+            key: values[name][key]
+            for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end", "break_minutes")
+        } for name in self.HOURLY_STAFF}
+        self._data_manager.data.setdefault("business_staff_shift_plans", {})[record_date] = cleaned
+        self._data_manager.save()
+        return cleaned
 
     def month_total(self, month):
         datetime.strptime(month, "%Y-%m")
@@ -348,6 +399,7 @@ class StaffingManager:
 
     def month_cost_summary(self, month, as_of=None):
         records = self._data_manager.data.get("business_staff_hours", {})
+        plan_records = self._data_manager.data.get("business_staff_shift_plans", {})
         wages, settings, rates = self.wages(), self.insurance_settings(), self.insurance_rates()
         as_of = as_of or date.today()
         actual_cutoff = as_of.isoformat()
@@ -429,20 +481,20 @@ class StaffingManager:
                 group = "salaried" if name in self.SALARIED_STAFF else "hourly"
                 forecast_social_by_group[group] += setting["standard_monthly"] * rate / 100
         planned_hourly_gross = sum(
-            self._shift_pay(wages[name], self.day(record_date)[name])
-            for record_date in records if record_date.startswith(month) and record_date > actual_cutoff
+            self._shift_pay(wages[name], self.planned_day(record_date)[name])
+            for record_date in plan_records if record_date.startswith(month) and record_date > actual_cutoff
             for name in self.HOURLY_STAFF)
         planned_hourly_transport = sum(
             self.commute_rates()[name]
-            for record_date in records if record_date.startswith(month) and record_date > actual_cutoff
-            for name in self.HOURLY_STAFF if self._worked(self.day(record_date)[name]))
+            for record_date in plan_records if record_date.startswith(month) and record_date > actual_cutoff
+            for name in self.HOURLY_STAFF if self._worked(self.planned_day(record_date)[name]))
         forecast_gross = sum(salaries.values()) + hourly_gross + planned_hourly_gross
         forecast_transportation = transportation + planned_hourly_transport
         planned_employment = sum(
-            (self._shift_pay(wages[name], self.day(record_date)[name])
-             + (self.commute_rates()[name] if self._worked(self.day(record_date)[name]) else 0))
+            (self._shift_pay(wages[name], self.planned_day(record_date)[name])
+             + (self.commute_rates()[name] if self._worked(self.planned_day(record_date)[name]) else 0))
             * rates["employment"] / 100
-            for record_date in records if record_date.startswith(month) and record_date > actual_cutoff
+            for record_date in plan_records if record_date.startswith(month) and record_date > actual_cutoff
             for name in self.HOURLY_STAFF if settings[name]["employment"])
         forecast_insurance = round(sum(forecast_social_by_group.values())
                                    + sum(employment_by_group.values()) + planned_employment

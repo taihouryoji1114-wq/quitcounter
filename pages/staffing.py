@@ -163,6 +163,7 @@ def staffing_page(request: Request):
             ui.button("保険設定を保存", on_click=save_insurance).classes("w-full q-mt-sm")
 
         tomorrow = (today_jst() + timedelta(days=1)).isoformat()
+        staffing.separate_legacy_future_plans(today_jst())
         with ui.expansion("明日以降のシフトを簡単入力", icon="event_available", value=False).classes(
             "staff-panel w-full q-mt-sm"):
             ui.label("ランチ／ディナーを選ぶだけ。時間は過去の実績から自動設定します").classes(
@@ -174,7 +175,7 @@ def staffing_page(request: Request):
         def render_simple_plan(record_date):
             plan_area.clear()
             templates = staffing.shift_templates(today_jst())
-            existing = staffing.day(record_date)
+            existing = staffing.planned_day(record_date)
             with plan_area:
                 selections = {}
                 for name in staffing.HOURLY_STAFF:

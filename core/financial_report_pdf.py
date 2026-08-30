@@ -23,10 +23,10 @@ def create_financial_report_pdf(path, report):
     title = ParagraphStyle("title", parent=styles["Title"], fontName="ReportJapanese",
                            fontSize=20, leading=25, textColor=colors.HexColor("#173B2E"))
     heading = ParagraphStyle("heading", parent=styles["Heading2"], fontName="ReportJapanese",
-                             fontSize=12, leading=16, spaceBefore=8, spaceAfter=6,
-                             textColor=colors.HexColor("#234D3C"))
+                             fontSize=14, leading=18, spaceBefore=9, spaceAfter=7,
+                             textColor=colors.HexColor("#102B21"))
     normal = ParagraphStyle("normal-jp", parent=styles["BodyText"], fontName="ReportJapanese",
-                            fontSize=7.5, leading=10)
+                            fontSize=8.5, leading=11, textColor=colors.HexColor("#111111"))
     right = ParagraphStyle("right-jp", parent=normal, alignment=TA_RIGHT)
     center = ParagraphStyle("center-jp", parent=normal, alignment=TA_CENTER)
     doc = SimpleDocTemplate(str(path), pagesize=A4, rightMargin=11 * mm, leftMargin=11 * mm,
@@ -107,7 +107,7 @@ def create_financial_report_pdf(path, report):
     daily_table.setStyle(_table_style(total_row=True)); story.append(daily_table)
 
     def page_number(canvas, document):
-        canvas.saveState(); canvas.setFont("ReportJapanese", 7); canvas.setFillColor(colors.HexColor("#68766F"))
+        canvas.saveState(); canvas.setFont("ReportJapanese", 8); canvas.setFillColor(colors.HexColor("#222222"))
         canvas.drawRightString(A4[0] - 11 * mm, 6 * mm, f"{document.page}ページ"); canvas.restoreState()
     doc.build(story, onFirstPage=page_number, onLaterPages=page_number)
     return path
@@ -125,7 +125,7 @@ def _profit_block(report, normal, center):
         scale = total_height / (cost_height + gross_height)
         cost_height *= scale; gross_height *= scale
 
-    tiny = ParagraphStyle("profit-block-tiny", parent=center, fontSize=6.1, leading=7.1)
+    tiny = ParagraphStyle("profit-block-tiny", parent=center, fontSize=7.2, leading=8.2)
 
     def label(text, value, note="", style=None):
         parts = [f"<b>{text}</b>", f"¥{int(value):,}"]

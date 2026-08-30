@@ -148,6 +148,12 @@ def shift_submission_page():
                 auto_employee_rest = ui.switch(
                     "社員Aの休みを1日多めにする", value=False,
                 ).classes("text-[10px] font-bold")
+                auto_leader_required = ui.switch(
+                    "店長か副社長のどちらかは出勤にする", value=True,
+                ).classes("text-[10px] font-bold")
+                auto_pair_together = ui.switch(
+                    "副社長と社員Aは出勤・休みを極力そろえる", value=True,
+                ).classes("text-[10px] font-bold")
                 auto_result = ui.column().classes("w-full gap-1 q-mt-sm")
 
                 def build_auto_schedule():
@@ -158,6 +164,7 @@ def shift_submission_page():
                             int(year.value), int(month.value), half.value,
                             auto_lunch.value, auto_dinner.value, thick_days,
                             auto_deputy_rest.value, auto_employee_rest.value,
+                            auto_leader_required.value, auto_pair_together.value,
                         )
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
