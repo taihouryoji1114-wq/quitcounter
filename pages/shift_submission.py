@@ -164,31 +164,6 @@ def shift_submission_page():
                 "outline no-caps").classes("w-full q-mt-md")
 
         if current_role() == "owner":
-            with ui.expansion("スタッフ個人PINの設定", icon="shield", value=False).classes(
-                    "surface-card w-full q-mt-md"):
-                ui.label("シフト希望を本人以外が書き換えないための番号です").classes(
-                    "text-[10px] text-grey-6")
-                pin_staff = ui.select(list(shift_submissions.STAFF), label="スタッフ").props(
-                    "outlined dense").classes("w-full q-mt-sm")
-                new_pin = ui.input(
-                    "新しい個人PIN（4〜8桁）", password=True, password_toggle_button=True,
-                ).props("outlined dense inputmode=numeric maxlength=8").classes("w-full q-mt-sm")
-
-                def save_staff_pin():
-                    if not pin_staff.value:
-                        ui.notify("スタッフを選択してください", type="negative")
-                        return
-                    try:
-                        shift_submissions.set_staff_pin(pin_staff.value, new_pin.value)
-                    except ValueError as error:
-                        ui.notify(str(error), type="negative")
-                        return
-                    new_pin.value = ""
-                    ui.notify(f"{pin_staff.value}の個人PINを設定しました", type="positive")
-
-                ui.button("個人PINを設定・変更", icon="key", on_click=save_staff_pin).props(
-                    "unelevated no-caps").classes("shift-submit w-full q-mt-sm")
-
             with ui.expansion("シフト案を自動作成", icon="auto_awesome", value=False).classes(
                     "surface-card w-full q-mt-md"):
                 ui.label("提出された希望だけを使って、偏りを抑えた下書きを作ります").classes(

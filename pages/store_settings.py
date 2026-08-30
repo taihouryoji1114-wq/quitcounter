@@ -4,6 +4,7 @@ from core.auth import require_app_access, require_permission
 from core.qr import data_url as qr_data_url
 from core.store_ops import store_ops
 from core.store_quiz import store_quiz
+from core.shift_submissions import shift_submissions
 from core.theme import Theme
 from pages.store_common import store_header_actions
 
@@ -193,6 +194,45 @@ def store_settings_page():
                         ui.button("終了", on_click=lambda _, selected=item: (
                             store_quiz.close_notice(selected["id"]), reload("掲載を終了しました")
                         )).props("flat dense no-caps color=negative")
+
+        notice_history = [item for item in store_quiz.notices(include_closed=True)
+                          if not item.get("active", True)]
+        if notice_history:
+            with ui.expansion(f"過去の業務連絡　{len(notice_history)}件", icon="history",
+                              value=False).classes("settings-section w-full q-mb-sm"):
+                for item in reversed(notice_history):
+                    with ui.column().classes("settings-row w-full gap-0"):
+                        ui.label(item["title"]).classes("text-xs font-black")
+                        if item.get("details"):
+                            ui.label(item["details"]).classes(
+                                "text-[9px] text-grey-6 whitespace-pre-wrap")
+                        ui.label(f"掲載：{item.get('created_at', '-')}　終了：{item.get('closed_at', '-')}").classes(
+                            "text-[8px] text-grey-5")
+
+        with ui.expansion("スタッフ個人PINを管理", icon="shield", value=False).classes(
+                "settings-section w-full q-mb-sm"):
+            ui.label("本人以外によるシフト希望の書き換えを防ぎます").classes(
+                "text-[10px] text-grey-6")
+            pin_staff = ui.select(list(shift_submissions.STAFF), label="スタッフ").props(
+                "outlined dense").classes("w-full q-mt-sm")
+            new_pin = ui.input(
+                "新しい個人PIN（4〜8桁）", password=True, password_toggle_button=True,
+            ).props("outlined dense inputmode=numeric maxlength=8").classes("w-full q-mt-sm")
+
+            def save_staff_pin():
+                if not pin_staff.value:
+                    ui.notify("スタッフを選択してください", type="negative")
+                    return
+                try:
+                    shift_submissions.set_staff_pin(pin_staff.value, new_pin.value)
+                except ValueError as error:
+                    notify_error(error)
+                    return
+                new_pin.value = ""
+                ui.notify(f"{pin_staff.value}の個人PINを設定しました", type="positive")
+
+            ui.button("個人PINを設定・変更", icon="key", on_click=save_staff_pin).classes(
+                "w-full q-mt-sm")
 
         items = store_ops.items()
         with ui.expansion(f"商品・備品の編集　{len(items)}件", icon="edit", value=False).classes(

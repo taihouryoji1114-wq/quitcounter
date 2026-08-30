@@ -384,6 +384,22 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.set_count(item["id"], 4)
         self.assertEqual(self.manager.purchase_list(), [])
 
+    def test_purchase_item_can_be_completed_and_restored_for_the_day(self):
+        item = self.manager.add_item("ラップ", "備品", "本", "", "", "count", 3, 1)
+        self.manager.set_purchase_item_completed(item["id"], True, "2026-08-30")
+        self.assertEqual(self.manager.purchase_list("2026-08-30"), [])
+        completed = self.manager.purchase_list("2026-08-30", include_completed=True)
+        self.assertTrue(completed[0]["completed"])
+        self.assertFalse(completed[0].get("manual", False))
+        self.manager.set_purchase_item_completed(item["id"], False, "2026-08-30")
+        self.assertEqual(self.manager.purchase_list("2026-08-30")[0]["name"], "ラップ")
+
+    def test_completed_purchase_item_reappears_on_next_day_if_still_low(self):
+        item = self.manager.add_item("白菜", "野菜仕入れ", "個", "", "", "count", 2, 1)
+        self.manager.set_purchase_item_completed(item["id"], True, "2026-08-30")
+        self.assertEqual(self.manager.purchase_list("2026-08-30"), [])
+        self.assertEqual(self.manager.purchase_list("2026-08-31")[0]["name"], "白菜")
+
     def test_completed_orders_are_not_carried_to_board(self):
         self.manager.set_daily_order_check("2026-08-19", "ミクリード", True)
         board = self.manager.previous_day_board("2026-08-20")

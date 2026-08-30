@@ -69,9 +69,10 @@ class StoreQuizManager:
                 return
         raise ValueError("問題が見つかりません。")
 
-    def notices(self):
+    def notices(self, include_closed=False):
         return [dict(item) for item in self._data_manager.data.get("store_business_notices", [])
-                if isinstance(item, dict) and item.get("active", True)]
+                if isinstance(item, dict)
+                and (include_closed or item.get("active", True))]
 
     def add_notice(self, title, details=""):
         title = str(title or "").strip()
@@ -90,6 +91,7 @@ class StoreQuizManager:
         for item in self._data_manager.data.setdefault("store_business_notices", []):
             if isinstance(item, dict) and item.get("id") == notice_id and item.get("active", True):
                 item["active"] = False
+                item["closed_at"] = datetime.now().isoformat(timespec="minutes")
                 self._data_manager.save()
                 return
         raise ValueError("業務連絡が見つかりません。")

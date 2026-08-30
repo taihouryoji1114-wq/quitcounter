@@ -40,6 +40,10 @@ class StoreQuizManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.notices()[0]["details"], "予約があります")
         self.manager.close_notice(item["id"])
         self.assertEqual(self.manager.notices(), [])
+        history = self.manager.notices(include_closed=True)
+        self.assertEqual(history[0]["title"], "本日の業務連絡")
+        self.assertFalse(history[0]["active"])
+        self.assertTrue(history[0]["closed_at"])
 
 
 if __name__ == "__main__":

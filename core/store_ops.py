@@ -305,13 +305,38 @@ class StoreOperationsManager:
         self._data_manager.save()
         return len(cleaned)
 
-    def purchase_list(self, record_date=None):
+    def set_purchase_item_completed(self, item_id, completed, record_date=None):
+        """Hide or restore one low-stock item on a specific operating day's list."""
+        if record_date is None:
+            from core.clock import operational_date_jst
+            record_date = operational_date_jst().isoformat()
+        self._date(record_date)
+        self._find(item_id)
+        stored = self._data_manager.data.setdefault("store_purchase_completed", {})
+        day_values = stored.setdefault(record_date, {})
+        if completed:
+            day_values[item_id] = datetime.now().isoformat(timespec="minutes")
+        else:
+            day_values.pop(item_id, None)
+        if not day_values:
+            stored.pop(record_date, None)
+        self._data_manager.save()
+
+    def purchase_list(self, record_date=None, include_completed=False):
         """Return counted items which have reached their minimum stock level.
 
         The purchase quantity is calculated automatically so the stock becomes one unit
         higher than the minimum.  This keeps the list useful without a second manual
         entry step on the inventory screen.
         """
+        if record_date is None:
+            from core.clock import operational_date_jst
+            record_date = operational_date_jst().isoformat()
+        self._date(record_date)
+        completed_values = self._data_manager.data.get(
+            "store_purchase_completed", {}).get(record_date, {})
+        if not isinstance(completed_values, dict):
+            completed_values = {}
         result = []
         for item in self.items():
             if item.get("tracking_mode") != "count":
@@ -323,7 +348,11 @@ class StoreOperationsManager:
             quantity = max(1, round(float(minimum) - float(current) + 1, 2))
             if float(quantity).is_integer():
                 quantity = int(quantity)
-            result.append({**item, "purchase_quantity": quantity, "auto_added": True})
+            completed = item["id"] in completed_values
+            if completed and not include_completed:
+                continue
+            result.append({**item, "purchase_quantity": quantity, "auto_added": True,
+                           "completed": completed})
         return sorted(result, key=lambda value: (
             float(value.get("current_stock", 0)) - float(value.get("reorder_point", 0)),
             value.get("name", ""),
