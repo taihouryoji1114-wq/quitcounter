@@ -214,6 +214,26 @@ def staffing_page(request: Request):
         with ui.expansion("勤務・出勤を入力", icon="schedule", value=False).classes(
             "staff-panel w-full q-mt-sm"):
             date_input = ui.input("日付", value=selected).props("outlined dense type=date").classes("w-full")
+            @ui.refreshable
+            def timecard_progress_summary(month):
+                progress = staffing.timecard_progress(month, today_jst().isoformat())
+                with ui.expansion(
+                    f"入力状況　{month.replace('-', '年')}月", icon="fact_check", value=False,
+                ).classes("timecard-progress w-full q-mt-sm"):
+                    with ui.element("div").classes("timecard-progress-grid w-full"):
+                        for name in staffing.STAFF:
+                            item = progress[name]
+                            latest = (f"{int(item['latest_date'][8:10])}日まで"
+                                      if item["latest_date"] else "まだ入力なし")
+                            with ui.element("div").classes(
+                                    "timecard-progress-person entered" if item["latest_date"]
+                                    else "timecard-progress-person"):
+                                ui.label(name).classes("timecard-progress-name")
+                                ui.label(latest).classes("timecard-progress-latest")
+                                ui.label(f"{item['entered_count']}日分").classes(
+                                    "timecard-progress-count")
+
+            timecard_progress_summary(selected[:7])
             hours_area = ui.column().classes("w-full gap-0")
 
         def render_day(record_date):
@@ -234,7 +254,17 @@ def staffing_page(request: Request):
                                             key = f"{prefix}_{suffix}"
                                             shift_inputs[name][key] = ui.input(
                                                 title, value=values[name][key]
-                                            ).props("outlined dense type=time step=60").classes("grow")
+                                            ).props(
+                                                "outlined dense inputmode=numeric placeholder='10:00'"
+                                            ).classes("grow")
+                                    ui.button(
+                                        f"{label}の入力を消す", icon="backspace",
+                                        on_click=lambda _, person=name, session=prefix: (
+                                            shift_inputs[person][f"{session}_start"].set_value(""),
+                                            shift_inputs[person][f"{session}_end"].set_value(""),
+                                        ),
+                                    ).props("flat dense no-caps color=negative").classes(
+                                        "timecard-clear-shift")
                                 shift_inputs[name]["break_minutes"] = ui.number(
                                     "休憩時間（賄いを含む）", value=values[name]["break_minutes"] or None,
                                     min=0, max=1440, step=1
@@ -266,6 +296,7 @@ def staffing_page(request: Request):
                             ui.notify(str(error), type="negative")
                             return
                         ui.notify(f"保存しました：¥{staffing.day_total(record_date):,}", type="positive")
+                        timecard_progress_summary.refresh(record_date[:7])
                         render_day(record_date)
                     ui.button("勤務時間を保存", icon="save", on_click=save_day).classes("w-full q-mt-md")
                     ui.label(f"この日の賃金・交通費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
@@ -277,7 +308,11 @@ def staffing_page(request: Request):
                     ).classes("text-[9px] text-grey-6 q-mt-xs")
                     ui.label(f"月末着地予測　¥{summary['forecast_company_cost']:,}").classes(
                         "text-sm font-black q-mt-xs")
-        date_input.on("change", lambda: render_day(date_input.value))
+        def change_timecard_date():
+            timecard_progress_summary.refresh(date_input.value[:7])
+            render_day(date_input.value)
+
+        date_input.on("change", change_timecard_date)
         render_day(selected)
         ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}.checked-date-chip{padding:6px 2px;border-radius:9px;font-size:9px;font-weight:900;text-align:center}.checked-date-chip.attended{background:#DDF1E5;color:#28704A;border:1px solid #B9DEC8}.checked-date-chip.unchecked{background:#F1F3F2;color:#9AA39E;border:1px solid #E4E8E5}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
-        ui.add_css(".staff-total-card *,.staff-group-card *,.attendance-progress-card *,.staff-panel *{min-width:0;box-sizing:border-box}.staff-total-card .text-2xl,.staff-total-card .text-xl,.staff-total-card .text-lg{max-width:100%;font-size:clamp(13px,5vw,22px)!important;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:clip;font-variant-numeric:tabular-nums}@media(max-width:520px){.staff-total-card,.staff-panel,.attendance-progress-card{padding-left:13px!important;padding-right:13px!important}.staff-group-card{padding:8px 6px}}")
+        ui.add_css(".staff-total-card *,.staff-group-card *,.attendance-progress-card *,.staff-panel *{min-width:0;box-sizing:border-box}.staff-total-card .text-2xl,.staff-total-card .text-xl,.staff-total-card .text-lg{max-width:100%;font-size:clamp(13px,5vw,22px)!important;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:clip;font-variant-numeric:tabular-nums}.timecard-progress{border-radius:15px!important;background:#F8FAF8!important;border:1px solid #E1E9E4!important}.timecard-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 10px 12px}.timecard-progress-person{min-width:0;padding:9px;border-radius:13px;background:#F1F3F2;border:1px solid #E4E8E5}.timecard-progress-person.entered{background:#E9F5ED;border-color:#C9E3D2}.timecard-progress-name{font-size:10px;font-weight:950}.timecard-progress-latest{font-size:11px;font-weight:950;color:#286B49}.timecard-progress-count{font-size:8px;color:#7A8780}.timecard-clear-shift{align-self:flex-end!important;margin-top:-2px!important;font-size:9px!important}@media(max-width:520px){.staff-total-card,.staff-panel,.attendance-progress-card{padding-left:13px!important;padding-right:13px!important}.staff-group-card{padding:8px 6px}}")
