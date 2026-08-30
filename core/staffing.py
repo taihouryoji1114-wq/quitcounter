@@ -176,6 +176,38 @@ class StaffingManager:
             }
         return result
 
+    def timecard_progress(self, month, through_date=None):
+        """Return the latest recorded work day for every pseudonymous staff member."""
+        try:
+            month_date = datetime.strptime(str(month), "%Y-%m")
+        except ValueError as error:
+            raise ValueError("対象月が正しくありません。") from error
+        days_in_month = monthrange(month_date.year, month_date.month)[1]
+        if through_date is None:
+            through_day = days_in_month
+        else:
+            parsed = self._date(through_date).date()
+            through_day = parsed.day if parsed.strftime("%Y-%m") == month else days_in_month
+        records = self._data_manager.data.get("business_staff_hours", {})
+        result = {}
+        for name in self.STAFF:
+            entered_days = []
+            for day_number in range(1, max(0, min(days_in_month, through_day)) + 1):
+                record = records.get(f"{month}-{day_number:02d}", {})
+                value = record.get(name, {}) if isinstance(record, dict) else {}
+                if not isinstance(value, dict):
+                    continue
+                has_shift = any(value.get(key) for key in (
+                    "lunch_start", "lunch_end", "dinner_start", "dinner_end"))
+                if has_shift or bool(value.get("attended", False)):
+                    entered_days.append(day_number)
+            result[name] = {
+                "entered_days": entered_days,
+                "entered_count": len(entered_days),
+                "latest_date": f"{month}-{entered_days[-1]:02d}" if entered_days else "",
+            }
+        return result
+
     def save_day(self, record_date, values):
         self._date(record_date)
         cleaned = {}
@@ -536,9 +568,11 @@ class StaffingManager:
 
     @staticmethod
     def _time(value):
-        value = str(value or "").strip()
+        value = str(value or "").strip().replace("：", ":")
         if not value:
             return ""
+        if value.isdigit() and len(value) in (3, 4):
+            value = f"{value[:-2]}:{value[-2:]}"
         try:
             parsed = datetime.strptime(value, "%H:%M")
         except ValueError as error:

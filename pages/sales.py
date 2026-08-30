@@ -55,6 +55,15 @@ def sales_page(request: Request):
                 dinner_customers = ui.number("人数", min=0, step=1).props(
                     "outlined suffix=人 inputmode=numeric"
                 ).classes("w-full")
+            daily_total = ui.label("この日の売上合計　¥0").classes(
+                "daily-sales-total w-full")
+
+            def update_daily_total():
+                total = int(lunch_sales.value or 0) + int(dinner_sales.value or 0)
+                daily_total.set_text(f"この日の売上合計　¥{total:,}")
+
+            lunch_sales.on_value_change(lambda _: update_daily_total())
+            dinner_sales.on_value_change(lambda _: update_daily_total())
             ui.label("決済方法別の売上").classes("font-bold q-mt-sm q-mb-xs")
             ui.label(
                 "ランチ＋ディナーの合計と同じ金額になるように入力してください。"
@@ -166,6 +175,7 @@ def sales_page(request: Request):
             ui.add_css("""
             .sales-confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
             .sales-confirm-cell{padding:12px;border-radius:14px}.sales-confirm-cell.lunch{background:#FFF5E8}.sales-confirm-cell.dinner{background:#F1EEFF}
+            .daily-sales-total{padding:14px 15px;margin:4px 0 10px;border-radius:16px;background:linear-gradient(135deg,#244F3D,#52795D);color:#fff;font-size:18px;font-weight:950;text-align:right;box-shadow:0 7px 16px rgba(25,68,49,.14)}
             """)
 
         with ui.expansion("決済手数料率を設定", icon="percent").classes(
@@ -259,6 +269,7 @@ def sales_page(request: Request):
             travel_agency_sales.value = record.get("travel_agency_sales") or None
             tabelog_points_sales.value = record.get("tabelog_points_sales") or None
             hotpepper_points_sales.value = record.get("hotpepper_points_sales") or None
+            update_daily_total()
             summary.refresh()
             history.refresh()
             sales_calendar.refresh()

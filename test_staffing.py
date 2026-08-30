@@ -191,6 +191,20 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(progress["店長"]["missing_days"], [2, 3, 4])
         self.assertEqual(progress["店長"]["latest_date"], "2026-08-01")
 
+    def test_timecard_progress_tracks_each_staff_latest_work_day(self):
+        self.staffing.save_day("2026-08-02", {
+            "スタッフA": {"lunch_start": "1000", "lunch_end": "15:30"},
+        })
+        self.staffing.save_day("2026-08-05", {
+            "スタッフA": {"dinner_start": "17:00", "dinner_end": "22:00"},
+            "店長": {"attended": True},
+        })
+        progress = self.staffing.timecard_progress("2026-08", "2026-08-06")
+        self.assertEqual(progress["スタッフA"]["entered_days"], [2, 5])
+        self.assertEqual(progress["スタッフA"]["entered_count"], 2)
+        self.assertEqual(progress["スタッフA"]["latest_date"], "2026-08-05")
+        self.assertEqual(progress["店長"]["latest_date"], "2026-08-05")
+
 
 if __name__ == "__main__":
     unittest.main()

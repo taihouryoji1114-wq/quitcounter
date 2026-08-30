@@ -25,6 +25,26 @@ def attendance_input_page():
                           action=actions, back_to="/mirai-kessan/input", brand="未来決算")
     selected_date = today_jst().isoformat()
     with content:
+        @ui.refreshable
+        def progress_summary(month):
+            progress = staffing.timecard_progress(month, today_jst().isoformat())
+            with ui.expansion(
+                f"入力状況　{month.replace('-', '年')}月", icon="fact_check", value=False,
+            ).classes("attendance-progress w-full q-mb-sm"):
+                with ui.element("div").classes("attendance-progress-grid w-full"):
+                    for name in staffing.STAFF:
+                        item = progress[name]
+                        latest = (f"{int(item['latest_date'][8:10])}日まで"
+                                  if item["latest_date"] else "まだ入力なし")
+                        with ui.element("div").classes(
+                                "attendance-progress-person entered" if item["latest_date"]
+                                else "attendance-progress-person"):
+                            ui.label(name).classes("attendance-progress-name")
+                            ui.label(latest).classes("attendance-progress-latest")
+                            ui.label(f"{item['entered_count']}日分").classes(
+                                "attendance-progress-count")
+
+        progress_summary(selected_date[:7])
         date_input = ui.input("日付", value=selected_date).props(
             "outlined dense type=date").classes("w-full")
         input_area = ui.column().classes("w-full gap-0")
@@ -52,10 +72,18 @@ def attendance_input_page():
                                     with ui.row().classes("w-full gap-2 no-wrap"):
                                         fields[name][f"{prefix}_start"] = ui.input(
                                             "開始", value=values[name][f"{prefix}_start"]).props(
-                                                "outlined dense type=time step=60").classes("grow")
+                                                "outlined dense inputmode=numeric placeholder='10:00'").classes("grow")
                                         fields[name][f"{prefix}_end"] = ui.input(
                                             "終了", value=values[name][f"{prefix}_end"]).props(
-                                                "outlined dense type=time step=60").classes("grow")
+                                                "outlined dense inputmode=numeric placeholder='15:30'").classes("grow")
+                                    ui.button(
+                                        f"{label}の入力を消す", icon="backspace",
+                                        on_click=lambda _, person=name, session=prefix: (
+                                            fields[person][f"{session}_start"].set_value(""),
+                                            fields[person][f"{session}_end"].set_value(""),
+                                        ),
+                                    ).props("flat dense no-caps color=negative").classes(
+                                        "attendance-clear-shift")
                                 fields[name]["break_minutes"] = ui.number(
                                     "休憩時間", value=values[name]["break_minutes"] or None,
                                     min=0, max=1440, step=1).props(
@@ -71,11 +99,16 @@ def attendance_input_page():
                             ui.notify(str(error), type="negative")
                             return
                         ui.notify("勤務・出勤を保存しました", type="positive")
+                        progress_summary.refresh(record_date[:7])
                         render(record_date)
                     ui.button("保存する", icon="save", on_click=save).classes("w-full q-mt-md")
 
-        date_input.on("change", lambda: render(date_input.value))
+        def change_date():
+            progress_summary.refresh(date_input.value[:7])
+            render(date_input.value)
+
+        date_input.on("change", change_date)
         render(selected_date)
         ui.add_css("""
-        .attendance-input-card{border-radius:20px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.attendance-person{border-radius:14px!important;background:#F7F9F7!important;border:1px solid #E7ECE8!important}.attendance-person .q-item{min-height:48px!important}
+        .attendance-input-card{border-radius:20px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.attendance-person{border-radius:14px!important;background:#F7F9F7!important;border:1px solid #E7ECE8!important}.attendance-person .q-item{min-height:48px!important}.attendance-progress{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.attendance-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 10px 12px}.attendance-progress-person{min-width:0;padding:9px;border-radius:13px;background:#F1F3F2;border:1px solid #E4E8E5}.attendance-progress-person.entered{background:#E9F5ED;border-color:#C9E3D2}.attendance-progress-name{font-size:10px;font-weight:950}.attendance-progress-latest{font-size:11px;font-weight:950;color:#286B49}.attendance-progress-count{font-size:8px;color:#7A8780}.attendance-clear-shift{align-self:flex-end!important;margin-top:-2px!important;font-size:9px!important}
         """)
