@@ -257,6 +257,12 @@ def store_dashboard_page():
                                         else:
                                             status_text = "完了" if item.get("completed") else "未完了"
                                         status_label = ui.label(status_text).classes("prep-icon-status")
+                                        check_preview_label = None
+                                        if item.get("check_items"):
+                                            checked_preview = "　".join(
+                                                f"✓ {name}" for name in item.get("checked_items", []))
+                                            check_preview_label = ui.label(
+                                                checked_preview).classes("prep-icon-checked-preview")
 
                                     if not feature:
                                         def tap_simple(_, value=item, card=tile, label=status_label):
@@ -290,7 +296,8 @@ def store_dashboard_page():
                                                 check_fields.append((check_text, field))
 
                                             def save_subchecks(_, value=item, fields=check_fields,
-                                                               card=tile, label=status_label):
+                                                               card=tile, label=status_label,
+                                                               preview=check_preview_label):
                                                 checked = [text for text, field in fields if field.value]
                                                 store_ops.set_service_prep_subchecks(
                                                     value["from_date"], value["from_period"],
@@ -299,6 +306,9 @@ def store_dashboard_page():
                                                 complete = len(checked) == len(fields)
                                                 value["checked_items"] = checked
                                                 label.set_text(f"{len(checked)}/{len(fields)}")
+                                                if preview:
+                                                    preview.set_text("　".join(
+                                                        f"✓ {name}" for name in checked))
                                                 card.classes(
                                                     add="prep-icon-completed" if complete else (
                                                         "prep-icon-progress" if checked else ""),
@@ -369,7 +379,11 @@ def store_dashboard_page():
                                     ui.label(f"{page_number}/{len(pages)}").classes(
                                         "prep-page-number")
 
-            render_board_lane([item for item in board_items if board_group(item) == "prep"])
+            with ui.expansion(
+                "仕込み一覧を開く", icon="apps", value=False,
+            ).props("duration=180").classes("prep-board-expansion w-full q-mt-sm"):
+                render_board_lane(
+                    [item for item in board_items if board_group(item) == "prep"])
 
         with ui.element("div").classes("store-app-grid w-full q-mt-md"):
             app_card("在庫確認", "現在数をまとめて入力", "inventory_2",
@@ -410,7 +424,7 @@ def store_dashboard_page():
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}
         .board-expansion .q-expansion-item__content{contain:content}.board-expansion .q-transition--slide-enter-active,.board-expansion .q-transition--slide-leave-active{transition:none!important;animation:none!important}.board-row{box-shadow:0 2px 7px rgba(8,31,23,.08)!important}
-        .prep-icon-board{padding:8px 1px 2px!important;gap:7px!important;touch-action:pan-x pan-y}.prep-icon-guide{font-size:9px;font-weight:900;opacity:.78}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.prep-icon-pages{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x pan-y;padding:2px 0 7px}.prep-icon-pages::-webkit-scrollbar{display:none}.prep-icon-page{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:98px;gap:9px;flex:0 0 100%;min-width:100%;scroll-snap-align:start;scroll-snap-stop:always;padding:2px 2px 22px}.prep-icon{position:relative!important;display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;min-height:98px!important;padding:11px!important;cursor:pointer;border-radius:20px!important;color:#17382c!important;background:linear-gradient(145deg,rgba(255,255,255,.99),rgba(225,238,230,.97))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:0 7px 16px rgba(1,24,17,.18)!important;transition:transform .16s ease,background .2s ease,color .2s ease!important;-webkit-tap-highlight-color:transparent;user-select:none}.prep-icon:active{transform:scale(.96)}.prep-icon-feature{grid-column:span 2;min-height:98px!important;background:linear-gradient(135deg,#fffdf7,#f4ead1)!important;border-color:#f1d99f!important}.prep-icon-completed{color:#563b05!important;background:linear-gradient(145deg,#ffe991,#d9ac36)!important;border-color:#ffe286!important;box-shadow:0 7px 18px rgba(129,82,6,.23)!important}.prep-icon-progress{color:#5a3b05!important;background:linear-gradient(145deg,#fff2cc,#f0c574)!important;border-color:#f4d290!important}.prep-icon-symbol{font-size:24px!important;color:#2b7757}.prep-icon-completed .prep-icon-symbol,.prep-icon-progress .prep-icon-symbol{color:#855b08}.prep-icon-badge{font-size:18px!important;color:#a66c12}.prep-icon-name{max-width:100%;font-size:13px;font-weight:950;line-height:1.25;overflow-wrap:anywhere}.prep-icon-status{font-size:9px;font-weight:900;opacity:.72}.prep-page-number{position:absolute;left:50%;bottom:1px;transform:translateX(-50%);font-size:8px;font-weight:900;opacity:.62}.prep-detail-dialog{width:min(92vw,430px)!important;max-height:88vh;overflow-y:auto;border-radius:25px!important}.board-subcheck{font-size:11px;font-weight:850;padding:5px 2px;border-bottom:1px solid #eee}.board-subcheck:has(.q-checkbox__inner--truthy) .q-checkbox__label{text-decoration:line-through;color:#8b948f}.board-note .q-field__control{background:rgba(255,255,255,.88);border-radius:10px}.board-note-save{align-self:flex-end;color:#246A4E!important;font-size:8px!important}@media(min-width:700px){.prep-icon-page{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:112px}.prep-icon{min-height:112px!important}.prep-icon-feature{grid-column:span 2;min-height:112px!important}.prep-icon-name{font-size:15px}}
+        .prep-board-expansion{border-radius:17px!important;background:rgba(5,29,21,.19)!important;border:1px solid rgba(255,255,255,.13)!important}.prep-board-expansion>.q-expansion-item__container>.q-item{min-height:44px!important;color:#fff!important;font-size:11px;font-weight:950}.prep-board-expansion .q-expansion-item__content{padding:1px 7px 8px}.prep-icon-board{padding:8px 1px 2px!important;gap:7px!important;touch-action:pan-x pan-y}.prep-icon-guide{font-size:9px;font-weight:900;opacity:.78}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.prep-icon-pages{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x pan-y;padding:2px 0 7px}.prep-icon-pages::-webkit-scrollbar{display:none}.prep-icon-page{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(98px,auto);gap:9px;flex:0 0 100%;min-width:100%;scroll-snap-align:start;scroll-snap-stop:always;padding:2px 2px 22px}.prep-icon{position:relative!important;display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;min-height:98px!important;padding:11px!important;cursor:pointer;border-radius:20px!important;color:#17382c!important;background:linear-gradient(145deg,rgba(255,255,255,.99),rgba(225,238,230,.97))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:0 7px 16px rgba(1,24,17,.18)!important;transition:transform .16s ease,background .2s ease,color .2s ease!important;-webkit-tap-highlight-color:transparent;user-select:none}.prep-icon:active{transform:scale(.96)}.prep-icon-feature{grid-column:span 2;min-height:98px!important;background:linear-gradient(135deg,#fffdf7,#f4ead1)!important;border-color:#f1d99f!important}.prep-icon-completed{color:#563b05!important;background:linear-gradient(145deg,#ffe991,#d9ac36)!important;border-color:#ffe286!important;box-shadow:0 7px 18px rgba(129,82,6,.23)!important}.prep-icon-progress{color:#5a3b05!important;background:linear-gradient(145deg,#fff2cc,#f0c574)!important;border-color:#f4d290!important}.prep-icon-symbol{font-size:24px!important;color:#2b7757}.prep-icon-completed .prep-icon-symbol,.prep-icon-progress .prep-icon-symbol{color:#855b08}.prep-icon-badge{font-size:18px!important;color:#a66c12}.prep-icon-name{max-width:100%;font-size:13px;font-weight:950;line-height:1.25;overflow-wrap:anywhere}.prep-icon-status{font-size:9px;font-weight:900;opacity:.72}.prep-icon-checked-preview{width:100%;font-size:8px;font-weight:850;line-height:1.35;color:#806529;text-decoration:line-through;white-space:normal;overflow-wrap:anywhere}.prep-page-number{position:absolute;left:50%;bottom:1px;transform:translateX(-50%);font-size:8px;font-weight:900;opacity:.62}.prep-detail-dialog{width:min(92vw,430px)!important;max-height:88vh;overflow-y:auto;border-radius:25px!important}.board-subcheck{font-size:11px;font-weight:850;padding:5px 2px;border-bottom:1px solid #eee}.board-subcheck:has(.q-checkbox__inner--truthy) .q-checkbox__label{text-decoration:line-through;color:#8b948f}.board-note .q-field__control{background:rgba(255,255,255,.88);border-radius:10px}.board-note-save{align-self:flex-end;color:#246A4E!important;font-size:8px!important}@media(min-width:700px){.prep-icon-page{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(112px,auto)}.prep-icon{min-height:112px!important}.prep-icon-feature{grid-column:span 2;min-height:112px!important}.prep-icon-name{font-size:15px}}
         """)
         ui.run_javascript("""
         requestAnimationFrame(() => {
