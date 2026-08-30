@@ -75,7 +75,7 @@ def store_dashboard_page():
             def reload_in_place():
                 ui.run_javascript("""
                 sessionStorage.setItem('storeBoardScrollY', String(window.scrollY));
-                document.querySelectorAll('.board-ticket-rail').forEach((rail, index) =>
+                document.querySelectorAll('.prep-icon-pages').forEach((rail, index) =>
                   sessionStorage.setItem(`storeBoardRail${index}`, String(rail.scrollLeft)));
                 window.location.reload();
                 """)
@@ -145,7 +145,7 @@ def store_dashboard_page():
                     reload_in_place()
                     return
                 item["completed"] = True
-                row.classes(add="board-ticket-completed board-longpress")
+                row.classes(add="prep-icon-completed")
                 if number_label:
                     number_label.set_text("完了")
                 if action:
@@ -201,133 +201,175 @@ def store_dashboard_page():
                 "ディナーへ切り替える" if period == "lunch" else "本日の営業を締める",
                 icon="east", on_click=ask_advance_service,
             ).props("unelevated no-caps").classes("service-switch w-full q-mt-sm")
-            def render_board_group(title, icon, group_name):
-                group_pending = [item for item in pending_items
-                                 if board_group(item) == group_name]
-                group_done = [item for item in done_items
-                              if board_group(item) == group_name]
-                state_key = f"store_board_{group_name}_open"
-
-                def remember_group_state(event):
-                    app.storage.user[state_key] = bool(event.value)
-
-                expansion_title = f"{title}　未完了 {len(group_pending)}"
-                with ui.expansion(
-                    expansion_title, icon=icon,
-                    value=bool(app.storage.user.get(state_key, False)),
-                    on_value_change=remember_group_state,
-                ).props("duration=0").classes("board-expansion w-full q-mt-sm"):
-                    render_board_lane(group_pending + group_done)
-
             def render_board_lane(items):
-                with ui.column().classes("board-lane"):
+                def is_feature_item(value):
+                    return bool(value.get("check_items") or value.get("note_enabled")
+                                or value.get("quantity_mode") or value.get("choice_mode"))
+
+                pages, current_page, used = [], [], 0
+                for value in items:
+                    weight = 2 if is_feature_item(value) else 1
+                    if current_page and used + weight > 8:
+                        pages.append(current_page)
+                        current_page, used = [], 0
+                    current_page.append(value)
+                    used += weight
+                if current_page:
+                    pages.append(current_page)
+
+                with ui.column().classes("prep-icon-board w-full"):
                     with ui.row().classes("w-full items-center justify-between no-wrap"):
-                        ui.label("伝票レール").classes("board-lane-title")
-                        if len(items) > 1:
-                            ui.label(f"横にスワイプ　{len(items)}枚").classes("board-swipe-hint")
-                    with ui.element("div").classes("board-ticket-rail w-full"):
-                        if not items:
-                            ui.label("ありません").classes("board-lane-empty")
-                        for index, item in enumerate(items, 1):
-                            if item.get("completed"):
-                                row = ui.card().classes(
-                                    "board-row board-ticket board-ticket-completed board-longpress q-pa-md").on(
-                                        "contextmenu", lambda _, value=item: open_long_press(value))
-                                with row:
-                                    ui.label(f"完了　{index}/{len(items)}").classes("ticket-number")
-                                    with ui.row().classes("w-full items-center gap-2 no-wrap"):
-                                        ui.icon("check_circle").classes("ticket-complete-icon text-lg")
-                                        ui.label(item["name"]).classes("board-name grow")
-                                continue
-                            row = ui.card().classes("board-row board-ticket q-pa-md")
-                            if item["kind"] in {"request", "prep", "order_check"}:
-                                row.classes("board-longpress").on(
-                                    "contextmenu", lambda _, value=item: open_long_press(value))
-                            with row:
-                                with ui.row().classes("w-full items-center justify-between no-wrap"):
-                                    ui.label(item["area"]).classes("board-area")
-                                    ticket_number = ui.label(f"{index}/{len(items)}").classes("ticket-number")
-                                ui.label(item["name"]).classes("board-name")
-                                if item.get("check_items"):
-                                    check_fields = []
-                                    for check_text in item["check_items"]:
-                                        field = ui.checkbox(
-                                            check_text,
-                                            value=check_text in item.get("checked_items", []),
-                                        ).classes("board-subcheck w-full")
-                                        check_fields.append((check_text, field))
+                        ui.label("タップして完了").classes("prep-icon-guide")
+                        if len(pages) > 1:
+                            ui.label(f"横へスワイプ　{len(pages)}ページ").classes(
+                                "board-swipe-hint")
+                    if not pages:
+                        ui.label("仕込みはありません").classes("board-lane-empty")
+                        return
+                    with ui.element("div").classes("prep-icon-pages w-full"):
+                        for page_number, page_items in enumerate(pages, 1):
+                            with ui.element("div").classes("prep-icon-page"):
+                                for item in page_items:
+                                    feature = is_feature_item(item)
+                                    tile_classes = "prep-icon prep-icon-feature" if feature else "prep-icon"
+                                    if item.get("completed"):
+                                        tile_classes += " prep-icon-completed"
+                                    elif item.get("checked_items"):
+                                        tile_classes += " prep-icon-progress"
+                                    tile = ui.card().classes(tile_classes)
+                                    with tile:
+                                        with ui.row().classes("w-full items-start justify-between no-wrap"):
+                                            ui.icon(
+                                                "check_circle" if item.get("completed") else
+                                                ("pending" if item.get("checked_items") else "restaurant"),
+                                            ).classes("prep-icon-symbol")
+                                            if item.get("note_enabled"):
+                                                ui.icon("sticky_note_2").classes("prep-icon-badge")
+                                        ui.label(item["name"]).classes("prep-icon-name")
+                                        if item.get("check_items"):
+                                            status_text = (
+                                                f"{len(item.get('checked_items', []))}/"
+                                                f"{len(item['check_items'])}")
+                                        elif item.get("quantity_mode"):
+                                            status_text = f"現在 {item.get('quantity', 0)}個"
+                                        elif item.get("choice_mode"):
+                                            status_text = item.get("choice") or "あり・なし"
+                                        else:
+                                            status_text = "完了" if item.get("completed") else "未完了"
+                                        status_label = ui.label(status_text).classes("prep-icon-status")
 
-                                    def save_subchecks(_, value=item, fields=check_fields,
-                                                       card=row, label=ticket_number):
-                                        checked = [text for text, field in fields if field.value]
-                                        store_ops.set_service_prep_subchecks(
-                                            value["from_date"], value["from_period"],
-                                            value["id"], checked)
-                                        complete = len(checked) == len(fields)
-                                        if complete and not value.get("completed"):
-                                            complete_item(value, card, label)
-                                        elif not complete and value.get("completed"):
-                                            value["completed"] = False
-                                            card.classes(remove="board-ticket-completed")
-                                            label.set_text("確認中")
-                                            summary_state["pending"] += 1
-                                            summary_state["done"] = max(0, summary_state["done"] - 1)
-                                            pending_summary.set_text(
-                                                f"未完了 {summary_state['pending']}件")
-                                            done_summary.set_text(
-                                                f"完了済み {summary_state['done']}件")
+                                    if not feature:
+                                        def tap_simple(_, value=item, card=tile, label=status_label):
+                                            if value.get("completed"):
+                                                open_long_press(value)
+                                            else:
+                                                complete_item(value, card, label)
+                                                card.classes(add="prep-icon-completed")
+                                                label.set_text("完了")
+                                                ui.notify(
+                                                    f"{value['name']}を完了しました",
+                                                    type="positive", timeout=1800)
+                                        tile.on("click", tap_simple)
+                                        continue
 
-                                    for _, field in check_fields:
-                                        field.on_value_change(save_subchecks)
-                                elif item.get("choice_mode"):
-                                    with ui.row().classes("board-choice-row w-full gap-2 q-mt-sm"):
-                                        ui.button("あり", on_click=lambda _, value=item:
-                                                  save_rice_choice(value, "あり")).props(
-                                                      "unelevated no-caps color=positive").classes("grow")
-                                        ui.button("なし", on_click=lambda _, value=item:
-                                                  save_rice_choice(value, "なし")).props(
-                                                      "outline no-caps color=primary").classes("grow")
-                                elif item.get("quantity_mode"):
-                                    quantity = ui.number(
-                                        value=max(0, int(item.get("quantity", 0) or 0)),
-                                        min=0, step=1, suffix="個",
-                                    ).props("outlined inputmode=numeric").classes(
-                                        "board-quantity w-full q-mt-sm")
-                                    ui.button(
-                                        "個数を保存", icon="save",
-                                        on_click=lambda _, value=item, field=quantity:
-                                            save_prep_quantity(value, field),
-                                    ).props("unelevated no-caps").classes(
-                                        "board-quantity-save w-full")
-                                elif item["kind"] == "request" and not can_manage:
-                                    ui.label("管理者対応").classes("board-manager-only")
-                                elif item["kind"] != "check_result":
-                                    action_holder = {}
-                                    complete_button = ui.button(
-                                        "完了", icon="check",
-                                        on_click=lambda _, value=item, card=row,
-                                        label=ticket_number, holder=action_holder: complete_item(
-                                            value, card, label, holder.get("button")),
-                                    ).props(
-                                                  "unelevated no-caps aria-label='完了'").classes(
-                                                      "board-ticket-complete w-full q-mt-sm")
-                                    action_holder["button"] = complete_button
-                                if item.get("note_enabled"):
-                                    note = ui.textarea(
-                                        "補足メモ", value=item.get("note", ""),
-                                    ).props("outlined autogrow dense").classes(
-                                        "board-note w-full q-mt-sm")
-                                    ui.button(
-                                        "メモを保存", icon="save",
-                                        on_click=lambda _, value=item, field=note: (
-                                            store_ops.set_service_prep_note(
-                                                value["from_date"], value["from_period"],
-                                                value["id"], field.value),
-                                            ui.notify("メモを保存しました", type="positive"),
-                                        ),
-                                    ).props("flat dense no-caps").classes("board-note-save")
+                                    with ui.dialog() as detail_dialog, ui.card().classes(
+                                            "prep-detail-dialog q-pa-lg"):
+                                        with ui.row().classes("w-full items-start justify-between no-wrap"):
+                                            with ui.column().classes("gap-0"):
+                                                ui.label(item["name"]).classes("text-lg font-black")
+                                                ui.label("仕込みの内容").classes("text-[9px] text-grey-6")
+                                            ui.button(icon="close", on_click=detail_dialog.close).props(
+                                                "flat round dense aria-label='閉じる'")
+                                        check_fields = []
+                                        if item.get("check_items"):
+                                            for check_text in item["check_items"]:
+                                                field = ui.checkbox(
+                                                    check_text,
+                                                    value=check_text in item.get("checked_items", []),
+                                                ).classes("board-subcheck w-full")
+                                                check_fields.append((check_text, field))
 
-            render_board_group("今日の作業・仕込み", "restaurant", "prep")
+                                            def save_subchecks(_, value=item, fields=check_fields,
+                                                               card=tile, label=status_label):
+                                                checked = [text for text, field in fields if field.value]
+                                                store_ops.set_service_prep_subchecks(
+                                                    value["from_date"], value["from_period"],
+                                                    value["id"], checked)
+                                                was_complete = bool(value.get("completed"))
+                                                complete = len(checked) == len(fields)
+                                                value["checked_items"] = checked
+                                                label.set_text(f"{len(checked)}/{len(fields)}")
+                                                card.classes(
+                                                    add="prep-icon-completed" if complete else (
+                                                        "prep-icon-progress" if checked else ""),
+                                                    remove="prep-icon-progress" if complete else (
+                                                        "prep-icon-completed" if checked else
+                                                        "prep-icon-completed prep-icon-progress"),
+                                                )
+                                                value["completed"] = complete
+                                                if complete != was_complete:
+                                                    summary_state["pending"] += -1 if complete else 1
+                                                    summary_state["done"] += 1 if complete else -1
+                                                    pending_summary.set_text(
+                                                        f"未完了 {summary_state['pending']}件")
+                                                    done_summary.set_text(
+                                                        f"完了済み {summary_state['done']}件")
+                                            for _, field in check_fields:
+                                                field.on_value_change(save_subchecks)
+                                        if item.get("choice_mode"):
+                                            with ui.row().classes("board-choice-row w-full gap-2 q-mt-sm"):
+                                                ui.button("あり", on_click=lambda _, value=item:
+                                                          save_rice_choice(value, "あり")).props(
+                                                              "unelevated no-caps color=positive").classes("grow")
+                                                ui.button("なし", on_click=lambda _, value=item:
+                                                          save_rice_choice(value, "なし")).props(
+                                                              "outline no-caps color=primary").classes("grow")
+                                        elif item.get("quantity_mode"):
+                                            quantity = ui.number(
+                                                value=max(0, int(item.get("quantity", 0) or 0)),
+                                                min=0, step=1, suffix="個",
+                                            ).props("outlined inputmode=numeric").classes(
+                                                "board-quantity w-full q-mt-sm")
+                                            ui.button(
+                                                "個数を保存", icon="save",
+                                                on_click=lambda _, value=item, field=quantity:
+                                                    save_prep_quantity(value, field),
+                                            ).props("unelevated no-caps").classes(
+                                                "board-quantity-save w-full")
+                                        if item.get("note_enabled"):
+                                            note = ui.textarea(
+                                                "補足メモ", value=item.get("note", ""),
+                                            ).props("outlined autogrow dense").classes(
+                                                "board-note w-full q-mt-sm")
+                                            ui.button(
+                                                "メモを保存", icon="save",
+                                                on_click=lambda _, value=item, field=note: (
+                                                    store_ops.set_service_prep_note(
+                                                        value["from_date"], value["from_period"],
+                                                        value["id"], field.value),
+                                                    ui.notify("メモを保存しました", type="positive"),
+                                                ),
+                                            ).props("flat dense no-caps").classes("board-note-save")
+                                        if (item.get("note_enabled") and not item.get("check_items")
+                                                and not item.get("quantity_mode")
+                                                and not item.get("choice_mode")):
+                                            ui.button(
+                                                "完了にする", icon="check",
+                                                on_click=lambda _, value=item, card=tile,
+                                                label=status_label, dialog=detail_dialog: (
+                                                    complete_item(value, card, label),
+                                                    card.classes(add="prep-icon-completed"),
+                                                    label.set_text("完了"),
+                                                    dialog.close(),
+                                                ),
+                                            ).props("unelevated no-caps").classes(
+                                                "board-ticket-complete w-full q-mt-sm")
+                                    tile.on("click", lambda _, dialog=detail_dialog: dialog.open())
+                                if len(pages) > 1:
+                                    ui.label(f"{page_number}/{len(pages)}").classes(
+                                        "prep-page-number")
+
+            render_board_lane([item for item in board_items if board_group(item) == "prep"])
 
         with ui.element("div").classes("store-app-grid w-full q-mt-md"):
             app_card("在庫確認", "現在数をまとめて入力", "inventory_2",
@@ -363,7 +405,7 @@ def store_dashboard_page():
         .board-longpress{-webkit-touch-callout:none;user-select:none;cursor:context-menu}
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}
         .board-expansion .q-expansion-item__content{contain:content}.board-expansion .q-transition--slide-enter-active,.board-expansion .q-transition--slide-leave-active{transition:none!important;animation:none!important}.board-row{box-shadow:0 2px 7px rgba(8,31,23,.08)!important}
-        .board-lane{display:flex!important;width:100%!important;padding:8px 3px 5px!important;background:transparent!important;gap:5px!important}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.board-ticket-rail{display:flex;gap:11px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scroll-behavior:smooth;scroll-padding:3px;padding:3px 3px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}.board-ticket-rail::-webkit-scrollbar{display:none}.board-ticket{flex:0 0 calc(72% - 4px);min-height:144px!important;scroll-snap-align:start;justify-content:center!important;border:1px solid rgba(255,255,255,.88)!important;box-shadow:0 9px 22px rgba(3,27,19,.22)!important;transition:background .22s ease,color .22s ease,transform .18s ease!important}.board-ticket .board-area{font-size:9px}.board-ticket .board-name{font-size:15px;line-height:1.4}.ticket-number{font-size:8px;font-weight:900;color:#71827A}.board-ticket-complete{min-height:38px!important;border-radius:11px!important;background:#246A4E!important;font-size:10px!important;font-weight:950!important}.board-ticket-completed{color:#51390A!important;background:linear-gradient(145deg,#FFF4B8,#EACB63)!important;border:1px solid #F8DC79!important}.board-ticket-completed .ticket-number{color:#8A671B}.ticket-complete-icon{color:#9B7319}.board-ticket-completed .board-name{text-decoration:none}.board-ticket-rail>.board-lane-empty{flex:0 0 100%;text-align:center}.board-subcheck{font-size:10px;font-weight:800}.board-note .q-field__control{background:rgba(255,255,255,.88);border-radius:10px}.board-note-save{align-self:flex-end;color:#246A4E!important;font-size:8px!important}@media(min-width:700px){.board-ticket{flex-basis:calc(42% - 5px);min-height:156px!important}}
+        .prep-icon-board{padding:8px 1px 2px!important;gap:7px!important}.prep-icon-guide{font-size:9px;font-weight:900;opacity:.78}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.prep-icon-pages{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x;padding:2px 0 7px}.prep-icon-pages::-webkit-scrollbar{display:none}.prep-icon-page{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:98px;gap:9px;flex:0 0 100%;min-width:100%;scroll-snap-align:start;scroll-snap-stop:always;padding:2px 2px 22px}.prep-icon{position:relative!important;display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;min-height:98px!important;padding:11px!important;cursor:pointer;border-radius:20px!important;color:#17382c!important;background:linear-gradient(145deg,rgba(255,255,255,.99),rgba(225,238,230,.97))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:0 7px 16px rgba(1,24,17,.18)!important;transition:transform .16s ease,background .2s ease,color .2s ease!important;-webkit-tap-highlight-color:transparent;user-select:none}.prep-icon:active{transform:scale(.96)}.prep-icon-feature{grid-column:span 2;min-height:98px!important;background:linear-gradient(135deg,#fffdf7,#f4ead1)!important;border-color:#f1d99f!important}.prep-icon-completed{color:#563b05!important;background:linear-gradient(145deg,#ffe991,#d9ac36)!important;border-color:#ffe286!important;box-shadow:0 7px 18px rgba(129,82,6,.23)!important}.prep-icon-progress{color:#5a3b05!important;background:linear-gradient(145deg,#fff2cc,#f0c574)!important;border-color:#f4d290!important}.prep-icon-symbol{font-size:24px!important;color:#2b7757}.prep-icon-completed .prep-icon-symbol,.prep-icon-progress .prep-icon-symbol{color:#855b08}.prep-icon-badge{font-size:18px!important;color:#a66c12}.prep-icon-name{max-width:100%;font-size:13px;font-weight:950;line-height:1.25;overflow-wrap:anywhere}.prep-icon-status{font-size:9px;font-weight:900;opacity:.72}.prep-page-number{position:absolute;left:50%;bottom:1px;transform:translateX(-50%);font-size:8px;font-weight:900;opacity:.62}.prep-detail-dialog{width:min(92vw,430px)!important;max-height:88vh;overflow-y:auto;border-radius:25px!important}.board-subcheck{font-size:11px;font-weight:850;padding:5px 2px;border-bottom:1px solid #eee}.board-subcheck:has(.q-checkbox__inner--truthy) .q-checkbox__label{text-decoration:line-through;color:#8b948f}.board-note .q-field__control{background:rgba(255,255,255,.88);border-radius:10px}.board-note-save{align-self:flex-end;color:#246A4E!important;font-size:8px!important}@media(min-width:700px){.prep-icon-page{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:112px}.prep-icon{min-height:112px!important}.prep-icon-feature{grid-column:span 2;min-height:112px!important}.prep-icon-name{font-size:15px}}
         """)
         ui.run_javascript("""
         requestAnimationFrame(() => {
@@ -372,7 +414,7 @@ def store_dashboard_page():
             sessionStorage.removeItem('storeBoardScrollY');
             setTimeout(() => window.scrollTo({top: Number(savedY), behavior: 'auto'}), 80);
           }
-          document.querySelectorAll('.board-ticket-rail').forEach((rail, index) => {
+          document.querySelectorAll('.prep-icon-pages').forEach((rail, index) => {
             const savedX = sessionStorage.getItem(`storeBoardRail${index}`);
             if (savedX !== null) {
               sessionStorage.removeItem(`storeBoardRail${index}`);
