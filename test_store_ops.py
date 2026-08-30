@@ -358,20 +358,19 @@ class StoreOperationsManagerTest(unittest.TestCase):
         reopened = self.manager.service_handover_board("2026-08-20", "dinner")
         self.assertFalse(reopened["items"][0]["completed"])
 
-    def test_purchase_plan_is_saved_and_blank_values_are_removed(self):
-        first = self.manager.add_item("白菜", "野菜仕入れ", "個")
-        second = self.manager.add_item("ラップ", "備品", "本")
-        self.assertEqual(self.manager.save_purchase_quantities(
-            {first["id"]: 3, second["id"]: ""}), 1)
+    def test_minimum_stock_automatically_adds_item_to_purchase_list(self):
+        item = self.manager.add_item("白菜", "野菜仕入れ", "個", "", "", "count", 2, 3)
+        self.assertEqual(self.manager.purchase_list(), [])
+        self.manager.set_count(item["id"], 2)
         purchase_list = self.manager.purchase_list()
-        self.assertEqual([(item["name"], item["purchase_quantity"])
-                          for item in purchase_list], [("白菜", 3.0)])
+        self.assertEqual([(value["name"], value["purchase_quantity"])
+                          for value in purchase_list], [("白菜", 1)])
 
-    def test_purchase_plan_resets_on_next_operating_day(self):
-        item = self.manager.add_item("白菜", "野菜仕入れ", "個")
-        self.manager.save_purchase_quantities({item["id"]: 3}, "2026-08-20")
-        self.assertEqual(len(self.manager.purchase_list("2026-08-20")), 1)
-        self.assertEqual(self.manager.purchase_list("2026-08-21"), [])
+    def test_purchase_list_disappears_after_stock_exceeds_minimum(self):
+        item = self.manager.add_item("ラップ", "備品", "本", "", "", "count", 3, 1)
+        self.assertEqual(len(self.manager.purchase_list()), 1)
+        self.manager.set_count(item["id"], 4)
+        self.assertEqual(self.manager.purchase_list(), [])
 
     def test_completed_orders_are_not_carried_to_board(self):
         self.manager.set_daily_order_check("2026-08-19", "ミクリード", True)

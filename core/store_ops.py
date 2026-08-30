@@ -306,9 +306,28 @@ class StoreOperationsManager:
         return len(cleaned)
 
     def purchase_list(self, record_date=None):
-        quantities = self.purchase_quantities(record_date)
-        return [{**item, "purchase_quantity": quantities.get(item["id"])}
-                for item in self.items() if quantities.get(item["id"]) not in (None, 0)]
+        """Return counted items which have reached their minimum stock level.
+
+        The purchase quantity is calculated automatically so the stock becomes one unit
+        higher than the minimum.  This keeps the list useful without a second manual
+        entry step on the inventory screen.
+        """
+        result = []
+        for item in self.items():
+            if item.get("tracking_mode") != "count":
+                continue
+            minimum = item.get("reorder_point")
+            current = item.get("current_stock")
+            if minimum is None or current is None or float(current) > float(minimum):
+                continue
+            quantity = max(1, round(float(minimum) - float(current) + 1, 2))
+            if float(quantity).is_integer():
+                quantity = int(quantity)
+            result.append({**item, "purchase_quantity": quantity, "auto_added": True})
+        return sorted(result, key=lambda value: (
+            float(value.get("current_stock", 0)) - float(value.get("reorder_point", 0)),
+            value.get("name", ""),
+        ))
 
     def daily_order_checks(self, record_date):
         self._date(record_date)

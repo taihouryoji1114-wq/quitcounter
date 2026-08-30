@@ -27,7 +27,7 @@ def purchase_list_page():
             with ui.card().classes("surface-card w-full q-pa-xl text-center"):
                 ui.icon("shopping_basket").classes("text-5xl text-grey-4")
                 ui.label("仕入れる商品はありません").classes("text-lg font-black q-mt-sm")
-                ui.label("在庫確認の赤い枠に仕入れ数を入力してください").classes(
+                ui.label("在庫数が最低在庫数以下になると自動で表示されます").classes(
                     "text-[10px] text-grey-6 q-mt-xs")
         else:
             with ui.card().classes("purchase-card w-full q-pa-lg"):
@@ -38,10 +38,14 @@ def purchase_list_page():
                         quantity = int(quantity)
                     with ui.row().classes("purchase-row w-full items-center no-wrap"):
                         ui.checkbox(value=False).props("dense color=positive")
-                        ui.label(item["name"]).classes("text-sm font-black grow")
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(item["name"]).classes("text-sm font-black")
+                            ui.label(
+                                f"現在 {item.get('current_stock')} / 最低 {item.get('reorder_point')} {item.get('unit', '個')}"
+                            ).classes("text-[9px] text-grey-6")
                         ui.label(f"{quantity}{item.get('unit', '個')}").classes(
                             "text-lg font-black text-negative")
-            ui.label("このリストは毎日午前2時にリセットされます").classes(
+            ui.label("在庫数が最低在庫数を上回ると、自動でリストから外れます").classes(
                 "text-[9px] text-grey-6 text-center w-full q-mt-sm")
         ui.add_css("""
         .purchase-card{border-radius:22px!important;border:1px solid #E1E9E4!important;box-shadow:0 8px 24px rgba(39,55,45,.05)!important}.purchase-row{padding:12px 0;border-bottom:1px solid #EDF1EE}.purchase-row:last-child{border-bottom:0}

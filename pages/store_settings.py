@@ -72,11 +72,16 @@ def store_settings_page():
             tracking = ui.select(
                 {"count": "数量で管理", "simple": "3段階で管理"}, value="count",
                 label="管理方法").props("outlined dense emit-value map-options").classes("w-full q-mt-xs")
+            minimum_stock = ui.number("最低在庫数", step=.1).props(
+                "outlined dense inputmode=decimal").classes("w-full q-mt-xs")
+            ui.label("この数以下になると、仕入れリストへ自動で追加されます").classes(
+                "text-[9px] text-grey-6")
 
             def add_item():
                 try:
                     store_ops.add_item(name.value, category.value, unit.value,
-                                       supplier.value, "", tracking.value, "", "")
+                                       supplier.value, "", tracking.value,
+                                       minimum_stock.value, "")
                 except ValueError as error:
                     notify_error(error)
                     return
@@ -214,12 +219,21 @@ def store_settings_page():
                                 {"count": "数量で管理", "simple": "3段階で管理"},
                                 value=selected.get("tracking_mode", "count"), label="管理方法").props(
                                     "outlined dense emit-value map-options").classes("w-full")
+                            edit_minimum = ui.number(
+                                "最低在庫数", value=selected.get("reorder_point"), step=.1).props(
+                                    "outlined dense inputmode=decimal").classes("w-full")
+                            ui.label("この数以下になると、仕入れリストへ自動で追加されます").classes(
+                                "text-[9px] text-grey-6")
 
                             def save():
                                 try:
                                     store_ops.update_item(selected["id"], edit_name.value,
                                                           edit_category.value, edit_unit.value,
                                                           edit_supplier.value, edit_tracking.value)
+                                    if edit_tracking.value == "count":
+                                        store_ops.update_count_settings(
+                                            selected["id"], edit_unit.value,
+                                            reorder_point=edit_minimum.value)
                                 except ValueError as error:
                                     notify_error(error)
                                     return

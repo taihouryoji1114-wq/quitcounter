@@ -52,13 +52,14 @@ def shift_submission_page():
 
             editor = ui.column().classes("w-full gap-0 q-mt-md")
 
-            def open_editor():
-                if not staff.value:
+            def render_editor(staff_name=None):
+                selected_staff = staff_name or staff.value
+                if not selected_staff:
                     ui.notify("名前を選択してください", type="negative")
                     return
                 try:
                     submission = shift_submissions.submission(
-                        staff.value, int(year.value), int(month.value), half.value)
+                        selected_staff, int(year.value), int(month.value), half.value)
                 except ValueError as error:
                     ui.notify(str(error), type="negative")
                     return
@@ -98,7 +99,7 @@ def shift_submission_page():
                     def save_submission():
                         try:
                             result = shift_submissions.save(
-                                staff.value, period["year"], period["month"], period["half"],
+                                selected_staff, period["year"], period["month"], period["half"],
                                 {day: {key: field.value for key, field in day_fields.items()}
                                  for day, day_fields in fields.items()}, note.value)
                         except ValueError as error:
@@ -108,7 +109,7 @@ def shift_submission_page():
                             ui.notify("期限後のため、変更申請を送りました", type="warning")
                         else:
                             ui.notify("シフト希望を保存しました", type="positive")
-                        open_editor()
+                        render_editor(selected_staff)
 
                     expired_change = bool(submission["submitted_at"]) and today > date.fromisoformat(
                         period["deadline"])
@@ -122,10 +123,72 @@ def shift_submission_page():
                     ui.button("入力を閉じる", icon="expand_less", on_click=editor.clear).props(
                         "flat no-caps color=grey-7").classes("w-full q-mt-sm")
 
+            pin_target = {"staff": ""}
+            with ui.dialog() as pin_dialog, ui.card().classes("surface-card q-pa-lg"):
+                ui.label("本人確認").classes("text-lg font-black")
+                pin_message = ui.label().classes("text-[10px] text-grey-6")
+                pin_input = ui.input("個人PIN", password=True, password_toggle_button=True).props(
+                    "outlined inputmode=numeric maxlength=8").classes("w-full q-mt-sm")
+
+                def unlock_editor():
+                    name = pin_target["staff"]
+                    if not shift_submissions.verify_staff_pin(name, pin_input.value):
+                        ui.notify("個人PINが違います", type="negative")
+                        return
+                    pin_dialog.close()
+                    pin_input.value = ""
+                    render_editor(name)
+
+                with ui.row().classes("w-full gap-2 q-mt-md"):
+                    ui.button("やめる", on_click=pin_dialog.close).props(
+                        "flat no-caps").classes("grow")
+                    ui.button("入力を開く", icon="lock_open", on_click=unlock_editor).props(
+                        "unelevated no-caps").classes("grow")
+
+            def open_editor():
+                if not staff.value:
+                    ui.notify("名前を選択してください", type="negative")
+                    return
+                if current_role() == "owner":
+                    render_editor(staff.value)
+                    return
+                if not shift_submissions.has_staff_pin(staff.value):
+                    ui.notify("個人PINが未設定です。管理者に設定してもらってください", type="warning")
+                    return
+                pin_target["staff"] = staff.value
+                pin_message.set_text(f"{staff.value}さんの個人PINを入力してください")
+                pin_input.value = ""
+                pin_dialog.open()
+
             ui.button("入力を開く", icon="edit_calendar", on_click=open_editor).props(
                 "outline no-caps").classes("w-full q-mt-md")
 
         if current_role() == "owner":
+            with ui.expansion("スタッフ個人PINの設定", icon="shield", value=False).classes(
+                    "surface-card w-full q-mt-md"):
+                ui.label("シフト希望を本人以外が書き換えないための番号です").classes(
+                    "text-[10px] text-grey-6")
+                pin_staff = ui.select(list(shift_submissions.STAFF), label="スタッフ").props(
+                    "outlined dense").classes("w-full q-mt-sm")
+                new_pin = ui.input(
+                    "新しい個人PIN（4〜8桁）", password=True, password_toggle_button=True,
+                ).props("outlined dense inputmode=numeric maxlength=8").classes("w-full q-mt-sm")
+
+                def save_staff_pin():
+                    if not pin_staff.value:
+                        ui.notify("スタッフを選択してください", type="negative")
+                        return
+                    try:
+                        shift_submissions.set_staff_pin(pin_staff.value, new_pin.value)
+                    except ValueError as error:
+                        ui.notify(str(error), type="negative")
+                        return
+                    new_pin.value = ""
+                    ui.notify(f"{pin_staff.value}の個人PINを設定しました", type="positive")
+
+                ui.button("個人PINを設定・変更", icon="key", on_click=save_staff_pin).props(
+                    "unelevated no-caps").classes("shift-submit w-full q-mt-sm")
+
             with ui.expansion("シフト案を自動作成", icon="auto_awesome", value=False).classes(
                     "surface-card w-full q-mt-md"):
                 ui.label("提出された希望だけを使って、偏りを抑えた下書きを作ります").classes(

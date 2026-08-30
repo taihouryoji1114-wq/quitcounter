@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime
+import hashlib
+import hmac
+import secrets
+import unicodedata
 
 from core.data import data
 from core.clock import today_jst
@@ -93,6 +97,45 @@ class ShiftSubmissionManager:
         return {staff: dict(record) for staff, record in stored.items()
                 if staff in self.STAFF and isinstance(record, dict)
                 and record.get("status") == "pending"}
+
+    @staticmethod
+    def _clean_pin(pin):
+        value = unicodedata.normalize("NFKC", str(pin or "")).strip()
+        if not value.isdigit() or not 4 <= len(value) <= 8:
+            raise ValueError("個人PINは4〜8桁の数字で設定してください。")
+        return value
+
+    def has_staff_pin(self, staff):
+        self._staff(staff)
+        stored = self._data_manager.data.get("store_shift_staff_pins", {}).get(staff, {})
+        return bool(isinstance(stored, dict) and stored.get("salt") and stored.get("digest"))
+
+    def set_staff_pin(self, staff, pin):
+        """Set a staff-specific shift PIN without storing the original number."""
+        self._staff(staff)
+        value = self._clean_pin(pin)
+        salt = secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", value.encode("utf-8"), salt.encode("ascii"), 120_000,
+        ).hex()
+        self._data_manager.data.setdefault("store_shift_staff_pins", {})[staff] = {
+            "salt": salt, "digest": digest,
+        }
+        self._data_manager.save()
+
+    def verify_staff_pin(self, staff, pin):
+        self._staff(staff)
+        try:
+            value = self._clean_pin(pin)
+        except ValueError:
+            return False
+        stored = self._data_manager.data.get("store_shift_staff_pins", {}).get(staff, {})
+        if not isinstance(stored, dict) or not stored.get("salt") or not stored.get("digest"):
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", value.encode("utf-8"), stored["salt"].encode("ascii"), 120_000,
+        ).hex()
+        return hmac.compare_digest(digest, stored["digest"])
 
     def auto_schedule(self, year, month, half, lunch_required=3, dinner_required=4,
                       thick_days=None, deputy_rest_priority=True,

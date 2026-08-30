@@ -37,6 +37,21 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         })
         self.assertEqual(saved["note"], "18日は相談")
 
+    def test_staff_pin_is_hashed_and_verified_per_person(self):
+        self.manager.set_staff_pin("スタッフA", "１２３４")
+        stored = self.data.data["store_shift_staff_pins"]["スタッフA"]
+        self.assertNotIn("1234", stored.values())
+        self.assertTrue(self.manager.has_staff_pin("スタッフA"))
+        self.assertTrue(self.manager.verify_staff_pin("スタッフA", "1234"))
+        self.assertFalse(self.manager.verify_staff_pin("スタッフA", "9999"))
+        self.assertFalse(self.manager.has_staff_pin("スタッフB"))
+
+    def test_staff_pin_rejects_non_numeric_or_short_values(self):
+        with self.assertRaises(ValueError):
+            self.manager.set_staff_pin("スタッフA", "12")
+        with self.assertRaises(ValueError):
+            self.manager.set_staff_pin("スタッフA", "abcd")
+
     def test_empty_submission_is_allowed_and_means_days_off(self):
         self.manager.save("スタッフA", 2026, 8, "second", {}, "全日希望なし")
         saved = self.manager.submission("スタッフA", 2026, 8, "second")

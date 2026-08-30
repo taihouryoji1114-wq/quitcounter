@@ -110,12 +110,10 @@ def inventory_page():
         return
     items = store_ops.items()
     is_owner = current_role() == "owner"
-    record_date = operational_date_jst().isoformat()
-    purchase_quantities = store_ops.purchase_quantities(record_date)
     reset_at = store_ops.inventory_check_reset_at()
     content = section_shell("在庫確認", "現在の在庫をまとめて入力")
     with content:
-        fields, purchase_fields = [], []
+        fields = []
         grouped = {}
         for item in items:
             grouped.setdefault(item.get("category", "その他"), []).append(item)
@@ -129,11 +127,6 @@ def inventory_page():
                         with ui.column().classes("gap-0 grow min-w-0"):
                             ui.label(item["name"]).classes("text-xs font-black")
                             ui.label(f"単位 {item.get('unit', '個')}").classes("text-[8px] text-grey-6")
-                        if is_owner:
-                            buy = ui.number(value=purchase_quantities.get(item["id"]),
-                                            placeholder="仕入", step=.1).props(
-                                                "outlined dense inputmode=decimal").classes("buy-field")
-                            purchase_fields.append((item["id"], buy))
                         if item.get("tracking_mode") == "count":
                             field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
                                               suffix=item.get("unit", "個")).props(
@@ -150,9 +143,6 @@ def inventory_page():
                        for item_id, kind, field in fields if field.value not in (None, "")]
             try:
                 store_ops.save_inventory_check(updates)
-                if is_owner:
-                    store_ops.save_purchase_quantities(
-                        {item_id: field.value for item_id, field in purchase_fields}, record_date)
             except ValueError as error:
                 ui.notify(str(error), type="negative")
                 return
@@ -179,7 +169,7 @@ def inventory_page():
         if is_owner:
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
                 "/store-ops/purchase-list")).props("outline no-caps").classes("w-full q-mt-sm")
-        ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:100px}.buy-field{width:60px}.buy-field input{color:#C84949!important;font-weight:900!important}")
+        ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:110px}")
 
 
 @ui.page("/store-ops/hygiene")
