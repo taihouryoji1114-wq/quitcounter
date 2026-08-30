@@ -126,7 +126,15 @@ def inventory_page():
                     with ui.row().classes("inventory-row-new w-full items-center no-wrap"):
                         with ui.column().classes("gap-0 grow min-w-0"):
                             ui.label(item["name"]).classes("text-xs font-black")
-                            ui.label(f"単位 {item.get('unit', '個')}").classes("text-[8px] text-grey-6")
+                            minimum = item.get("reorder_point")
+                            unit = item.get("unit", "個")
+                            if minimum is not None:
+                                minimum_text = (str(int(minimum)) if float(minimum).is_integer()
+                                                else str(minimum))
+                                ui.label(f"最低 {minimum_text}{unit}で自動仕入れ").classes(
+                                    "minimum-stock-mark")
+                            else:
+                                ui.label(f"単位 {unit}").classes("text-[8px] text-grey-6")
                         if item.get("tracking_mode") == "count":
                             field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
                                               suffix=item.get("unit", "個")).props(
@@ -169,7 +177,7 @@ def inventory_page():
         if is_owner:
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
                 "/store-ops/purchase-list")).props("outline no-caps").classes("w-full q-mt-sm")
-        ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:110px}")
+        ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:110px}.minimum-stock-mark{display:inline-flex;width:max-content;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900}")
 
 
 @ui.page("/store-ops/hygiene")

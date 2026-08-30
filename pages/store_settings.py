@@ -203,6 +203,13 @@ def store_settings_page():
                         ui.label(item["name"]).classes("text-xs font-black")
                         ui.label(f"{item.get('category', 'その他')}・{item.get('unit', '個')}").classes(
                             "text-[9px] text-grey-6")
+                        minimum = item.get("reorder_point")
+                        if minimum is not None:
+                            minimum_text = (str(int(minimum)) if float(minimum).is_integer()
+                                            else str(minimum))
+                            ui.label(
+                                f"最低在庫 設定済み：{minimum_text}{item.get('unit', '個')}"
+                            ).classes("minimum-stock-configured")
 
                     def edit_item(_, selected=item):
                         with ui.dialog() as dialog, ui.card().classes("settings-dialog q-pa-lg"):
@@ -345,5 +352,5 @@ def store_settings_page():
 
         ui.add_css("""
         .settings-hero{border-radius:24px!important;border:1px solid #E0E8E2!important;background:linear-gradient(145deg,#EEF6F1,#FFF9EE)!important;box-shadow:none!important}
-        .settings-section{border:1px solid #E0E7E2!important;border-radius:19px!important;background:#fff!important;overflow:hidden}.settings-section>.q-item{min-height:56px;font-size:13px;font-weight:900}.settings-section .q-expansion-item__content{padding:7px 13px 15px}.settings-row{padding:9px 2px;border-bottom:1px solid #EDF1EE}.settings-dialog{width:min(92vw,440px)!important;border-radius:23px!important}.settings-qr{width:210px;height:210px;border-radius:17px;background:#fff;padding:10px;border:1px solid #E1E9E4}
+        .settings-section{border:1px solid #E0E7E2!important;border-radius:19px!important;background:#fff!important;overflow:hidden}.settings-section>.q-item{min-height:56px;font-size:13px;font-weight:900}.settings-section .q-expansion-item__content{padding:7px 13px 15px}.settings-row{padding:9px 2px;border-bottom:1px solid #EDF1EE}.settings-dialog{width:min(92vw,440px)!important;border-radius:23px!important}.settings-qr{width:210px;height:210px;border-radius:17px;background:#fff;padding:10px;border:1px solid #E1E9E4}.minimum-stock-configured{display:inline-flex;width:max-content;margin-top:3px;padding:2px 7px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900}
         """)

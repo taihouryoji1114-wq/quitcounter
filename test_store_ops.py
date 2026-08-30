@@ -322,19 +322,31 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual({item["status"] for item in self.manager.service_prep_items(
             "2026-08-20", "dinner")}, {"incomplete"})
 
-    def test_service_context_changes_only_when_manually_advanced(self):
+    def test_service_context_period_changes_manually_and_stale_date_rolls_forward(self):
         self.assertEqual(
             self.manager.active_service_context("2026-08-20", "lunch"),
             ("2026-08-20", "lunch"),
         )
         self.assertEqual(
             self.manager.active_service_context("2026-08-22", "dinner"),
-            ("2026-08-20", "lunch"),
+            ("2026-08-22", "dinner"),
         )
         self.assertEqual(self.manager.advance_service_context(),
-                         ("2026-08-20", "dinner"))
+                         ("2026-08-23", "lunch"))
         self.assertEqual(self.manager.advance_service_context(),
-                         ("2026-08-21", "lunch"))
+                         ("2026-08-23", "dinner"))
+
+    def test_future_manual_service_context_is_not_moved_back(self):
+        self.assertEqual(
+            self.manager.active_service_context("2026-08-22", "dinner"),
+            ("2026-08-22", "dinner"),
+        )
+        self.assertEqual(self.manager.advance_service_context(),
+                         ("2026-08-23", "lunch"))
+        self.assertEqual(
+            self.manager.active_service_context("2026-08-22", "dinner"),
+            ("2026-08-23", "lunch"),
+        )
 
     def test_manual_service_advance_keeps_completed_lane(self):
         prep = self.manager.add_prep_template("唐揚げ", "厨房")
