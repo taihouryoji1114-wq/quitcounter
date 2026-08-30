@@ -41,6 +41,7 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.manager.set_staff_pin("スタッフA", "１２３４")
         stored = self.data.data["store_shift_staff_pins"]["スタッフA"]
         self.assertNotIn("1234", stored.values())
+        self.assertEqual(self.manager.staff_pin_for_admin("スタッフA"), "1234")
         self.assertTrue(self.manager.has_staff_pin("スタッフA"))
         self.assertTrue(self.manager.verify_staff_pin("スタッフA", "1234"))
         self.assertFalse(self.manager.verify_staff_pin("スタッフA", "9999"))

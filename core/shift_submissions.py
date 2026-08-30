@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime
+import base64
 import hashlib
 import hmac
+import os
 import secrets
 import unicodedata
 
@@ -111,7 +113,7 @@ class ShiftSubmissionManager:
         return bool(isinstance(stored, dict) and stored.get("salt") and stored.get("digest"))
 
     def set_staff_pin(self, staff, pin):
-        """Set a staff-specific shift PIN without storing the original number."""
+        """Set a staff PIN and keep an authenticated encrypted admin-viewable copy."""
         self._staff(staff)
         value = self._clean_pin(pin)
         salt = secrets.token_hex(16)
@@ -119,9 +121,46 @@ class ShiftSubmissionManager:
             "sha256", value.encode("utf-8"), salt.encode("ascii"), 120_000,
         ).hex()
         self._data_manager.data.setdefault("store_shift_staff_pins", {})[staff] = {
-            "salt": salt, "digest": digest,
+            "salt": salt, "digest": digest, "sealed_pin": self._seal_pin(value),
         }
         self._data_manager.save()
+
+    @staticmethod
+    def _pin_secret():
+        return os.environ.get("STORAGE_SECRET", "habitory-local-pin-key").encode("utf-8")
+
+    @classmethod
+    def _seal_pin(cls, value):
+        nonce = secrets.token_bytes(16)
+        key = hashlib.sha256(cls._pin_secret() + nonce).digest()
+        encrypted = bytes(byte ^ key[index % len(key)]
+                          for index, byte in enumerate(value.encode("utf-8")))
+        payload = nonce + encrypted
+        tag = hmac.new(cls._pin_secret(), payload, hashlib.sha256).digest()[:16]
+        return base64.urlsafe_b64encode(payload + tag).decode("ascii")
+
+    @classmethod
+    def _open_pin(cls, sealed):
+        try:
+            raw = base64.urlsafe_b64decode(str(sealed).encode("ascii"))
+            payload, tag = raw[:-16], raw[-16:]
+            if not hmac.compare_digest(
+                    tag, hmac.new(cls._pin_secret(), payload, hashlib.sha256).digest()[:16]):
+                return None
+            nonce, encrypted = payload[:16], payload[16:]
+            key = hashlib.sha256(cls._pin_secret() + nonce).digest()
+            return bytes(byte ^ key[index % len(key)]
+                         for index, byte in enumerate(encrypted)).decode("utf-8")
+        except (ValueError, UnicodeError):
+            return None
+
+    def staff_pin_for_admin(self, staff):
+        """Return a PIN only for the administrator settings UI."""
+        self._staff(staff)
+        stored = self._data_manager.data.get("store_shift_staff_pins", {}).get(staff, {})
+        if not isinstance(stored, dict):
+            return None
+        return self._open_pin(stored.get("sealed_pin", ""))
 
     def verify_staff_pin(self, staff, pin):
         self._staff(staff)
