@@ -288,7 +288,8 @@ def store_dashboard_page():
                 pages, current_page, used = [], [], 0
                 for value in items:
                     weight = 2 if is_feature_item(value) else 1
-                    if current_page and used + weight > 8:
+                    # Six grid cells fit comfortably on a phone without clipping.
+                    if current_page and used + weight > 6:
                         pages.append(current_page)
                         current_page, used = [], 0
                     current_page.append(value)
@@ -443,7 +444,7 @@ def store_dashboard_page():
                                                     ui.notify("メモを保存しました", type="positive"),
                                                 ),
                                             ).props("flat dense no-caps").classes("board-note-save")
-                                        if (item.get("note_enabled") and not item.get("check_items")
+                                    if (item.get("note_enabled") and not item.get("check_items")
                                                 and not item.get("quantity_mode")
                                                 and not item.get("choice_mode")):
                                             ui.button(
@@ -457,6 +458,10 @@ def store_dashboard_page():
                                                 ),
                                             ).props("unelevated no-caps").classes(
                                                 "board-ticket-complete w-full q-mt-sm")
+                                    # Keep the dialog inside its card slot. Otherwise the hidden
+                                    # dialog itself is counted as another CSS-grid item and pushes
+                                    # visible cards off the page.
+                                    detail_dialog.move(slot)
                                     tile.on("click", lambda _, dialog=detail_dialog: dialog.open())
                                 if len(pages) > 1:
                                     ui.label(f"{page_number}/{len(pages)}").classes(
@@ -527,6 +532,16 @@ def store_dashboard_page():
         ui.add_css("""
         .store-board,.prep-board-expansion,.prep-icon-board,.prep-icon-pages{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
         .prep-icon-page>*{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+        /* Mobile live-board: six grid cells per page. Dialogs are moved out of the
+           grid in Python, so only visible cards participate in this layout. */
+        .prep-icon-page{grid-template-rows:repeat(3,126px)!important;grid-auto-rows:126px!important;height:418px!important;padding-bottom:20px!important}
+        .prep-icon-slot{height:126px!important}
+        .prep-icon{justify-content:flex-start!important;box-sizing:border-box!important;height:126px!important;min-height:126px!important;max-height:126px!important}
+        .prep-icon>.q-row{flex:0 0 auto!important}
+        .prep-icon-name{flex:0 0 auto!important;min-height:31px!important;max-height:31px!important;margin-top:5px!important}
+        .prep-icon-status{margin-top:auto!important}
+        .prep-icon-checked-preview{flex:0 0 auto!important;max-height:20px!important;line-height:1.25!important}
+        @media(min-width:700px){.prep-icon-page{grid-template-rows:repeat(2,118px)!important;grid-auto-rows:118px!important;height:269px!important;padding-bottom:22px!important}.prep-icon-slot,.prep-icon{height:118px!important;min-height:118px!important;max-height:118px!important}}
         .notice-staff-name .q-field__control{min-height:38px!important;height:38px!important}
         .notice-response-list{font-size:8px;font-weight:900;margin-top:5px;overflow-wrap:anywhere}
         .notice-history-scroll{max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:4px}
