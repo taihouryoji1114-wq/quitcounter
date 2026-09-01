@@ -120,31 +120,32 @@ def inventory_page():
         for category, category_items in grouped.items():
             with ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
                               value=False).classes("surface-card w-full q-mb-sm"):
-                for item in category_items:
-                    last_check = str(item.get("last_inventory_check_at", ""))
-                    was_reset = bool(reset_at and (not last_check or last_check <= reset_at))
-                    with ui.row().classes("inventory-row-new w-full items-center no-wrap"):
-                        with ui.column().classes("gap-0 grow min-w-0"):
-                            ui.label(item["name"]).classes("text-xs font-black")
-                            minimum = item.get("reorder_point")
-                            unit = item.get("unit", "個")
-                            if minimum is not None:
-                                minimum_text = (str(int(minimum)) if float(minimum).is_integer()
-                                                else str(minimum))
-                                ui.label(f"最低 {minimum_text}{unit}で自動仕入れ").classes(
-                                    "minimum-stock-mark")
+                with ui.element("div").classes("inventory-grid-new w-full"):
+                    for item in category_items:
+                        last_check = str(item.get("last_inventory_check_at", ""))
+                        was_reset = bool(reset_at and (not last_check or last_check <= reset_at))
+                        with ui.card().classes("inventory-item-new"):
+                            with ui.column().classes("gap-0 w-full min-w-0"):
+                                ui.label(item["name"]).classes("inventory-item-name")
+                                minimum = item.get("reorder_point")
+                                unit = item.get("unit", "個")
+                                if minimum is not None:
+                                    minimum_text = (str(int(minimum)) if float(minimum).is_integer()
+                                                    else str(minimum))
+                                    ui.label(f"最低 {minimum_text}{unit}").classes(
+                                        "minimum-stock-mark")
+                                else:
+                                    ui.label(f"単位 {unit}").classes("inventory-unit")
+                            if item.get("tracking_mode") == "count":
+                                field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
+                                                  suffix=item.get("unit", "個")).props(
+                                                      "outlined dense inputmode=decimal").classes("stock-field")
+                                fields.append((item["id"], "count", field))
                             else:
-                                ui.label(f"単位 {unit}").classes("text-[8px] text-grey-6")
-                        if item.get("tracking_mode") == "count":
-                            field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
-                                              suffix=item.get("unit", "個")).props(
-                                                  "outlined dense inputmode=decimal").classes("stock-field")
-                            fields.append((item["id"], "count", field))
-                        else:
-                            field = ui.select({"enough": "十分", "low": "少ない", "out": "なし"},
-                                              value=None if was_reset else item.get("status", "enough")).props(
-                                                  "outlined dense options-dense").classes("stock-field")
-                            fields.append((item["id"], "status", field))
+                                field = ui.select({"enough": "十分", "low": "少ない", "out": "なし"},
+                                                  value=None if was_reset else item.get("status", "enough")).props(
+                                                      "outlined dense options-dense").classes("stock-field")
+                                fields.append((item["id"], "status", field))
 
         def save_all():
             updates = [{"item_id": item_id, kind: field.value}
@@ -177,7 +178,15 @@ def inventory_page():
         if is_owner:
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
                 "/store-ops/purchase-list")).props("outline no-caps").classes("w-full q-mt-sm")
-        ui.add_css(".inventory-row-new{padding:9px 2px;border-bottom:1px solid #EDF1EE;gap:5px}.stock-field{width:110px}.minimum-stock-mark{display:inline-flex;width:max-content;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900}")
+        ui.add_css("""
+        .inventory-grid-new{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:7px 1px 10px}
+        .inventory-item-new{display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;min-height:132px;padding:11px!important;border-radius:16px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}
+        .inventory-item-name{display:-webkit-box;min-height:32px;max-height:32px;overflow:hidden;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:11px;font-weight:950;line-height:1.4;color:#17382C}
+        .inventory-unit{margin-top:3px;font-size:8px;color:#8A9690}
+        .stock-field{width:100%!important;margin-top:8px}.stock-field .q-field__control{min-height:40px!important;height:40px!important}.stock-field input{font-weight:900!important}
+        .minimum-stock-mark{display:inline-flex;width:max-content;max-width:100%;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        @media(min-width:760px){.inventory-grid-new{grid-template-columns:repeat(3,minmax(0,1fr))}.inventory-item-new{min-height:142px}.inventory-item-name{font-size:13px}}
+        """)
 
 
 @ui.page("/store-ops/hygiene")
