@@ -82,10 +82,33 @@ class StoreQuizManager:
         item = {
             "id": uuid4().hex, "title": title[:100], "details": details[:1000],
             "active": True, "created_at": datetime.now().isoformat(timespec="minutes"),
+            "acknowledgements": [], "explanation_requests": [],
         }
         self._data_manager.data.setdefault("store_business_notices", []).append(item)
         self._data_manager.save()
         return dict(item)
+
+    def respond_to_notice(self, notice_id, staff_name, needs_explanation=False):
+        staff_name = str(staff_name or "").strip()
+        if not staff_name:
+            raise ValueError("スタッフ名を入力してください。")
+        response_key = "explanation_requests" if needs_explanation else "acknowledgements"
+        opposite_key = "acknowledgements" if needs_explanation else "explanation_requests"
+        for item in self._data_manager.data.setdefault("store_business_notices", []):
+            if not isinstance(item, dict) or item.get("id") != notice_id:
+                continue
+            item.setdefault(response_key, [])
+            item.setdefault(opposite_key, [])
+            item[opposite_key] = [value for value in item[opposite_key]
+                                  if value.get("name") != staff_name]
+            if not any(value.get("name") == staff_name for value in item[response_key]):
+                item[response_key].append({
+                    "name": staff_name[:40],
+                    "at": datetime.now().isoformat(timespec="minutes"),
+                })
+            self._data_manager.save()
+            return
+        raise ValueError("業務連絡が見つかりません。")
 
     def close_notice(self, notice_id):
         for item in self._data_manager.data.setdefault("store_business_notices", []):

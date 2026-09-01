@@ -4,7 +4,7 @@ import pytest
 
 from core.chankocchi import (affection_label, can_depart, care, feed,
                              claim_store_reward, has_store_activity, initial_profile,
-                             start_next_generation)
+                             life_routine, start_next_generation)
 
 
 def test_care_rewards_only_once_per_action_and_day():
@@ -64,3 +64,17 @@ def test_food_choice_is_saved_and_changes_hunger():
     feed(profile, "fish", "2026-08-23")
     assert profile["last_food"] == "fish"
     assert profile["meters"]["hunger"] == 38
+
+
+def test_life_routine_follows_needs_before_time_of_day():
+    profile = initial_profile()
+    profile["meters"]["hunger"] = 10
+    routine = life_routine(profile, datetime(2026, 8, 30, 23, 0))
+    assert routine["action"] == "wait_food"
+    assert routine["period"] == "night"
+
+
+def test_life_routine_sleeps_at_night_when_content():
+    profile = initial_profile()
+    routine = life_routine(profile, datetime(2026, 8, 30, 23, 0))
+    assert routine["action"] == "sleepy"

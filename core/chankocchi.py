@@ -159,6 +159,29 @@ def current_wish(profile):
     return profile.get("last_speech") or "なにする？"
 
 
+def life_routine(profile, now=None):
+    """Choose the creature's current autonomous routine from needs and local time."""
+    now = now or datetime.now()
+    meters = profile.get("meters", {})
+    hunger = int(meters.get("hunger", 70))
+    joy = int(meters.get("joy", 70))
+    clean = int(meters.get("cleanliness", 70))
+    hour = now.hour
+    period = ("morning" if 5 <= hour < 11 else "day" if 11 <= hour < 17
+              else "evening" if 17 <= hour < 22 else "night")
+    if hunger < 36:
+        return {"action": "wait_food", "label": "ごはんを待ってる", "period": period}
+    if clean < 28:
+        return {"action": "want_bath", "label": "お風呂が気になる", "period": period}
+    if joy < 36:
+        return {"action": "seek_play", "label": "遊び相手を探してる", "period": period}
+    if period == "night":
+        return {"action": "sleepy", "label": "うとうとしてる", "period": period}
+    if period == "morning":
+        return {"action": "window", "label": "朝の外を見てる", "period": period}
+    return {"action": "wander", "label": "自由に過ごしてる", "period": period}
+
+
 def claim_store_reward(profile, business_date, now=None):
     normalize_profile(profile, now)
     if business_date in profile["store_reward_dates"]:

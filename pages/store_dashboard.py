@@ -36,17 +36,51 @@ def store_dashboard_page():
                         if notice.get("details"):
                             ui.label(notice["details"]).classes(
                                 "text-[10px] text-grey-7 whitespace-pre-wrap q-mt-xs")
+                        staff_name = ui.input("確認するスタッフ名").props(
+                            "outlined dense autocomplete=off").classes(
+                                "notice-staff-name w-full q-mt-sm")
+
+                        def notice_response(needs_explanation, selected=notice, field=staff_name):
+                            try:
+                                store_quiz.respond_to_notice(
+                                    selected["id"], field.value, needs_explanation)
+                            except ValueError as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            ui.notify(
+                                "説明依頼を送りました" if needs_explanation else "確認済みにしました",
+                                type="positive")
+                            ui.navigate.to("/store-ops")
+
+                        with ui.row().classes("w-full gap-2 q-mt-xs"):
+                            ui.button("確認済み", icon="check",
+                                      on_click=lambda _, fn=notice_response: fn(False)).props(
+                                          "unelevated dense no-caps").classes("grow")
+                            ui.button("説明を求める", icon="help_outline",
+                                      on_click=lambda _, fn=notice_response: fn(True)).props(
+                                          "outline dense no-caps color=warning").classes("grow")
+                        acknowledgements = notice.get("acknowledgements", [])
+                        explanation_requests = notice.get("explanation_requests", [])
+                        if acknowledgements:
+                            ui.label("確認済み：" + "、".join(
+                                value.get("name", "") for value in acknowledgements)).classes(
+                                    "notice-response-list text-positive")
+                        if explanation_requests:
+                            ui.label("説明希望：" + "、".join(
+                                value.get("name", "") for value in explanation_requests)).classes(
+                                    "notice-response-list text-warning")
         notice_history = [item for item in store_quiz.notices(include_closed=True)
                           if not item.get("active", True)]
         if notice_history:
             with ui.expansion(f"過去の業務連絡　{len(notice_history)}件", icon="history",
                               value=False).classes("notice-history w-full q-mb-sm"):
-                for notice in reversed(notice_history):
-                    with ui.column().classes("w-full gap-0 q-py-xs"):
-                        ui.label(notice["title"]).classes("text-xs font-black")
-                        if notice.get("details"):
-                            ui.label(notice["details"]).classes(
-                                "text-[9px] text-grey-6 whitespace-pre-wrap")
+                with ui.element("div").classes("notice-history-scroll w-full"):
+                    for notice in reversed(notice_history):
+                        with ui.column().classes("w-full gap-0 q-py-xs"):
+                            ui.label(notice["title"]).classes("text-xs font-black")
+                            if notice.get("details"):
+                                ui.label(notice["details"]).classes(
+                                    "text-[9px] text-grey-6 whitespace-pre-wrap")
         year, month, day = (int(value) for value in business_date.split("-"))
         ui.label(f"{month}月{day}日　TODAY'S OPERATION").classes(
             "today-ribbon w-full")
@@ -165,7 +199,7 @@ def store_dashboard_page():
                     action.set_visibility(False)
                 summary_state["pending"] = max(0, summary_state["pending"] - 1)
                 summary_state["done"] += 1
-                pending_summary.set_text(f"未完了 {summary_state['pending']}件")
+                pending_summary.set_text(str(summary_state["pending"]))
                 done_summary.set_text(f"完了済み {summary_state['done']}件")
 
             def save_rice_choice(item, choice):
@@ -206,8 +240,9 @@ def store_dashboard_page():
                 switch_dialog.open()
 
             with ui.row().classes("w-full items-center gap-2 q-mt-sm"):
-                pending_summary = ui.label(f"未完了 {len(pending_items)}件").classes(
-                    "board-summary pending")
+                pending_summary = ui.label(str(len(pending_items))).classes(
+                    "board-count-badge")
+                ui.label("未完了").classes("board-count-caption")
                 done_summary = ui.label(f"完了済み {len(done_items)}件").classes(
                     "board-summary done")
 
@@ -369,7 +404,7 @@ def store_dashboard_page():
                                                     summary_state["pending"] += -1 if complete else 1
                                                     summary_state["done"] += 1 if complete else -1
                                                     pending_summary.set_text(
-                                                        f"未完了 {summary_state['pending']}件")
+                                                        str(summary_state["pending"]))
                                                     done_summary.set_text(
                                                         f"完了済み {summary_state['done']}件")
                                             for _, field in check_fields:
@@ -422,7 +457,6 @@ def store_dashboard_page():
                                                 ),
                                             ).props("unelevated no-caps").classes(
                                                 "board-ticket-complete w-full q-mt-sm")
-                                    detail_dialog.move(slot)
                                     tile.on("click", lambda _, dialog=detail_dialog: dialog.open())
                                 if len(pages) > 1:
                                     ui.label(f"{page_number}/{len(pages)}").classes(
@@ -448,10 +482,14 @@ def store_dashboard_page():
         with ui.element("div").classes("store-app-grid w-full q-mt-md"):
             app_card("在庫確認", "現在数をまとめて入力", "inventory_2",
                      "/store-ops/inventory", "text-emerald-7")
+            open_handovers = sum(
+                1 for item in store_ops.handovers(business_date)
+                if not item.get("confirmed", False))
+            open_requests = len(store_ops.order_requests(open_only=True))
             app_card("自由引き継ぎ", "申し送りを記録・確認", "edit_note",
-                     "/store-ops/handover", "text-amber-8")
+                     "/store-ops/handover", "text-amber-8", open_handovers)
             app_card("発注依頼", "必要な物をその場で共有", "add_shopping_cart",
-                     "/store-ops/order-requests", "text-red-7")
+                     "/store-ops/order-requests", "text-red-7", open_requests)
             app_card("シフト提出", "半月ごとの勤務希望", "calendar_month",
                      "/store-ops/shift-submission", "text-blue-7")
 
@@ -485,6 +523,16 @@ def store_dashboard_page():
         .board-choice-row .q-btn{min-height:27px!important;font-size:8px!important;border-radius:8px!important}
         .board-expansion .q-expansion-item__content{contain:content}.board-expansion .q-transition--slide-enter-active,.board-expansion .q-transition--slide-leave-active{transition:none!important;animation:none!important}.board-row{box-shadow:0 2px 7px rgba(8,31,23,.08)!important}
         .prep-board-expansion{border-radius:17px!important;background:rgba(5,29,21,.19)!important;border:1px solid rgba(255,255,255,.13)!important}.prep-board-expansion>.q-expansion-item__container>.q-item{min-height:44px!important;color:#fff!important;font-size:11px;font-weight:950}.prep-board-expansion .q-expansion-item__content{padding:1px 7px 8px}.prep-icon-board{padding:8px 1px 2px!important;gap:7px!important;touch-action:pan-x pan-y}.prep-icon-guide{font-size:9px;font-weight:900;opacity:.78}.board-swipe-hint{font-size:8px;font-weight:800;opacity:.68}.prep-icon-pages{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x pan-y;padding:2px 0 7px}.prep-icon-pages::-webkit-scrollbar{display:none}.prep-icon-page{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,108px);grid-auto-flow:row dense;grid-auto-rows:108px;align-content:start;gap:9px;flex:0 0 100%;width:100%;min-width:100%;max-width:100%;height:483px;box-sizing:border-box;overflow:hidden;scroll-snap-align:start;scroll-snap-stop:always;padding:2px 2px 22px}.prep-icon-slot{min-width:0;width:100%;height:108px}.prep-icon-feature-slot{grid-column:span 2}.prep-icon{position:relative!important;display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;width:100%!important;height:108px!important;min-height:108px!important;max-height:108px!important;overflow:hidden!important;padding:10px!important;cursor:pointer;border-radius:20px!important;color:#17382c!important;background:linear-gradient(145deg,rgba(255,255,255,.99),rgba(225,238,230,.97))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:0 7px 16px rgba(1,24,17,.18)!important;transition:transform .16s ease,background .2s ease,color .2s ease!important;-webkit-tap-highlight-color:transparent;user-select:none}.prep-icon:active{transform:scale(.96)}.prep-icon-feature{background:linear-gradient(135deg,#fffdf7,#f4ead1)!important;border-color:#f1d99f!important}.prep-icon-completed{color:#563b05!important;background:linear-gradient(145deg,#ffe991,#d9ac36)!important;border-color:#ffe286!important;box-shadow:0 7px 18px rgba(129,82,6,.23)!important}.prep-icon-progress{color:#5a3b05!important;background:linear-gradient(145deg,#fff2cc,#f0c574)!important;border-color:#f4d290!important}.prep-icon-symbol{font-size:22px!important;color:#2b7757}.prep-icon-completed .prep-icon-symbol,.prep-icon-progress .prep-icon-symbol{color:#855b08}.prep-icon-badge{font-size:17px!important;color:#a66c12}.prep-icon-name{display:-webkit-box;max-width:100%;max-height:34px;font-size:12px;font-weight:950;line-height:1.3;overflow:hidden;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}.prep-icon-status{flex:0 0 auto;max-width:100%;font-size:9px;font-weight:900;line-height:1.2;opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.prep-icon-checked-preview{display:-webkit-box;width:100%;max-height:21px;overflow:hidden;font-size:8px;font-weight:850;line-height:1.3;color:#806529;text-decoration:line-through;white-space:normal;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}.prep-page-number{position:absolute;left:50%;bottom:1px;transform:translateX(-50%);font-size:8px;font-weight:900;opacity:.62}.prep-page-controls{gap:4px!important;margin-top:-5px}.prep-page-controls .q-btn{color:#fff!important}.prep-detail-dialog{width:min(92vw,430px)!important;max-height:88vh;overflow-y:auto;border-radius:25px!important}.board-subcheck{font-size:11px;font-weight:850;padding:5px 2px;border-bottom:1px solid #eee}.board-subcheck:has(.q-checkbox__inner--truthy) .q-checkbox__label{text-decoration:line-through;color:#8b948f}.board-note .q-field__control{background:rgba(255,255,255,.88);border-radius:10px}.board-note-save{align-self:flex-end;color:#246A4E!important;font-size:8px!important}.notice-history{border:1px solid #E4E9E5!important;border-radius:16px!important;background:rgba(255,255,255,.9)!important}.notice-history .q-expansion-item__content{padding:3px 14px 10px}@media(min-width:700px){.prep-icon-page{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,118px);grid-auto-rows:118px;height:269px}.prep-icon-slot,.prep-icon,.prep-icon-feature{height:118px!important;min-height:118px!important;max-height:118px!important}.prep-icon-name{font-size:14px}}
+        """)
+        ui.add_css("""
+        .store-board,.prep-board-expansion,.prep-icon-board,.prep-icon-pages{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+        .prep-icon-page>*{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+        .notice-staff-name .q-field__control{min-height:38px!important;height:38px!important}
+        .notice-response-list{font-size:8px;font-weight:900;margin-top:5px;overflow-wrap:anywhere}
+        .notice-history-scroll{max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:4px}
+        .store-app-badge{position:absolute;z-index:3;right:13px;top:12px;display:grid;place-items:center;min-width:25px;height:25px;padding:0 7px;border-radius:999px;background:#E43F3F;color:#fff;font-size:11px;font-weight:950;box-shadow:0 4px 10px rgba(167,26,26,.28)}
+        .board-count-badge{display:grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:999px;background:#E84646;color:#fff;font-size:11px;font-weight:950;box-shadow:0 4px 10px rgba(0,0,0,.18)}
+        .board-count-caption{font-size:9px;font-weight:900;opacity:.82}
         """)
         ui.run_javascript("""
         requestAnimationFrame(() => {

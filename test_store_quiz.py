@@ -45,6 +45,16 @@ class StoreQuizManagerTest(unittest.TestCase):
         self.assertFalse(history[0]["active"])
         self.assertTrue(history[0]["closed_at"])
 
+    def test_notice_responses_are_saved_and_can_be_changed(self):
+        item = self.manager.add_notice("重要連絡", "内容")
+        self.manager.respond_to_notice(item["id"], "スタッフA")
+        notice = self.manager.notices()[0]
+        self.assertEqual(notice["acknowledgements"][0]["name"], "スタッフA")
+        self.manager.respond_to_notice(item["id"], "スタッフA", needs_explanation=True)
+        notice = self.manager.notices()[0]
+        self.assertEqual(notice["acknowledgements"], [])
+        self.assertEqual(notice["explanation_requests"][0]["name"], "スタッフA")
+
 
 if __name__ == "__main__":
     unittest.main()
