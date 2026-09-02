@@ -4,6 +4,7 @@ from core.auth import current_role, has_permission, require_app_access
 from core.clock import operational_date_jst, store_service_period_jst
 from core.store_ops import store_ops
 from core.store_quiz import store_quiz
+from core.staffing import staffing
 from core.theme import Theme
 from pages.store_common import app_card, store_header_actions
 
@@ -36,8 +37,9 @@ def store_dashboard_page():
                         if notice.get("details"):
                             ui.label(notice["details"]).classes(
                                 "text-[10px] text-grey-7 whitespace-pre-wrap q-mt-xs")
-                        staff_name = ui.input("確認するスタッフ名").props(
-                            "outlined dense autocomplete=off").classes(
+                        staff_name = ui.select(
+                            list(staffing.STAFF), label="確認するスタッフ名").props(
+                            "outlined dense options-dense").classes(
                                 "notice-staff-name w-full q-mt-sm")
 
                         def notice_response(needs_explanation, selected=notice, field=staff_name):

@@ -605,29 +605,23 @@ class StoreOperationsManager:
             self._data_manager.save()
 
     def active_service_context(self, default_date, default_period):
-        """Return the active checklist date and manually controlled service period.
+        """Return the checklist context selected by staff.
 
-        Lunch/dinner switching stays manual, but an old operating date must not remain
-        on the live board forever when nobody closed the previous service.  Moving the
-        context forward does not reset or delete the previous day's records.
+        Once initialized, both the operating date and lunch/dinner period stay fixed
+        until ``advance_service_context`` is used.  This prevents a date change from
+        making completed work appear to have reset itself.
         """
         context = self._data_manager.data.get("store_active_service_context", {})
         record_date = str(context.get("date", ""))
         period = str(context.get("period", ""))
         changed = False
         try:
-            active_day = self._date(record_date)
+            self._date(record_date)
             self._service_period(period)
         except (TypeError, ValueError):
             record_date = str(default_date)
             period = self._service_period(default_period)
             changed = True
-        else:
-            default_day = self._date(str(default_date))
-            if active_day < default_day:
-                record_date = str(default_date)
-                period = self._service_period(default_period)
-                changed = True
         if changed:
             self._data_manager.data["store_active_service_context"] = {
                 "date": record_date, "period": period,
