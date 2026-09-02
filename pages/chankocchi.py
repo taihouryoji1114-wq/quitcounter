@@ -112,6 +112,10 @@ def chankocchi_page():
                     ui.element('div').classes('living-trace trace-cup')
                     ui.element('div').classes('chanko-character pose-sit').props(
                         'aria-label="部屋で暮らすちゃんこっち" role="button" tabindex="0"')
+                    with ui.element('div').classes('pet-quick-actions'):
+                        ui.button(icon='restaurant', on_click=food_dialog.open).props('round unelevated aria-label="ごはん"').classes('pet-action pet-food')
+                        ui.button(icon='sports_esports', on_click=open_game).props('round unelevated aria-label="あそぶ"').classes('pet-action pet-play')
+                        ui.button(icon='bathtub', on_click=do_bath).props('round unelevated aria-label="お風呂"').classes('pet-action pet-bath')
                     ui.element('div').classes('actor-shadow')
                     if mode == 'eating':
                         with ui.element('div').classes('meal-bowl'):
@@ -181,6 +185,7 @@ CHANKO_CSS = '''
 .speech-bubble{position:absolute;z-index:10;top:88px;left:18px;max-width:58%;padding:11px 14px;border-radius:17px 17px 17px 5px;background:rgba(255,255,255,.9);box-shadow:0 5px 18px rgba(61,37,18,.12);font-size:12px;font-weight:900;color:#46352A;backdrop-filter:blur(7px)}
 .life-status{position:absolute;z-index:10;right:18px;top:91px;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:rgba(49,39,30,.66);color:white;backdrop-filter:blur(7px);font-size:9px;font-weight:850}.life-status-dot{width:7px;height:7px;border-radius:50%;background:#91E4A7;box-shadow:0 0 0 4px rgba(145,228,167,.14);animation:alive-pulse 2.2s ease-in-out infinite}.sunbeam{position:absolute;z-index:1;left:39%;top:14%;width:30%;height:67%;background:linear-gradient(115deg,rgba(255,239,177,.18),transparent 70%);transform:skewX(-13deg);pointer-events:none;animation:sun-shift 12s ease-in-out infinite alternate}.living-trace{display:none}
 .chanko-character{position:absolute!important;z-index:6;width:88px!important;height:88px!important;left:18%;bottom:18%;background-image:url('/static/chankocchi_egg_sprites_v1.png');background-repeat:no-repeat;background-size:400% 100%;filter:sepia(.05) saturate(.93) drop-shadow(0 7px 4px rgba(49,29,16,.25));transition:left 4.8s cubic-bezier(.42,0,.58,1),bottom 4.8s ease,scale 1.2s ease;transform-origin:50% 94%;will-change:left,bottom,transform}
+.pet-quick-actions{position:absolute;z-index:18;left:18%;bottom:calc(18% + 88px);display:flex;gap:7px;opacity:0;pointer-events:none;transform:translate(-18px,12px) scale(.82);transition:left 4.8s cubic-bezier(.42,0,.58,1),bottom 4.8s ease,opacity .18s ease,transform .22s ease}.quick-open .pet-quick-actions{opacity:1;pointer-events:auto;transform:translate(-18px,0) scale(1)}.pet-action{width:42px!important;height:42px!important;min-width:42px!important;color:#49372A!important;background:rgba(255,249,232,.96)!important;border:2px solid rgba(255,255,255,.78)!important;box-shadow:0 7px 18px rgba(45,25,12,.24)!important}.pet-food{color:#D47636!important}.pet-play{color:#4B87A4!important}.pet-bath{color:#4D9D9B!important}
 .actor-shadow{position:absolute;z-index:5;left:39%;bottom:17%;width:76px;height:17px;border-radius:50%;background:rgba(45,25,13,.2);filter:blur(3px);transition:left 3.8s cubic-bezier(.42,0,.58,1),bottom 3.8s ease,width 1s;pointer-events:none}
 .pose-walk-a{background-position:0 0}.pose-walk-b{background-position:33.333% 0}.pose-sit{background-position:66.666% 0;animation:living-breath 3.8s ease-in-out infinite}.pose-sleep{background-position:100% 0;animation:sleep-breath 4.8s ease-in-out infinite}.is-walking{animation:step-bob .42s ease-in-out infinite}.facing-left{transform:scaleX(-1)}
 .is-looking{animation:curious-look 1.8s ease-in-out}.is-excited{animation:happy-hop .48s ease-in-out 3}.is-grooming{animation:groom 1.1s ease-in-out 2}.is-listening{animation:ear-listen .8s ease-in-out 2}
@@ -204,6 +209,7 @@ CHANKO_LIFE_SCRIPT = r'''
   const room = actor.closest('.life-room');
   const viewport = actor.closest('.life-viewport');
   const shadow = room.querySelector('.actor-shadow');
+  const quickActions = room.querySelector('.pet-quick-actions');
   const bubble = room.querySelector('.speech-bubble .q-label');
   const status = room.querySelector('.life-status-label');
   const routine = room.dataset.routine || 'wander';
@@ -213,12 +219,12 @@ CHANKO_LIFE_SCRIPT = r'''
     kitchen: {left: '35%', bottom:'18%', stay:[4200, 7600], pose:'sit',   scale:.91, room:'kitchen', label:'台所の匂いを気にしてる'},
     table:   {left: '46%', bottom:'17%', stay:[5000, 9000], pose:'sit',   scale:.94, room:'kitchen', label:'テーブルのそばでのんびり'},
     bed:     {left: '61%', bottom:'18%', stay:[9000,15000], pose:'sleep', scale:.84, room:'bedroom', label:'お布団でうとうとしてる'},
-    bath:    {left: '72%', bottom:'18%', stay:[3800, 6500], pose:'sit',   scale:.84, room:'bedroom', label:'お風呂をのぞいてる'},
+    dresser: {left: '70%', bottom:'18%', stay:[3800, 6500], pose:'sit',   scale:.84, room:'bedroom', label:'寝室で身づくろいしてる'},
     garden:  {left: '87%', bottom:'17%', stay:[6200,11000], pose:'sit',   scale:.90, room:'garden',  label:'庭のお花を見てる'},
   };
   const keys = Object.keys(places);
   const preferred = {
-    wait_food:['kitchen','table'], want_bath:['bath','bed'], seek_play:['garden','sofa'],
+    wait_food:['kitchen','table'], want_bath:['dresser','bed'], seek_play:['garden','sofa'],
     sleepy:['bed','sofa'], window:['window','garden'], wander:keys,
   };
   let current = sessionStorage.getItem('chankocchi-place');
@@ -249,6 +255,7 @@ CHANKO_LIFE_SCRIPT = r'''
     const destination = places[next];
     const goingLeft = keys.indexOf(next) < keys.indexOf(current);
     actor.classList.toggle('facing-left', goingLeft);
+    room.classList.remove('quick-open');
     actor.classList.add('is-walking');
     actor.style.scale = destination.scale;
     if (status) status.textContent = 'とことこ移動中';
@@ -262,10 +269,7 @@ CHANKO_LIFE_SCRIPT = r'''
       actor.style.left = destination.left;
       actor.style.bottom = destination.bottom;
       if (shadow) { shadow.style.left = `calc(${destination.left} + 12px)`; shadow.style.bottom = destination.bottom; }
-      if (room && viewport) {
-        const targetX = parseFloat(destination.left) / 100 * room.clientWidth;
-        viewport.scrollTo({left: Math.max(0, targetX - viewport.clientWidth / 2), behavior: 'smooth'});
-      }
+      if (quickActions) { quickActions.style.left = destination.left; quickActions.style.bottom = `calc(${destination.bottom} + 88px)`; }
     });
     window.__chankoLifeTimer = setTimeout(() => {
       clearInterval(window.__chankoStepTimer);
@@ -298,14 +302,15 @@ CHANKO_LIFE_SCRIPT = r'''
   const start = places[current];
   actor.style.left=start.left; actor.style.bottom=start.bottom; actor.style.scale=start.scale;
   if (shadow) { shadow.style.left=`calc(${start.left} + 12px)`; shadow.style.bottom=start.bottom; }
+  if (quickActions) { quickActions.style.left=start.left; quickActions.style.bottom=`calc(${start.bottom} + 88px)`; }
   settle(current);
   actor.onclick = () => {
     if (busy) return;
+    room.classList.toggle('quick-open');
     actor.classList.remove('is-looking','is-grooming','is-listening');
     actor.classList.add('is-excited');
     say(routine==='wait_food' ? 'お腹すいた！' : routine==='seek_play' ? 'あそぼ！' : '呼んだ？');
     setTimeout(()=>actor.classList.remove('is-excited'),1700);
-    setTimeout(()=>document.querySelector('.chanko-app')?.classList.add('menu-open'),350);
   };
   actor.onkeydown = event => { if(event.key==='Enter'||event.key===' '){event.preventDefault();actor.click();} };
   document.querySelectorAll('.room-jump').forEach(button => {
@@ -313,13 +318,13 @@ CHANKO_LIFE_SCRIPT = r'''
       const candidates = keys.filter(key => places[key].room === button.dataset.room);
       const destination = candidates[Math.floor(Math.random() * candidates.length)];
       if (!destination) return;
-      if (destination === current) {
-        const x = parseFloat(places[destination].left) / 100 * room.clientWidth;
-        viewport.scrollTo({left: Math.max(0, x - viewport.clientWidth / 2), behavior:'smooth'});
-        return;
-      }
-      moveTo(destination);
+      const x = parseFloat(places[destination].left) / 100 * room.clientWidth;
+      viewport.scrollTo({left: Math.max(0, x - viewport.clientWidth / 2), behavior:'smooth'});
+      room.classList.remove('quick-open');
     };
+  });
+  room.addEventListener('click', event => {
+    if (event.target === room) room.classList.remove('quick-open');
   });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && !busy) { idleMoment(); say('おかえり！'); }
