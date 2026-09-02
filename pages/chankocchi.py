@@ -81,6 +81,9 @@ def chankocchi_page():
         except ValueError as error:
             ui.notify(str(error), type='warning')
 
+    def toggle_life_menu():
+        ui.run_javascript("document.querySelector('.chanko-app')?.classList.toggle('menu-open')")
+
     @ui.refreshable
     def render():
         stage = stage_info(profile); progress, progress_label = next_stage_progress(profile)
@@ -123,31 +126,38 @@ def chankocchi_page():
                             ('bedroom', '寝室', 'bedtime'), ('garden', '庭', 'local_florist')):
                         ui.button(room_label, icon=room_icon).props(
                             f'flat no-caps data-room="{room_key}"').classes('room-jump')
-            with ui.element('div').classes('life-control-panel'):
-                with ui.element('div').classes('meter-grid'):
-                    for key, label in {'hunger':'おなか','cleanliness':'お風呂','joy':'ごきげん'}.items():
-                        with ui.element('div').classes('meter-card'):
-                            ui.label(label); ui.linear_progress(profile['meters'][key] / 100).props('rounded color=amber-7')
-                with ui.element('div').classes('care-grid'):
-                    ui.button('ごはん', icon='restaurant', on_click=food_dialog.open).props('flat no-caps').classes('care-button')
-                    ui.button('あそぶ', icon='sports_esports', on_click=open_game).props('flat no-caps').classes('care-button')
-                    ui.button('お風呂', icon='bathtub', on_click=do_bath).props('flat no-caps').classes('care-button')
-            ui.label('暮らしメニュー').classes('life-menu-title')
-            with ui.element('div').classes('life-menu-grid'):
-                with ui.card().classes('growth-card w-full'):
-                    with ui.row().classes('w-full items-center no-wrap'):
-                        with ui.column().classes('gap-0 grow'):
-                            ui.label('成長のきろく').classes('font-black'); ui.label(progress_label).classes('text-xs text-grey-6')
-                        ui.label('ちゃんタマあり' if profile.get('egg_ready') else '成長中').classes('growing-chip')
-                    ui.linear_progress(progress).props('rounded color=deep-orange-5').classes('q-mt-sm')
-                with ui.card().classes('store-link w-full'):
-                    ui.label('今日のお仕事').classes('font-black')
-                    ui.label('厨房ライブボードとタスクの実績を確認します').classes('text-[10px] opacity-80')
-                    with ui.row().classes('w-full gap-2 q-mt-sm'):
-                        ui.button('店舗運営へ', icon='storefront', on_click=open_store).props('flat no-caps').classes('grow store-open')
-                        reward_label = '受取済' if today_claimed else '+10枚' if store_done else '未達成'
-                        ui.button(reward_label, on_click=store_reward).props('unelevated no-caps').classes('store-reward').set_enabled(not today_claimed)
-            if can_depart(profile): ui.button('次の世代を迎える', on_click=next_generation).props('unelevated no-caps color=deep-orange-7').classes('w-full q-mt-md')
+            ui.button(icon='menu', on_click=toggle_life_menu).props('round unelevated aria-label="暮らしメニュー"').classes('life-menu-fab')
+            ui.element('button').classes('life-sheet-shade').on('click', toggle_life_menu).props('aria-label="メニューを閉じる"')
+            with ui.element('aside').classes('life-sheet'):
+                with ui.row().classes('w-full items-center no-wrap life-sheet-head'):
+                    with ui.column().classes('gap-0 grow'):
+                        ui.label('ちゃんこっちのお世話').classes('text-lg font-black')
+                        ui.label(f"{profile['generation']}代目・{stage['name']}").classes('text-xs text-grey-6')
+                    ui.button(icon='close', on_click=toggle_life_menu).props('round flat aria-label="閉じる"')
+                with ui.element('div').classes('life-control-panel'):
+                    with ui.element('div').classes('meter-grid'):
+                        for key, label in {'hunger':'おなか','cleanliness':'お風呂','joy':'ごきげん'}.items():
+                            with ui.element('div').classes('meter-card'):
+                                ui.label(label); ui.linear_progress(profile['meters'][key] / 100).props('rounded color=amber-7')
+                    with ui.element('div').classes('care-grid'):
+                        ui.button('ごはん', icon='restaurant', on_click=food_dialog.open).props('flat no-caps').classes('care-button')
+                        ui.button('あそぶ', icon='sports_esports', on_click=open_game).props('flat no-caps').classes('care-button')
+                        ui.button('お風呂', icon='bathtub', on_click=do_bath).props('flat no-caps').classes('care-button')
+                with ui.element('div').classes('life-menu-grid'):
+                    with ui.card().classes('growth-card w-full'):
+                        with ui.row().classes('w-full items-center no-wrap'):
+                            with ui.column().classes('gap-0 grow'):
+                                ui.label('成長のきろく').classes('font-black'); ui.label(progress_label).classes('text-xs text-grey-6')
+                            ui.label('ちゃんタマあり' if profile.get('egg_ready') else '成長中').classes('growing-chip')
+                        ui.linear_progress(progress).props('rounded color=deep-orange-5').classes('q-mt-sm')
+                    with ui.card().classes('store-link w-full'):
+                        ui.label('今日のお仕事').classes('font-black')
+                        ui.label('厨房ライブボードとタスクの実績を確認します').classes('text-[10px] opacity-80')
+                        with ui.row().classes('w-full gap-2 q-mt-sm'):
+                            ui.button('店舗運営へ', icon='storefront', on_click=open_store).props('flat no-caps').classes('grow store-open')
+                            reward_label = '受取済' if today_claimed else '+10枚' if store_done else '未達成'
+                            ui.button(reward_label, on_click=store_reward).props('unelevated no-caps').classes('store-reward').set_enabled(not today_claimed)
+                if can_depart(profile): ui.button('次の世代を迎える', on_click=next_generation).props('unelevated no-caps color=deep-orange-7').classes('w-full q-mt-md')
         ui.add_css(CHANKO_CSS)
         if mode == 'living':
             ui.run_javascript(CHANKO_LIFE_SCRIPT)
@@ -178,8 +188,10 @@ CHANKO_CSS = '''
 .action-prop{position:absolute;z-index:8}.play-prop{font-size:32px;left:50%;bottom:39%}.meal-bowl{position:absolute;z-index:8;left:64%;bottom:25%;width:54px;height:20px;border-radius:5px 5px 24px 24px;background:linear-gradient(#F8F1DF 0 28%,#31536B 29% 45%,#E8DED0 46%);box-shadow:0 5px 8px rgba(54,30,14,.25)}.meal-bowl:after{content:'';position:absolute;left:7px;right:7px;top:-5px;height:9px;border-radius:50%;background:#A96539;box-shadow:inset 0 2px #F4C06A}.steam{position:absolute;top:-23px;width:7px;height:20px;border-left:2px solid rgba(255,255,255,.84);border-radius:50%;animation:steam-rise 1.6s ease-in-out infinite}.steam-one{left:16px}.steam-two{left:32px;animation-delay:-.7s}.bath-tub{position:absolute;z-index:7;right:2.2%;bottom:15%;width:113px;height:57px;border-radius:15px 15px 34px 34px;background:linear-gradient(180deg,#EAF4F4,#99BEC2);border:4px solid #F6FFFF;box-shadow:0 7px 12px rgba(25,45,49,.24)}.bath-tub:before{content:'';position:absolute;left:5px;right:5px;top:-9px;height:18px;border-radius:50%;background:#CDE8E8;border:3px solid white}.bath-bubbles{position:absolute;z-index:9;right:6%;bottom:26%;width:65px;height:34px;background:radial-gradient(circle at 14% 65%,#fff 0 6px,transparent 7px),radial-gradient(circle at 37% 38%,#fff 0 8px,transparent 9px),radial-gradient(circle at 62% 62%,#fff 0 7px,transparent 8px),radial-gradient(circle at 85% 31%,#fff 0 6px,transparent 7px);animation:bubble-float 1.8s ease-in-out infinite}
 .room-map{position:sticky;z-index:24;left:50%;bottom:80px;display:flex;width:max-content;gap:3px;padding:5px;border-radius:18px;background:rgba(50,36,27,.68);backdrop-filter:blur(12px);transform:translateX(-50%);box-shadow:0 8px 24px rgba(30,18,10,.2)}.room-jump{min-height:34px!important;padding:0 7px!important;border-radius:13px!important;color:#fff!important;font-size:9px!important}.room-jump.is-current{background:rgba(255,224,154,.94)!important;color:#563D28!important}
 .life-control-panel{position:relative;z-index:20;width:min(calc(100% - 24px),680px);margin:-66px auto 0;padding:13px;border-radius:25px;background:rgba(255,250,239,.88);border:1px solid rgba(255,255,255,.72);box-shadow:0 15px 38px rgba(78,48,28,.16);backdrop-filter:blur(16px)}.meter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 0 9px}.meter-card{padding:9px 8px;border-radius:14px;background:rgba(255,255,255,.72);font-size:9px;font-weight:900;color:#725945}.care-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.care-button{background:#fff!important;color:#543E30!important;min-height:53px!important;border-radius:16px!important}.life-menu-title{display:block;width:min(calc(100% - 32px),680px);margin:24px auto 8px;font-size:17px;font-weight:950;color:#49382D}.life-menu-grid{display:grid;grid-template-columns:1fr;gap:11px;width:min(calc(100% - 32px),680px);margin:0 auto}.growth-card,.store-link{margin-top:0;padding:15px!important;border-radius:21px!important;border:1px solid rgba(120,81,51,.12)!important;box-shadow:0 8px 22px rgba(93,61,39,.07)!important}.growing-chip{font-size:9px;font-weight:900;padding:6px 9px;border-radius:999px;background:#E8EFEA;color:#52685A}.store-link{background:linear-gradient(135deg,#284E3E,#4E8064)!important;color:#fff!important}.store-open{color:white!important}.store-reward{background:#FFE09A!important;color:#5C421B!important}.choice-dialog{width:min(92vw,440px)!important;padding:22px!important;border-radius:25px!important}.food-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:12px}.food-choice{min-height:58px!important;border-radius:16px!important;background:#FFF7E5!important;color:#49382D!important}.mini-area{position:relative;height:260px;margin-top:12px;border-radius:20px;background:linear-gradient(#BDE4EC,#F7E0A7 65%,#8FC574 65%);overflow:hidden}.mini-target{position:absolute!important;left:42%;top:38%;font-size:27px!important;transition:left .15s,top .15s}.mini-score{text-align:center;font-size:19px;font-weight:950;color:#5C421B}
+.chanko-app{position:fixed;z-index:1;inset:0;height:100dvh;width:100%;margin:0;padding:0;background:#4A2F1D;overflow:hidden}.life-viewport{position:absolute;inset:0;width:100vw;height:100dvh;min-height:100dvh;overflow-x:auto;overflow-y:hidden;border-radius:0;box-shadow:none}.life-room{width:max(205vw,1500px);height:100dvh;min-height:100dvh}.room-map{bottom:max(18px,env(safe-area-inset-bottom))}
+.life-menu-fab{position:fixed!important;z-index:35;right:18px;bottom:max(76px,calc(env(safe-area-inset-bottom) + 70px));width:52px!important;height:52px!important;background:rgba(57,42,31,.86)!important;color:#fff!important;box-shadow:0 9px 26px rgba(25,14,8,.3)!important;backdrop-filter:blur(12px)}.life-sheet-shade{position:fixed;z-index:39;inset:0;border:0;background:rgba(35,22,14,.34);opacity:0;pointer-events:none;transition:opacity .25s ease}.life-sheet{position:fixed;z-index:40;left:0;right:0;bottom:0;max-height:min(78dvh,720px);padding:15px 16px max(20px,env(safe-area-inset-bottom));border-radius:29px 29px 0 0;background:rgba(255,250,240,.97);box-shadow:0 -20px 55px rgba(31,19,11,.28);backdrop-filter:blur(20px);overflow-y:auto;transform:translateY(105%);transition:transform .32s cubic-bezier(.22,.8,.2,1)}.menu-open .life-sheet{transform:translateY(0)}.menu-open .life-sheet-shade{opacity:1;pointer-events:auto}.life-sheet-head{position:sticky;top:-15px;z-index:2;margin:-15px 0 8px;padding:16px 0 8px;background:linear-gradient(rgba(255,250,240,.99) 75%,transparent)}.life-control-panel{position:relative;width:100%;margin:0 auto 12px;padding:13px;border-radius:22px;background:#FFF8E9;border:1px solid rgba(132,89,55,.12);box-shadow:none}.life-menu-grid{width:100%;margin:0 auto}
 @keyframes living-breath{0%,100%{transform:translateY(0) rotate(-.5deg)}35%{transform:translateY(-2px) rotate(.4deg)}65%{transform:translateY(-3px) rotate(.8deg)}}@keyframes sleep-breath{50%{transform:scale(.965) translateY(2px)}}@keyframes step-bob{0%,100%{margin-bottom:0}50%{margin-bottom:5px}}@keyframes curious-look{0%,100%{transform:rotate(0)}28%{transform:rotate(-6deg)}70%{transform:rotate(5deg)}}@keyframes happy-hop{50%{transform:translateY(-12px) scale(1.04)}}@keyframes groom{35%{transform:rotate(-7deg) scale(.98)}70%{transform:rotate(5deg)}}@keyframes ear-listen{50%{transform:translateY(-2px) scaleY(1.025)}}@keyframes nibble{50%{transform:translateY(3px) rotate(1.5deg)}}@keyframes bob{50%{transform:translateY(-4px)}}@keyframes hop{50%{transform:translateY(-15px) rotate(3deg)}}@keyframes steam-rise{0%{transform:translateY(5px) scale(.8);opacity:0}45%{opacity:.9}100%{transform:translateY(-12px) translateX(4px);opacity:0}}@keyframes bubble-float{50%{transform:translateY(-5px) rotate(2deg)}}@keyframes alive-pulse{50%{opacity:.48;transform:scale(.82)}}@keyframes sun-shift{to{transform:translateX(12px) skewX(-13deg);opacity:.68}}
-@media(min-width:760px){.life-menu-grid{grid-template-columns:1fr 1fr}.life-room{width:max(160vw,1700px)}}@media(max-width:390px){.care-button{font-size:11px!important}.life-viewport{min-height:510px;height:69dvh}.room-jump{font-size:8px!important;padding:0 5px!important}}
+@media(min-width:760px){.life-menu-grid{grid-template-columns:1fr 1fr}.life-room{width:max(175vw,1700px)}.life-sheet{left:50%;right:auto;width:min(720px,92vw);transform:translate(-50%,105%)}.menu-open .life-sheet{transform:translate(-50%,0)}}@media(max-width:390px){.care-button{font-size:11px!important}.life-viewport{height:100dvh;min-height:100dvh}.room-jump{font-size:8px!important;padding:0 5px!important}.chanko-top{top:max(8px,env(safe-area-inset-top));left:9px;right:9px}.speech-bubble{top:82px}}
 '''
 
 
@@ -293,6 +305,7 @@ CHANKO_LIFE_SCRIPT = r'''
     actor.classList.add('is-excited');
     say(routine==='wait_food' ? 'お腹すいた！' : routine==='seek_play' ? 'あそぼ！' : '呼んだ？');
     setTimeout(()=>actor.classList.remove('is-excited'),1700);
+    setTimeout(()=>document.querySelector('.chanko-app')?.classList.add('menu-open'),350);
   };
   actor.onkeydown = event => { if(event.key==='Enter'||event.key===' '){event.preventDefault();actor.click();} };
   document.querySelectorAll('.room-jump').forEach(button => {
