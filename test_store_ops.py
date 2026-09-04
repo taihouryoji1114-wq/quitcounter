@@ -288,11 +288,28 @@ class StoreOperationsManagerTest(unittest.TestCase):
         completed = [item for item in board["items"] if item.get("completed")]
         self.assertIn("唐揚げ", {item["name"] for item in completed})
 
-    def test_old_completed_notes_do_not_fill_current_board(self):
+    def test_old_completed_notes_remain_until_manual_deletion(self):
         note = self.manager.add_handover("2026-08-10", "古い引き継ぎ", "ホール")
         self.manager.confirm_handover("2026-08-10", note["id"])
         board = self.manager.service_handover_board("2026-08-20", "lunch")
-        self.assertNotIn("古い引き継ぎ", {item["name"] for item in board["items"]})
+        self.assertIn("古い引き継ぎ", {item["name"] for item in board["items"]})
+        self.assertEqual(self.manager.all_handovers()[0]["record_date"], "2026-08-10")
+        self.manager.delete_handover("2026-08-10", note["id"])
+        self.assertEqual(self.manager.all_handovers(), [])
+        self.assertEqual(self.manager.handovers("2026-08-10"), [])
+        board = self.manager.service_handover_board("2026-08-21", "lunch")
+        self.assertNotIn(note["id"], {item["id"] for item in board["items"]})
+        # A manual deletion hides the note, but keeps its contents recoverable.
+        self.assertEqual(self.data.data["store_handovers"]["2026-08-10"][0]["message"], "古い引き継ぎ")
+        reloaded = StoreOperationsManager(DataManager(self.data.file_path))
+        self.assertEqual(reloaded.all_handovers(), [])
+
+    def test_unconfirmed_handover_survives_date_change_and_reload(self):
+        note = self.manager.add_handover("2026-08-31", "翌月も残す", "厨房")
+        reloaded = StoreOperationsManager(DataManager(self.data.file_path))
+        self.assertEqual(reloaded.all_handovers()[0]["id"], note["id"])
+        board = reloaded.service_handover_board("2026-09-04", "lunch")
+        self.assertIn(note["id"], {item["id"] for item in board["items"]})
 
     def test_completed_handover_can_be_reopened(self):
         note = self.manager.add_handover("2026-08-19", "補充を確認", "ホール")

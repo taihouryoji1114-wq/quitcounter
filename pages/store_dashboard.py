@@ -490,7 +490,7 @@ def store_dashboard_page():
             app_card("在庫確認", "現在数をまとめて入力", "inventory_2",
                      "/store-ops/inventory", "text-emerald-7")
             open_handovers = sum(
-                1 for item in store_ops.handovers(business_date)
+                1 for item in store_ops.all_handovers()
                 if not item.get("confirmed", False))
             open_requests = len(store_ops.order_requests(open_only=True))
             app_card("自由引き継ぎ", "申し送りを記録・確認", "edit_note",

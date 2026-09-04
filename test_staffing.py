@@ -22,6 +22,31 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(self.staffing.STAFF[3], "スタッフA")
         self.assertEqual(self.staffing.STAFF[-1], "スタッフI")
 
+    def test_authorized_august_reset_runs_once_and_preserves_other_data(self):
+        self.staffing.save_day("2026-08-02", {"店長": {"attended": True}})
+        self.staffing.save_day("2026-09-02", {"店長": {"attended": True}})
+        self.staffing.save_wages({"スタッフA": 1300})
+        self.staffing.save_simple_plan("2026-08-03", {"スタッフA": {"lunch": True}}, date(2026, 8, 1))
+        self.assertEqual(self.staffing.reset_august_2026_once(), 1)
+        self.assertFalse(self.staffing.day("2026-08-02")["店長"]["attended"])
+        self.assertTrue(self.staffing.day("2026-09-02")["店長"]["attended"])
+        self.assertEqual(self.staffing.wages()["スタッフA"], 1300)
+        self.assertTrue(self.staffing.planned_day("2026-08-03")["スタッフA"]["lunch_start"])
+        self.staffing.save_person("2026-08-02", "店長", {"attended": True})
+        reloaded = StaffingManager(DataManager(self.data.file_path))
+        self.assertEqual(reloaded.reset_august_2026_once(), 0)
+        self.assertTrue(reloaded.day("2026-08-02")["店長"]["attended"])
+        self.assertTrue(self.data.data["business_staff_reset_archives"])
+
+    def test_person_save_tracks_rest_days_without_marking_other_people(self):
+        self.staffing.save_person("2026-08-02", "スタッフA", {})
+        self.staffing.save_person("2026-08-04", "スタッフA", {"lunch_start": "1000", "lunch_end": "1500"})
+        progress = self.staffing.timecard_progress("2026-08", "2026-08-04")
+        self.assertEqual(progress["スタッフA"]["entered_days"], [2, 4])
+        self.assertEqual(progress["スタッフA"]["missing_days"], [1, 3])
+        self.assertEqual(progress["スタッフB"]["entered_days"], [])
+        self.assertTrue(self.staffing.day("2026-08-02")["スタッフA"]["entry_confirmed"])
+
     def test_month_total_uses_wage_and_daily_hours(self):
         self.staffing.save_wages({"スタッフA": 1200, "スタッフB": 1500})
         self.staffing.save_day("2026-08-01", {
@@ -94,6 +119,14 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertTrue(self.staffing.separate_legacy_future_plans(date(2026, 8, 14)))
         self.assertEqual(self.staffing.day("2026-08-20")["スタッフA"]["lunch_start"], "")
         self.assertEqual(self.staffing.planned_day("2026-08-20")["スタッフA"]["lunch_start"], "10:00")
+
+    def test_elapsed_plan_never_becomes_actual_after_reload(self):
+        self.staffing.save_simple_plan("2026-08-15", {"スタッフA": {"lunch": True}}, date(2026, 8, 14))
+        reloaded = StaffingManager(DataManager(self.data.file_path))
+        summary = reloaded.month_cost_summary("2026-08", date(2026, 9, 4))
+        self.assertEqual(summary["gross_wages"], 0)
+        self.assertEqual(reloaded.day("2026-08-15")["スタッフA"]["lunch_start"], "")
+        self.assertEqual(reloaded.timecard_progress("2026-08", "2026-08-31")["スタッフA"]["entered_count"], 0)
 
     def test_night_rate_and_crossing_midnight(self):
         self.staffing.save_wages({"スタッフA": 1200})

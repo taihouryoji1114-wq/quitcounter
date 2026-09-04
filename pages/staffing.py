@@ -163,11 +163,10 @@ def staffing_page(request: Request):
             ui.button("保険設定を保存", on_click=save_insurance).classes("w-full q-mt-sm")
 
         tomorrow = (today_jst() + timedelta(days=1)).isoformat()
-        staffing.separate_legacy_future_plans(today_jst())
         with ui.expansion("明日以降のシフトを簡単入力", icon="event_available", value=False).classes(
             "staff-panel w-full q-mt-sm"):
-            ui.label("ランチ／ディナーを選ぶだけ。時間は過去の実績から自動設定します").classes(
-                "text-[9px] text-grey-6 q-mb-sm")
+            ui.label("着地予想専用です。過去の実績から予定時間を見積もりますが、勤務実績には入力しません。").classes(
+                "text-xs text-grey-8 q-mb-sm")
             plan_date = ui.input("予定日", value=tomorrow).props(
                 f"outlined dense type=date min={tomorrow}").classes("w-full")
             plan_area = ui.column().classes("w-full gap-1")
@@ -219,12 +218,12 @@ def staffing_page(request: Request):
             def timecard_progress_summary(month):
                 progress = staffing.timecard_progress(month, today_jst().isoformat())
                 with ui.expansion(
-                    f"入力状況　{month.replace('-', '年')}月", icon="fact_check", value=False,
+                    f"入力状況　{month.replace('-', '年')}月", icon="fact_check", value=True,
                 ).classes("timecard-progress w-full q-mt-sm"):
                     with ui.element("div").classes("timecard-progress-grid w-full"):
                         for name in staffing.STAFF:
                             item = progress[name]
-                            latest = (f"{int(item['latest_date'][8:10])}日まで"
+                            latest = (f"最終入力：{int(item['latest_date'][8:10])}日"
                                       if item["latest_date"] else "まだ入力なし")
                             with ui.element("div").classes(
                                     "timecard-progress-person entered" if item["latest_date"]
@@ -233,6 +232,9 @@ def staffing_page(request: Request):
                                 ui.label(latest).classes("timecard-progress-latest")
                                 ui.label(f"{item['entered_count']}日分").classes(
                                     "timecard-progress-count")
+                                ui.label("入力済み：" + ("・".join(map(str, item["entered_days"])) or "なし")).classes("text-xs break-words")
+                                ui.label("未確認：" + ("・".join(map(str, item["missing_days"])) or "なし")).classes("text-xs text-orange-9 break-words")
+                    ui.label("休みの日も、その人の入力欄を空欄のまま保存すると確認済みになります。未確認＝欠勤ではありません。").classes("text-xs q-mt-sm")
 
             timecard_progress_summary(selected[:7])
             hours_area = ui.column().classes("w-full gap-0")
@@ -246,7 +248,9 @@ def staffing_page(request: Request):
                     ui.label("終了が開始より早い場合は翌日として計算します").classes("text-[9px] text-grey-6 q-mb-sm")
                     for name in staffing.STAFF:
                         shift_inputs[name] = {}
-                        with ui.expansion(name, value=False).classes("staff-shift w-full q-mb-xs"):
+                        entered = values[name].get("entry_confirmed") or values[name]["attended"] or any(
+                            values[name][key] for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"))
+                        with ui.expansion(f"{name}　{'入力済み' if entered else '未入力'}", value=False).classes("staff-shift w-full q-mb-xs") as staff_panel:
                             if name in staffing.HOURLY_STAFF:
                                 for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
                                     ui.label(label).classes("text-[10px] font-bold q-mt-xs")
@@ -287,28 +291,29 @@ def staffing_page(request: Request):
                                     f"（休憩 {detail['break_minutes']}分・支払対象 {detail['paid_minutes']//60}時間{detail['paid_minutes']%60}分・深夜 {detail['night_minutes']}分）　¥{detail['pay']:,}"
                                 ).classes("text-[10px] font-bold text-primary q-mt-sm")
 
-                    def save_day():
-                        try:
-                            staffing.save_day(record_date, {
-                                name: {key: field.value for key, field in fields.items()}
-                                for name, fields in shift_inputs.items()
-                            })
-                        except ValueError as error:
-                            ui.notify(str(error), type="negative")
-                            return
-                        ui.notify(f"保存しました：¥{staffing.day_total(record_date):,}", type="positive")
-                        timecard_progress_summary.refresh(record_date[:7])
-                        render_day(record_date)
-                    ui.button("勤務時間を保存", icon="save", on_click=save_day).classes("w-full q-mt-md")
-                    ui.label(f"この日の賃金・交通費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
-                    summary = staffing.month_cost_summary(record_date[:7], today_jst())
-                    ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-[10px] text-grey-7 q-mt-xs")
-                    ui.label(f"現時点の会社総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
-                    ui.label(
-                        f"副社長 暦日{summary['elapsed_days']}/{summary['days_in_month']}日・店長 {summary['attendance']['店長']}/{summary['planned_days']}日・社員A {summary['attendance']['社員A']}/{summary['planned_days']}日（1日10時間基準）"
-                    ).classes("text-[9px] text-grey-6 q-mt-xs")
-                    ui.label(f"月末着地予測　¥{summary['forecast_company_cost']:,}").classes(
-                        "text-sm font-black q-mt-xs")
+                            def save_person(_, person=name, panel=staff_panel):
+                                try:
+                                    staffing.save_person(record_date, person, {
+                                        key: field.value for key, field in shift_inputs[person].items()
+                                    })
+                                except ValueError as error:
+                                    ui.notify(str(error), type="negative")
+                                    return
+                                panel.set_text(f"{person}　入力済み")
+                                timecard_progress_summary.refresh(record_date[:7])
+                                totals.refresh()
+                                ui.notify(f"{person}の{record_date}を保存しました", type="positive")
+
+                            ui.button("この人の入力を保存（空欄なら休み）", icon="save", on_click=save_person).classes("w-full q-mt-sm")
+
+                    @ui.refreshable
+                    def totals():
+                        ui.label(f"この日の賃金・交通費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
+                        summary = staffing.month_cost_summary(record_date[:7], today_jst())
+                        ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-xs text-grey-7 q-mt-xs")
+                        ui.label(f"現時点の会社総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
+                        ui.label(f"月末着地予測　¥{summary['forecast_company_cost']:,}").classes("text-sm font-black q-mt-xs")
+                    totals()
         def change_timecard_date():
             timecard_progress_summary.refresh(date_input.value[:7])
             render_day(date_input.value)

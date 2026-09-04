@@ -27,6 +27,28 @@ class StaffingManager:
     def __init__(self, manager=None):
         self._data_manager = manager or data
 
+    def reset_august_2026_once(self):
+        """User-authorized reset; retain a recovery archive and never repeat it."""
+        marker = "reset_actual_timecards_2026_08_v1"
+        migrations = self._data_manager.data.setdefault("data_migrations", {})
+        if marker in migrations:
+            return 0
+        records = self._data_manager.data.setdefault("business_staff_hours", {})
+        dates = [key for key in records if key.startswith("2026-08-")]
+        archive = {key: records.pop(key) for key in dates}
+        self._data_manager.data.setdefault("business_staff_reset_archives", {})[marker] = archive
+        migrations[marker] = datetime.now().isoformat(timespec="seconds")
+        self._data_manager.save()
+        return len(dates)
+
+    def save_person(self, record_date, name, values):
+        if name not in self.STAFF:
+            raise ValueError("スタッフを選んでください。")
+        previous = self._data_manager.data.get("business_staff_hours", {}).get(record_date, {})
+        combined = dict(previous)
+        combined[name] = dict(values, entry_confirmed=True)
+        self.save_day(record_date, combined)
+
     def wages(self):
         stored = self._data_manager.data.get("business_staff_wages", {})
         return {name: int(stored.get(name, 0) or 0) for name in self.STAFF}
@@ -140,6 +162,7 @@ class StaffingManager:
                 result[name]["transportation"] = int(value.get("transportation", 0) or 0)
                 result[name]["attended"] = bool(value.get("attended", False))
                 result[name]["break_minutes"] = int(value.get("break_minutes", 0) or 0)
+                result[name]["entry_confirmed"] = bool(value.get("entry_confirmed", False))
             else:  # Preserve older duration-only entries.
                 result[name] = {"lunch_start": "", "lunch_end": "", "dinner_start": "", "dinner_end": "", "transportation": 0, "attended": False, "break_minutes": 0}
         return result
@@ -244,12 +267,14 @@ class StaffingManager:
                     continue
                 has_shift = any(value.get(key) for key in (
                     "lunch_start", "lunch_end", "dinner_start", "dinner_end"))
-                if has_shift or bool(value.get("attended", False)):
+                if has_shift or bool(value.get("attended", False)) or value.get("entry_confirmed"):
                     entered_days.append(day_number)
             result[name] = {
                 "entered_days": entered_days,
                 "entered_count": len(entered_days),
                 "latest_date": f"{month}-{entered_days[-1]:02d}" if entered_days else "",
+                "missing_days": [day for day in range(1, max(0, min(days_in_month, through_day)) + 1)
+                                 if day not in entered_days],
             }
         return result
 
@@ -263,6 +288,9 @@ class StaffingManager:
             cleaned[name]["transportation"] = self._amount(value.get("transportation", 0), "交通費")
             cleaned[name]["attended"] = bool(value.get("attended", False))
             cleaned[name]["break_minutes"] = self._amount(value.get("break_minutes", 0), "休憩時間")
+            cleaned[name]["entry_source"] = "manual"
+            cleaned[name]["entry_confirmed"] = bool(value.get("entry_confirmed", False))
+            cleaned[name]["entered_at"] = datetime.now().isoformat(timespec="seconds")
             for prefix in ("lunch", "dinner"):
                 start, end = cleaned[name][f"{prefix}_start"], cleaned[name][f"{prefix}_end"]
                 if bool(start) != bool(end):
@@ -633,3 +661,4 @@ class StaffingManager:
 
 
 staffing = StaffingManager()
+staffing.reset_august_2026_once()

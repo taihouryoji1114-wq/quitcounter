@@ -18,8 +18,8 @@ def handover_page():
     if not require_app_access("store_ops"):
         return
     record_date = operational_date_jst().isoformat()
-    notes = store_ops.handovers(record_date)
-    content = section_shell("今日の引き継ぎ", "自由記入で共有する")
+    notes = store_ops.all_handovers()
+    content = section_shell("自由引き継ぎ", "日付が変わっても残ります。不要になったら手動で削除してください。")
     with content:
         message = ui.textarea("引き継ぎ内容").props("outlined autogrow").classes("w-full")
         area = ui.toggle({"ホール": "ホール", "デシャップ": "デシャップ", "厨房": "厨房"},
@@ -35,10 +35,28 @@ def handover_page():
 
         ui.button("引き継ぎを追加", icon="send", on_click=add_note).classes("w-full q-mt-md")
         ui.separator().classes("q-my-lg")
+        def request_delete(note):
+            with ui.dialog() as dialog, ui.card().classes("w-full max-w-sm"):
+                ui.label("この引き継ぎを削除しますか？").classes("text-lg font-bold")
+                ui.label(note["message"]).classes("whitespace-pre-wrap break-words")
+                def delete():
+                    store_ops.delete_handover(note["record_date"], note["id"])
+                    dialog.close()
+                    ui.navigate.to("/store-ops/handover")
+                with ui.row():
+                    ui.button("キャンセル", on_click=dialog.close).props("flat")
+                    ui.button("削除する", on_click=delete).props("color=negative")
+            dialog.open()
+
         for note in reversed(notes):
             with ui.card().classes("surface-card w-full q-pa-lg q-mb-sm"):
                 ui.label(note["area"]).classes("text-[9px] font-black text-primary")
-                ui.label(note["message"]).classes("text-sm font-bold q-mt-xs")
+                ui.label(note["record_date"]).classes("text-xs text-grey-7")
+                ui.label(note["message"]).classes("text-sm font-bold q-mt-xs whitespace-pre-wrap break-words")
+                if note.get("confirmed"):
+                    ui.label("確認済み").classes("text-positive text-xs")
+                ui.button("削除", icon="delete_outline",
+                          on_click=lambda _, item=note: request_delete(item)).props("flat color=negative")
 
 
 @ui.page("/store-ops/order-requests")

@@ -847,8 +847,7 @@ class StoreOperationsManager:
                 continue
             for note in self.handovers(note_date):
                 confirmed = bool(note.get("confirmed", False))
-                # Old confirmed notes do not need to fill the completed lane forever.
-                if not confirmed or note_date == source_date:
+                if not note.get("deleted_at"):
                     items.append({"id": note["id"], "kind": "note",
                                   "name": note.get("message", "引き継ぎ"),
                                   "area": note.get("area", "厨房"), "from_date": note_date,
@@ -1042,7 +1041,23 @@ class StoreOperationsManager:
     def handovers(self, record_date):
         self._date(record_date)
         values = self._data_manager.data.get("store_handovers", {}).get(record_date, [])
-        return [dict(value) for value in values if isinstance(value, dict)]
+        return [dict(value) for value in values
+                if isinstance(value, dict) and not value.get("deleted_at")]
+
+    def all_handovers(self):
+        """Keep free handovers visible across dates until explicitly deleted."""
+        return [dict(note, record_date=record_date)
+                for record_date in sorted(self._data_manager.data.get("store_handovers", {}))
+                for note in self.handovers(record_date)]
+
+    def delete_handover(self, record_date, handover_id):
+        self._date(record_date)
+        for item in self._data_manager.data.get("store_handovers", {}).get(record_date, []):
+            if isinstance(item, dict) and item.get("id") == handover_id:
+                item["deleted_at"] = datetime.now().isoformat(timespec="seconds")
+                self._data_manager.save()
+                return
+        raise ValueError("引き継ぎが見つかりません。")
 
     def add_handover(self, record_date, message, area="厨房", category=""):
         self._date(record_date)
