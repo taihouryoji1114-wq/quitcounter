@@ -9,11 +9,14 @@ class AudioContext {
   createOscillator() { return {frequency: {}, connect() {}, start() { chimes++; }, stop() {}}; }
   createGain() { return {gain: {setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}}, connect() {}}; }
 }
+const speechSynthesis = {cancel() {}, speak(utterance) { utterance.onstart?.(); }};
 const sandbox = {
-  window: {AudioContext, speechSynthesis: {cancel() {}}},
-  document: {visibilityState: 'visible'},
+  window: {AudioContext, speechSynthesis}, speechSynthesis,
+  SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
+  navigator: {},
+  document: {visibilityState: 'visible', querySelectorAll() { return []; }, addEventListener() {}},
   localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value)},
-  setTimeout() {}, alert() {}, Date,
+  setTimeout(callback, delay) { if (delay === 750) callback(); }, setInterval() {}, alert() {}, Date,
 };
 vm.runInNewContext(fs.readFileSync('static/store_announcements.js', 'utf8'), sandbox);
 (async () => {
@@ -31,5 +34,12 @@ vm.runInNewContext(fs.readFileSync('static/store_announcements.js', 'utf8'), san
   sandbox.document.visibilityState = 'visible';
   api.tick([{...rows[0], enabled: false}], '2026-09-06 15:00'); assert.equal(chimes, 4);
   api.stop(); api.tick(rows, '2026-09-06 15:00'); assert.equal(chimes, 4);
+  assert.equal(api.sync(rows, '2026-09-06T15:00:00+09:00').ready, false);
+  await api.enable();
+  assert.equal(api.sync(rows, '2026-09-06T15:00:00+09:00').ready, true);
+  sandbox.localStorage.getItem = () => { throw Error('disabled'); };
+  sandbox.localStorage.setItem = () => { throw Error('disabled'); };
+  api.tick(rows, '2026-09-07 15:00'); assert.equal(chimes, 6);
+  api.tick(rows, '2026-09-07 15:00'); assert.equal(chimes, 6);
   console.log('Announcement timing, deduplication, visibility and mute OK');
 })();
