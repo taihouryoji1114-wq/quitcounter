@@ -72,5 +72,24 @@ class AdvanceManager:
                 return
         raise ValueError("返金記録が見つかりません。")
 
+    def update_refund(self, record_id, day, values):
+        if datetime.strptime(day, "%Y-%m-%d").strftime("%Y-%m-%d") != day:
+            raise ValueError("返金日を選んでください。")
+        amounts = self.amounts(values)
+        if not sum(amounts):
+            raise ValueError("返金額を入力してください。全額を消す場合は取消を使ってください。")
+        for record in self.state().get("refunds", []):
+            if record["id"] != record_id or record.get("voided"):
+                continue
+            remaining = self.totals()[2]
+            if any(amounts[i] > remaining[i] + record["amounts"][i] for i in range(3)):
+                raise ValueError("修正後の返金額が、その人の立替額を超えています。")
+            record.setdefault("revisions", []).append({"day": record["day"], "amounts": list(record["amounts"]),
+                                                       "changed_at": datetime.now().isoformat(timespec="seconds")})
+            record.update(day=day, amounts=amounts)
+            self.manager.save()
+            return
+        raise ValueError("修正できる返金記録が見つかりません。")
+
 
 advances = AdvanceManager()

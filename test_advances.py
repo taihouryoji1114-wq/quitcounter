@@ -39,6 +39,34 @@ class AdvanceTests(unittest.TestCase):
         self.manager.refund("2026-09-04", [100, 0, 0], "same-click")
         self.assertEqual(self.manager.totals()[2], [900, 0, 0])
 
+    def test_refund_edit_replaces_original_without_double_counting(self):
+        self.manager.save_month("2026-09", [1000, 1000, 0])
+        self.manager.refund("2026-09-01", [500, 0, 0], "original")
+        self.manager.update_refund("original", "2026-09-02", [100, 400, 0])
+        self.assertEqual(self.manager.totals()[2], [900, 600, 0])
+        self.assertEqual(len(self.manager.state()["refunds"]), 1)
+        self.assertEqual(self.manager.state()["refunds"][0]["revisions"][0]["amounts"], [500, 0, 0])
+        with self.assertRaises(ValueError):
+            self.manager.update_refund("original", "2026-09-02", [1001, 0, 0])
+        self.assertEqual(self.manager.totals()[2], [900, 600, 0])
+        self.manager.void_refund("original")
+        with self.assertRaises(ValueError):
+            self.manager.update_refund("original", "2026-09-02", [100, 0, 0])
+
+    def test_month_save_button_works_when_history_exists(self):
+        from unittest.mock import patch
+        from nicegui import ui
+        import pages.advances as page
+        self.manager.save_month("2026-08", [100, 200, 300])
+        with patch.object(page, "advances", self.manager), patch.object(page, "require_app_access", return_value=True), patch.object(page, "require_permission", return_value=True), patch.object(page, "has_permission", return_value=True), patch.object(ui.navigate, "to") as navigate:
+            with ui.column() as container:
+                page.advances_page()
+                buttons = [el for el in ui.context.client.elements.values() if isinstance(el, ui.button) and el.text == "この月の金額を保存"]
+                listener = next(iter(buttons[-1]._event_listeners.values()))
+                listener.handler(None)
+                navigate.assert_called_once_with("/mirai-kessan/advances")
+            container.delete()
+
     def test_names_and_invalid_amounts(self):
         self.manager.save_names(["甲", "乙", "丙"])
         self.assertEqual(self.manager.names(), ["甲", "乙", "丙"])
