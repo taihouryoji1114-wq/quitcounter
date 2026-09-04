@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from unittest.mock import patch
+from datetime import date
 from pathlib import Path
 
 from core.data import DataManager
@@ -14,6 +16,35 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+
+    def test_cancel_before_deadline_requires_own_pin_and_can_resubmit(self):
+        self.manager.set_staff_pin("スタッフA", "1234")
+        self.manager.set_staff_pin("スタッフB", "5678")
+        with patch("core.shift_submissions.today_jst", return_value=date(2026, 9, 1)):
+            self.manager.save("スタッフA", 2026, 9, "second", {"16": {"type": "ランチ"}})
+            self.manager.save("スタッフB", 2026, 9, "second", {})
+            with self.assertRaises(ValueError):
+                self.manager.cancel_submission("スタッフA", 2026, 9, "second", pin="5678")
+            result = self.manager.cancel_submission("スタッフA", 2026, 9, "second", pin="1234")
+            self.assertFalse(result["change_request"])
+            self.assertNotIn("スタッフA", self.manager.period_submissions(2026, 9, "second"))
+            self.assertIn("スタッフB", self.manager.period_submissions(2026, 9, "second"))
+            self.assertTrue(self.data.data["store_shift_cancelled_archive"])
+            self.manager.save("スタッフA", 2026, 9, "second", {"17": {"type": "ディナー"}})
+            self.assertTrue(self.manager.submission("スタッフA", 2026, 9, "second")["submitted_at"])
+
+    def test_late_cancel_keeps_submission_until_approved(self):
+        self.manager.set_staff_pin("スタッフA", "1234")
+        self.manager.save("スタッフA", 2026, 9, "second", {"16": {"type": "ランチ"}})
+        with patch("core.shift_submissions.today_jst", return_value=date(2026, 9, 6)):
+            self.assertTrue(self.manager.cancel_submission("スタッフA", 2026, 9, "second", pin="1234")["change_request"])
+            self.assertIn("スタッフA", self.manager.period_submissions(2026, 9, "second"))
+            self.manager.review_change("スタッフA", 2026, 9, "second", False)
+            self.assertIn("スタッフA", self.manager.period_submissions(2026, 9, "second"))
+            self.manager.cancel_submission("スタッフA", 2026, 9, "second", pin="1234")
+            self.manager.review_change("スタッフA", 2026, 9, "second", True)
+            self.assertNotIn("スタッフA", self.manager.period_submissions(2026, 9, "second"))
+            self.assertEqual(self.manager.pending_changes(2026, 9, "second"), {})
 
     def test_first_half_deadline_is_previous_month_twentieth(self):
         period = self.manager.period(2026, 9, "first")

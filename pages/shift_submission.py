@@ -72,7 +72,7 @@ def shift_submission_page():
                     deadline = period["deadline"][5:].replace("-", "/")
                     ui.label(f"提出期限 {deadline}").classes("text-[10px] text-negative font-bold")
                     if submission.get("pending_change"):
-                        ui.label("変更申請は管理者の確認待ちです").classes(
+                        ui.label("取消申請は管理者の確認待ちです" if submission["pending_change"].get("action") == "cancel" else "変更申請は管理者の確認待ちです").classes(
                             "pending-notice w-full q-mt-sm")
                     for day in range(period["start"], period["end"] + 1):
                         weekday = date(period["year"], period["month"], day).strftime("%a")
@@ -93,6 +93,9 @@ def shift_submission_page():
                                     end = ui.input("終了", value=saved_day.get("end", "")).props(
                                         "outlined dense type=time").classes("shift-time")
                             fields[str(day)] = {"type": shift_type, "start": start, "end": end}
+                            ui.button("この日の入力を消す", icon="backspace", on_click=lambda _, t=shift_type, s=start, e=end: (
+                                t.set_value(""), s.set_value(""), e.set_value(""))).props("flat dense color=negative")
+                    ui.label("日別の入力を消した後は、下の提出・変更ボタンで保存してください。").classes("text-xs text-grey-7")
                     note = ui.textarea("希望・連絡事項（任意）", value=submission["note"]).props(
                         "outlined autogrow").classes("w-full q-mt-sm")
 
@@ -118,6 +121,28 @@ def shift_submission_page():
                     ui.button(button_text, icon="send", on_click=save_submission).classes(
                         "shift-submit w-full q-mt-md")
                     if submission["submitted_at"]:
+                        def cancel_submission():
+                            with ui.dialog() as cancel_dialog, ui.card().classes("w-full max-w-sm"):
+                                ui.label(f"{selected_staff}：{period['label']}").classes("font-bold")
+                                needs_review = current_role() != "owner" and today_jst() > date.fromisoformat(period["deadline"])
+                                ui.label("半月分の取消申請を送ります。承認までは元の提出を残します。" if needs_review else "この半月分の提出を取り消し、未提出に戻します。")
+                                confirm_pin = ui.input("本人の個人PIN", password=True).props("outlined inputmode=numeric") if current_role() != "owner" else None
+                                def execute():
+                                    try:
+                                        result = shift_submissions.cancel_submission(
+                                            selected_staff, period["year"], period["month"], period["half"],
+                                            pin=confirm_pin.value if confirm_pin else None,
+                                            administrator=current_role() == "owner")
+                                    except ValueError as error:
+                                        ui.notify(str(error), type="negative")
+                                        return
+                                    cancel_dialog.close()
+                                    ui.notify("取消申請を送りました" if result["change_request"] else "提出を取り消しました")
+                                    render_editor(selected_staff)
+                                ui.button("取消申請を送る" if needs_review else "提出を取り消す", on_click=execute).props("color=negative")
+                                ui.button("やめる", on_click=cancel_dialog.close).props("flat")
+                            cancel_dialog.open()
+                        ui.button("半月分の提出を取り消す", icon="cancel", on_click=cancel_submission).props("outline color=negative").classes("w-full q-mt-sm")
                         ui.label(f"前回提出：{submission['submitted_at'][5:].replace('-', '/')}").classes(
                             "text-[9px] text-grey-6 text-center w-full q-mt-xs")
                     ui.button("入力を閉じる", icon="expand_less", on_click=editor.clear).props(
@@ -295,7 +320,7 @@ def shift_submission_page():
                                         if value["start"] or value["end"]:
                                             text += f" {value['start'] or '指定なし'}〜{value['end'] or '指定なし'}"
                                         changes.append(f"{request_day}日：{text}")
-                                    ui.label("／".join(changes) if changes else "全日希望なし").classes(
+                                    ui.label("半月分の提出取消 → 承認すると未提出に戻ります" if request.get("action") == "cancel" else ("／".join(changes) if changes else "全日希望なし")).classes(
                                         "request-summary q-mt-sm")
                                     with ui.row().classes("w-full gap-2 q-mt-sm"):
                                         ui.button("拒否", icon="close", on_click=lambda _, staff_name=name: (

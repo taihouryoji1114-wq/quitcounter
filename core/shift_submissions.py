@@ -92,6 +92,34 @@ class ShiftSubmissionManager:
         return {staff: dict(record) for staff, record in stored.items()
                 if staff in self.STAFF and isinstance(record, dict)}
 
+    def cancel_submission(self, staff, year, month, half, pin=None, administrator=False):
+        self._staff(staff)
+        if not administrator and not self.verify_staff_pin(staff, pin):
+            raise ValueError("個人PINが違います。")
+        period = self.period(year, month, half)
+        records = self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(period["key"], {})
+        if staff not in records:
+            raise ValueError("取り消す提出がありません。")
+        now = datetime.now().isoformat(timespec="minutes")
+        if not administrator and today_jst() > date.fromisoformat(period["deadline"]):
+            self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(period["key"], {})[staff] = {
+                "action": "cancel", "status": "pending", "requested_at": now}
+            self._data_manager.save()
+            return {"change_request": True}
+        self._archive_cancelled(staff, period["key"], now)
+        request = self._data_manager.data.get("store_shift_change_requests", {}).get(period["key"], {}).get(staff)
+        if request and request.get("status") == "pending":
+            request["status"] = "cancelled"
+        self._data_manager.save()
+        return {"change_request": False}
+
+    def _archive_cancelled(self, staff, key, now):
+        record = self._data_manager.data.get("store_shift_submissions", {}).get(key, {}).pop(staff, None)
+        if record is not None:
+            self._data_manager.data.setdefault("store_shift_cancelled_archive", []).append(
+                {"staff": staff, "period": key, "record": record, "cancelled_at": now})
+        self._data_manager.data.get("store_auto_shift_drafts", {}).pop(key, None)
+
     def pending_changes(self, year, month, half):
         period = self.period(year, month, half)
         stored = self._data_manager.data.get("store_shift_change_requests", {}).get(
@@ -273,7 +301,9 @@ class ShiftSubmissionManager:
         now = datetime.now().isoformat(timespec="minutes")
         request["status"] = "approved" if approved else "rejected"
         request["reviewed_at"] = now
-        if approved:
+        if approved and request.get("action") == "cancel":
+            self._archive_cancelled(staff, period["key"], now)
+        elif approved:
             self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
                 period["key"], {})[staff] = {
                     "days": dict(request.get("days", {})),
