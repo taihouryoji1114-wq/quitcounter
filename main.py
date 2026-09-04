@@ -22,6 +22,7 @@ import pages.future_financials
 import pages.financial_analysis
 import pages.consulting
 import pages.staffing
+import pages.staffing_month
 import pages.advances
 import pages.announcement_controls
 import pages.store_operations

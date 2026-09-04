@@ -22,6 +22,29 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(self.staffing.STAFF[3], "スタッフA")
         self.assertEqual(self.staffing.STAFF[-1], "スタッフI")
 
+    def test_person_month_batch_preserves_others_and_is_atomic(self):
+        self.staffing.save_person("2026-08-01", "スタッフB", {"lunch_start": "1000", "lunch_end": "1500"})
+        before = dict(self.data.data["business_staff_hours"]["2026-08-01"]["スタッフB"])
+        rows = {"2026-08-01": {"dinner_start": "1700", "dinner_end": "2200", "entry_confirmed": True},
+                "2026-08-02": {"entry_confirmed": True}}
+        self.assertEqual(self.staffing.save_person_month("スタッフA", "2026-08", rows), 2)
+        self.assertEqual(self.data.data["business_staff_hours"]["2026-08-01"]["スタッフB"], before)
+        self.assertEqual(self.staffing.day("2026-08-01")["スタッフA"]["dinner_start"], "17:00")
+        self.assertTrue(self.staffing.day("2026-08-02")["スタッフA"]["entry_confirmed"])
+        with self.assertRaises(ValueError):
+            self.staffing.save_person_month("スタッフA", "2026-08", {
+                "2026-08-03": {"entry_confirmed": True},
+                "2026-08-04": {"lunch_start": "1000"}})
+        self.assertNotIn("2026-08-03", self.data.data["business_staff_hours"])
+
+    def test_person_month_conflict_does_not_overwrite(self):
+        self.staffing.save_person("2026-08-01", "スタッフA", {"entry_confirmed": True})
+        with self.assertRaises(ValueError):
+            self.staffing.save_person_month("スタッフA", "2026-08", {"2026-08-01": {}}, expected={})
+        self.assertTrue(self.staffing.day("2026-08-01")["スタッフA"]["entry_confirmed"])
+        with self.assertRaises(ValueError):
+            self.staffing.save_person_month("スタッフA", "2026-08", {"2026-09-01": {}})
+
     def test_attendance_previous_month_includes_last_day(self):
         self.staffing.save_person("2026-08-31", "店長", {"attended": True})
         self.staffing.save_person("2026-09-01", "店長", {"attended": True})

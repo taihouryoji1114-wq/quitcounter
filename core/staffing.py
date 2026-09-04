@@ -278,7 +278,7 @@ class StaffingManager:
             }
         return result
 
-    def save_day(self, record_date, values):
+    def _clean_day(self, record_date, values):
         self._date(record_date)
         cleaned = {}
         for name in self.STAFF:
@@ -298,9 +298,38 @@ class StaffingManager:
             worked_minutes = sum(self._minutes(cleaned[name]))
             if cleaned[name]["break_minutes"] > worked_minutes:
                 raise ValueError(f"{name}の休憩時間が勤務時間を超えています。")
+        return cleaned
+
+    def save_day(self, record_date, values):
+        cleaned = self._clean_day(record_date, values)
         self._data_manager.data.setdefault("business_staff_hours", {})[record_date] = cleaned
         self._data_manager.save()
         return cleaned
+
+    def save_person_month(self, name, month, days, expected=None):
+        """Validate the entire batch before writing; preserve other staff/days."""
+        from core.clock import today_jst
+        if name not in self.STAFF:
+            raise ValueError("スタッフを選んでください。")
+        if datetime.strptime(month, "%Y-%m").strftime("%Y-%m") != month:
+            raise ValueError("対象月を選んでください。")
+        records = self._data_manager.data.get("business_staff_hours", {})
+        updates = {}
+        for record_date, value in days.items():
+            if not record_date.startswith(month + "-") or self._date(record_date).date() > today_jst():
+                raise ValueError("対象月の今日以前の日付だけ入力できます。")
+            if expected is not None and records.get(record_date, {}).get(name, {}) != expected.get(record_date, {}):
+                raise ValueError(f"{record_date}は別の画面で更新されました。再読込して確認してください。")
+            try:
+                updates[record_date] = self._clean_day(record_date, {name: value})[name]
+            except ValueError as error:
+                raise ValueError(f"{record_date}：{error}") from error
+        if updates:
+            records = self._data_manager.data.setdefault("business_staff_hours", {})
+            for record_date, value in updates.items():
+                records.setdefault(record_date, {})[name] = value
+            self._data_manager.save()
+        return len(updates)
 
     def day_total(self, record_date):
         wages, shifts = self.wages(), self.day(record_date)

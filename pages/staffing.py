@@ -19,6 +19,9 @@ def staffing_page(request: Request):
     content = Theme.shell("人件費管理", "スタッフ名を保存せず、時給と勤務時間から自動計算",
                           back_to="/mirai-kessan/dashboard", brand="未来決算")
     with content:
+        with ui.card().classes("w-full q-pa-md q-mb-md"):
+            ui.label("1人ずつ、1か月分をまとめて入力").classes("text-lg font-bold")
+            ui.button("スタッフ別まとめ入力", icon="edit_calendar", on_click=lambda: ui.navigate.to("/mirai-kessan/staffing/month")).classes("w-full q-py-sm")
         wages = staffing.wages()
         salaries = staffing.monthly_salaries()
         current_month = today_jst().strftime("%Y-%m")
