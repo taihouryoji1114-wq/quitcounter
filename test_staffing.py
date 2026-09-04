@@ -22,6 +22,18 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(self.staffing.STAFF[3], "スタッフA")
         self.assertEqual(self.staffing.STAFF[-1], "スタッフI")
 
+    def test_attendance_previous_month_includes_last_day(self):
+        self.staffing.save_person("2026-08-31", "店長", {"attended": True})
+        self.staffing.save_person("2026-09-01", "店長", {"attended": True})
+        previous = self.staffing.attendance_progress("2026-08", "2026-09-04")["店長"]
+        self.assertEqual(previous["target_count"], 31)
+        self.assertEqual(previous["checked_days"], [31])
+        current = self.staffing.attendance_progress("2026-09", "2026-09-04")["店長"]
+        self.assertEqual(current["target_count"], 4)
+        self.assertEqual(current["checked_days"], [1])
+        february = self.staffing.attendance_progress("2024-02", "2026-09-04")["店長"]
+        self.assertEqual(february["target_count"], 29)
+
     def test_authorized_august_reset_runs_once_and_preserves_other_data(self):
         self.staffing.save_day("2026-08-02", {"店長": {"attended": True}})
         self.staffing.save_day("2026-09-02", {"店長": {"attended": True}})
