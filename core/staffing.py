@@ -331,6 +331,23 @@ class StaffingManager:
             self._data_manager.save()
         return len(updates)
 
+    def save_date_batch(self, record_date, people, expected=None):
+        from core.clock import today_jst
+        if self._date(record_date).date() > today_jst():
+            raise ValueError("勤務実績は今日以前の日付で入力してください。")
+        current = self._data_manager.data.get("business_staff_hours", {}).get(record_date, {})
+        updates = {}
+        for name, value in people.items():
+            if name not in self.STAFF:
+                raise ValueError("スタッフを選んでください。")
+            if expected is not None and current.get(name, {}) != expected.get(name, {}):
+                raise ValueError(f"{name}は別の画面で更新されています。再読込してください。")
+            updates[name] = self._clean_day(record_date, {name: value})[name]
+        if updates:
+            self._data_manager.data.setdefault("business_staff_hours", {}).setdefault(record_date, {}).update(updates)
+            self._data_manager.save()
+        return len(updates)
+
     def day_total(self, record_date):
         wages, shifts = self.wages(), self.day(record_date)
         return round(sum(self._shift_pay(wages[name], shifts[name]) for name in self.HOURLY_STAFF)

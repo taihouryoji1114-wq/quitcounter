@@ -45,6 +45,22 @@ class StaffingManagerTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.staffing.save_person_month("スタッフA", "2026-08", {"2026-09-01": {}})
 
+    def test_date_batch_validates_everyone_before_saving(self):
+        self.staffing.save_person("2026-08-01", "スタッフC", {"entry_confirmed": True})
+        before = dict(self.data.data["business_staff_hours"]["2026-08-01"]["スタッフC"])
+        with self.assertRaises(ValueError):
+            self.staffing.save_date_batch("2026-08-01", {
+                "スタッフA": {"lunch_start": "1000", "lunch_end": "1500"},
+                "スタッフB": {"dinner_start": "1700"}})
+        self.assertEqual(self.staffing.day("2026-08-01")["スタッフA"]["lunch_start"], "")
+        self.assertEqual(self.staffing.save_date_batch("2026-08-01", {
+            "スタッフA": {"lunch_start": "1000", "lunch_end": "1500", "entry_confirmed": True},
+            "スタッフB": {"entry_confirmed": True}}), 2)
+        self.assertEqual(self.staffing.day("2026-08-01")["スタッフA"]["lunch_start"], "10:00")
+        self.assertEqual(self.data.data["business_staff_hours"]["2026-08-01"]["スタッフC"], before)
+        with self.assertRaises(ValueError):
+            self.staffing.save_date_batch("2026-08-01", {"スタッフA": {}}, expected={})
+
     def test_attendance_previous_month_includes_last_day(self):
         self.staffing.save_person("2026-08-31", "店長", {"attended": True})
         self.staffing.save_person("2026-09-01", "店長", {"attended": True})
