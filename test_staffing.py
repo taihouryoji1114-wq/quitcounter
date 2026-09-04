@@ -251,7 +251,7 @@ class StaffingManagerTest(unittest.TestCase):
         summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 31))
         self.assertEqual(summary["planned_days"], 21)
         self.assertEqual(summary["attendance"]["店長"], 1)
-        self.assertEqual(summary["gross_wages"], round(350_000 / 21))
+        self.assertEqual(summary["gross_wages"], 630_000)
         self.assertEqual(summary["transportation"], 500)
         self.assertEqual(summary["forecast_gross_wages"], 630_000)
 
@@ -276,6 +276,15 @@ class StaffingManagerTest(unittest.TestCase):
         self.assertEqual(summary["gross_wages"], 100_000)
         self.assertEqual(summary["attendance"]["副社長"], 0)
         self.assertEqual(summary["forecast_gross_wages"], 310_000)
+
+    def test_all_salaries_accrue_without_attendance_and_ignore_old_checks(self):
+        self.staffing.save_monthly_salaries({"副社長": 300000, "店長": 300000, "社員A": 240000})
+        self.assertEqual(self.staffing.month_cost_summary("2026-09", date(2026, 9, 5))["gross_wages"], 140000)
+        self.staffing.save_person("2026-09-01", "店長", {"attended": True})
+        self.assertEqual(self.staffing.month_cost_summary("2026-09", date(2026, 9, 5))["gross_wages"], 140000)
+        self.assertEqual(self.staffing.month_cost_summary("2026-08", date(2026, 9, 5))["gross_wages"], 840000)
+        self.assertEqual(self.staffing.month_cost_summary("2026-10", date(2026, 9, 5))["gross_wages"], 0)
+        self.assertEqual(self.staffing.month_cost_summary("2026-09", date(2026, 9, 30))["gross_wages"], 840000)
 
     def test_attendance_progress_shows_checked_and_missing_dates(self):
         self.staffing.save_day("2026-08-01", {"店長": {"attended": True}})

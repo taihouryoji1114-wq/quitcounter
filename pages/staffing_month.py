@@ -21,7 +21,7 @@ def monthly_timecards():
     with content:
         ui.button("日付別まとめ入力に切り替え", icon="groups", on_click=lambda: ui.navigate.to("/mirai-kessan/staffing/day")).props("flat")
         with ui.row().classes("w-full no-wrap gap-2"):
-            person = ui.select(list(staffing.STAFF), value="スタッフA", label="スタッフ").props("outlined dense").classes("grow")
+            person = ui.select(list(staffing.HOURLY_STAFF), value="スタッフA", label="スタッフ").props("outlined dense").classes("grow")
             month_input = ui.input("対象月", value=today_jst().strftime("%Y-%m")).props("outlined dense type=month").classes("grow")
         editor = ui.column().classes("w-full gap-2")
 
@@ -29,7 +29,7 @@ def monthly_timecards():
             try:
                 month = str(month_input.value)
                 first = date.fromisoformat(month + "-01")
-                if first > today_jst() or person.value not in staffing.STAFF:
+                if first > today_jst() or person.value not in staffing.HOURLY_STAFF:
                     raise ValueError()
             except (ValueError, TypeError):
                 ui.notify("スタッフと今月以前の対象月を選んでください", type="negative")
@@ -168,7 +168,7 @@ def daily_timecards(request: Request):
                 ui.label("変更したスタッフだけ保存します。休みは「休み」を選択。1000のように時刻を直接入力できます。").classes("text-xs")
                 counter = ui.label("変更なし").classes("text-orange-9 font-bold")
                 with ui.column().classes("w-full gap-2").style("max-height:62vh;overflow-y:auto;padding:3px"):
-                    for name in staffing.STAFF:
+                    for name in staffing.HOURLY_STAFF:
                         value = values[name]
                         work = value["attended"] or any(value[k] for k in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"))
                         status = "出勤" if work else "休み" if value.get("entry_confirmed") else "未入力"

@@ -56,58 +56,10 @@ def staffing_page(request: Request):
                         ui.label(title).classes("text-[9px] opacity-70")
                         ui.label(f"¥{group['company_cost']:,}").classes("text-base font-black")
                         ui.label(f"給与 {group['gross_wages']:,}・交通 {group['transportation']:,}・保険 {group['employer_insurance']:,}").classes("text-[7px] opacity-70")
-        with ui.expansion("出勤チェック状況　出勤日を見る", icon="fact_check",
-                          value=False).classes("attendance-progress-card staff-panel w-full q-mb-sm"):
-            def move_attendance_month(offset):
-                try:
-                    selected_month = date.fromisoformat(f"{attendance_month.value}-01")
-                    index = selected_month.year * 12 + selected_month.month - 1 + offset
-                    target = date(index // 12, index % 12 + 1, 1).strftime("%Y-%m")
-                except (ValueError, TypeError):
-                    return
-                if target <= current_month:
-                    attendance_month.set_value(target)
-
-            with ui.row().classes("w-full items-center no-wrap gap-2"):
-                ui.button(icon="chevron_left", on_click=lambda: move_attendance_month(-1)).props(
-                    "flat round aria-label='前月を見る'")
-                attendance_month = ui.input("対象月", value=current_month,
-                    on_change=lambda: attendance_days.refresh()).props(
-                        f"outlined dense type=month max={current_month}").classes("grow min-w-0")
-                ui.button(icon="chevron_right", on_click=lambda: move_attendance_month(1)).props(
-                    "flat round aria-label='翌月を見る'")
-            ui.button("今月に戻る", on_click=lambda: attendance_month.set_value(current_month)).props("flat dense")
-
-            @ui.refreshable
-            def attendance_days():
-                month = str(attendance_month.value or "")
-                try:
-                    if month > current_month:
-                        raise ValueError()
-                    progress_by_name = staffing.attendance_progress(month, today_jst().isoformat())
-                except (ValueError, TypeError):
-                    ui.label("今月以前の対象月を選んでください。")
-                    return
-                ui.label(f"{month.replace('-', '年')}月の出勤記録").classes("text-sm font-bold q-mt-sm")
-                ui.label("緑：出勤登録あり ／ 灰色：出勤登録なし").classes("text-xs text-grey-7")
-                for name in staffing.SALARIED_STAFF:
-                    progress = progress_by_name[name]
-                    with ui.row().classes("w-full items-center justify-between q-mt-xs"):
-                        with ui.column().classes("gap-0"):
-                            ui.label(name).classes("text-xs font-black")
-                            latest = (f"{int(progress['latest_date'][5:7])}月"
-                                      f"{int(progress['latest_date'][8:10])}日" if progress["latest_date"] else "まだなし")
-                            ui.label(f"最後の出勤：{latest}").classes("text-[9px] text-grey-6")
-                        ui.label(f"出勤 {progress['checked_count']}日").classes("text-xs font-black text-primary")
-                    with ui.element("div").classes("checked-date-list w-full q-mb-sm"):
-                        for day_number in range(1, progress["target_count"] + 1):
-                            attended = day_number in progress["checked_days"]
-                            ui.label(f"{day_number}日").classes(
-                                "checked-date-chip attended" if attended else "checked-date-chip unchecked")
-            attendance_days()
+        ui.label("社員3人の給与は日割りで自動反映されます。勤務時間の入力はアルバイトだけです。").classes("text-sm font-bold q-my-sm")
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
-            ui.label("副社長は暦日按分、店長・社員は月10日休み・1出勤10時間を基準に配分します").classes(
+            ui.label("3人とも出勤入力は不要。月10日休みを月内に均等配分し、月給×経過日数÷月の日数で自動計上します。過去月は満額です。").classes(
                 "text-[9px] text-grey-6 q-mb-xs")
             salary_inputs = {
                 name: ui.number(f"{name}の額面給与", value=salaries[name] or None,

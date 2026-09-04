@@ -32,7 +32,8 @@ def attendance_input_page():
                 f"入力状況　{month.replace('-', '年')}月", icon="fact_check", value=False,
             ).classes("attendance-progress w-full q-mb-sm"):
                 with ui.element("div").classes("attendance-progress-grid w-full"):
-                    for name in staffing.STAFF:
+                    ui.label("社員3人の給与は自動日割り計上のため、出勤入力は不要です。").classes("text-sm")
+                    for name in staffing.HOURLY_STAFF:
                         item = progress[name]
                         latest = (f"{int(item['latest_date'][8:10])}日まで"
                                   if item["latest_date"] else "まだ入力なし")
@@ -55,7 +56,7 @@ def attendance_input_page():
             with input_area:
                 fields = {}
                 with ui.card().classes("attendance-input-card w-full q-pa-md q-mt-sm"):
-                    for name in staffing.STAFF:
+                    for name in staffing.HOURLY_STAFF:
                         fields[name] = {}
                         with ui.expansion(name, value=name in staffing.SALARIED_STAFF).classes(
                             "attendance-person w-full q-mb-xs"):
@@ -91,7 +92,7 @@ def attendance_input_page():
 
                     def save():
                         try:
-                            staffing.save_day(record_date, {
+                            staffing.save_date_batch(record_date, {
                                 name: {key: field.value for key, field in person_fields.items()}
                                 for name, person_fields in fields.items()
                             })

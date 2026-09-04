@@ -491,9 +491,10 @@ class StaffingManager:
             1 for day in records if day.startswith(month) and day <= actual_cutoff and self.day(day)[name]["attended"]
         ) for name in self.SALARIED_STAFF}
         salaries = self.monthly_salaries()
-        salaried_actual = round(salaries["副社長"] * vice_progress) + sum(
-            min(salaries[name], round(salaries[name] / planned_days * attendance[name]))
-            for name in ("店長", "社員A"))
+        # Ten rest days are spread across the month rather than guessed dates:
+        # salary / planned_days * (planned_days * elapsed_days / days_in_month).
+        salaried_actual = sum(round(salaries[name] * vice_progress)
+                              for name in self.SALARIED_STAFF)
         gross = salaried_actual
         salaried_transport = hourly_transport = 0
         for record_date in records:
@@ -515,19 +516,15 @@ class StaffingManager:
                 rate = rates["health"] + rates["pension"] + rates["other"]
                 if setting["care"]:
                     rate += rates["care"]
-                if name == "副社長":
+                if name in self.SALARIED_STAFF:
                     factor = vice_progress
-                elif name in ("店長", "社員A"):
-                    factor = min(1, attendance[name] / planned_days)
                 else:
                     factor = 1
                 group = "salaried" if name in self.SALARIED_STAFF else "hourly"
                 social_by_group[group] += setting["standard_monthly"] * rate / 100 * factor
             if setting["employment"]:
                 if name in self.SALARIED_STAFF:
-                    salary_actual = (round(salaries[name] * vice_progress) if name == "副社長"
-                                     else min(salaries[name], round(
-                                         salaries[name] / planned_days * attendance[name])))
+                    salary_actual = round(salaries[name] * vice_progress)
                     staff_gross = salary_actual + sum(
                         self.commute_rates()[name] for day in records if day.startswith(month)
                         and self.day(day)[name]["attended"])
