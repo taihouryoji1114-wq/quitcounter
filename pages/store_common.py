@@ -1,9 +1,11 @@
 from nicegui import app, ui
 
 from core.auth import current_role, log_out
+from pages.announcement_controls import announcement_player
 
 
 def store_header_actions():
+    announcement_player()
     with ui.row().classes("gap-0"):
         if current_role() == "owner" and app.storage.user.get("return_to_chankocchi"):
             ui.button(icon="pets", on_click=lambda: ui.navigate.to("/chankocchi")).props(

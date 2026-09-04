@@ -40,6 +40,7 @@ def _render_future_financials_home(selected_month=None):
             for title, icon, path in (
                 ("経営コンサル", "psychology", "/mirai-kessan/consulting"),
                 ("人件費管理", "groups", "/mirai-kessan/staffing"),
+                ("立替管理", "account_balance_wallet", "/mirai-kessan/advances"),
                 ("売上入力", "point_of_sale", "/mirai-kessan/sales"),
                 ("仕入れノート", "inventory_2", "/mirai-kessan/shiire"),
                 ("利益シミュレーション", "grid_view", "/mirai-kessan/block-map"),
@@ -518,6 +519,7 @@ def _render_future_financials_home(selected_month=None):
                     ui.icon("chevron_right").classes("text-2xl text-grey-7")
 
         menu_card("売上入力", "その日の売上を記録", "point_of_sale", "#C07B32", "/mirai-kessan/sales")
+        menu_card("立替管理", "3人の立替額・返金・残額", "account_balance_wallet", "#398061", "/mirai-kessan/advances")
         menu_card(
             "仕入れノート", "原価・経費・消費税を記録",
             "inventory_2", "#3678C8", "/mirai-kessan/shiire",

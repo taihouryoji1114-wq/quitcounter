@@ -7,6 +7,7 @@ from core.store_quiz import store_quiz
 from core.shift_submissions import shift_submissions
 from core.theme import Theme
 from pages.store_common import store_header_actions
+from pages.announcement_controls import announcement_settings
 
 
 CATEGORIES = ["野菜仕入れ", "冷食", "冷凍庫", "飲料", "調味料", "備品", "清掃用品", "その他"]
@@ -57,6 +58,7 @@ def store_settings_page():
         dialog.open()
 
     with content:
+        announcement_settings()
         with ui.card().classes("settings-hero w-full q-pa-lg q-mb-md"):
             ui.icon("tune").classes("text-3xl text-primary")
             ui.label("店舗で使う項目だけを管理").classes("text-lg font-black q-mt-sm")

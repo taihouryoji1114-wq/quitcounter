@@ -504,6 +504,8 @@ def store_dashboard_page():
             ui.label("その他の機能").classes("store-more-title")
             ui.label("横へスワイプ").classes("store-more-hint")
         with ui.element("div").classes("store-app-rail w-full"):
+            app_card("アナウンス", "定時のお知らせ・お試し再生", "campaign",
+                     "/store-ops/announcements", "text-amber-8")
             app_card("温度・衛生", "冷蔵庫温度と衛生記録", "health_and_safety",
                      "/store-ops/hygiene", "text-cyan-8")
             app_card("清掃", "清掃状況と担当確認", "cleaning_services",
