@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import date
 
 from nicegui import ui
+from fastapi import Request
 from core.auth import require_app_access, require_permission, has_permission
 from core.clock import today_jst
 from core.staffing import staffing
@@ -133,7 +134,7 @@ def monthly_timecards():
 
 
 @ui.page("/mirai-kessan/staffing/day")
-def daily_timecards():
+def daily_timecards(request: Request):
     if not require_app_access("future_financials") or not require_permission("future_dashboard", "/mirai-kessan/input"):
         return
     Theme.page("日付別まとめ入力｜未来決算", app_name="mirai-kessan")
@@ -142,7 +143,11 @@ def daily_timecards():
     dirty = set()
     with content:
         ui.button("スタッフ別まとめ入力に切り替え", on_click=lambda: ui.navigate.to("/mirai-kessan/staffing/month")).props("flat")
-        selected_day = ui.input("対象日", value=today_jst().isoformat()).props(f"outlined type=date max={today_jst().isoformat()}").classes("w-full")
+        try:
+            initial_day = date.fromisoformat(request.query_params.get("date", "")).isoformat()
+        except ValueError:
+            initial_day = today_jst().isoformat()
+        selected_day = ui.input("対象日", value=initial_day).props(f"outlined type=date max={today_jst().isoformat()}").classes("w-full")
         editor = ui.column().classes("w-full")
 
         def load():

@@ -15,6 +15,13 @@ def staffing_page(request: Request):
         return
     if not require_permission("future_dashboard", "/mirai-kessan/input"):
         return
+    if request.query_params.get("date"):
+        try:
+            target = date.fromisoformat(request.query_params["date"]).isoformat()
+        except ValueError:
+            target = today_jst().isoformat()
+        ui.navigate.to(f"/mirai-kessan/staffing/day?date={target}")
+        return
     Theme.page("人件費管理｜未来決算", app_name="mirai-kessan")
     content = Theme.shell("人件費管理", "スタッフ名を保存せず、時給と勤務時間から自動計算",
                           back_to="/mirai-kessan/dashboard", brand="未来決算")
@@ -241,120 +248,5 @@ def staffing_page(request: Request):
         plan_date.on("change", lambda: render_simple_plan(plan_date.value))
         render_simple_plan(tomorrow)
 
-        requested_day = str(request.query_params.get("date", ""))
-        try:
-            selected = date.fromisoformat(requested_day).isoformat()
-        except ValueError:
-            selected = today_jst().isoformat()
-        with ui.expansion("勤務・出勤を入力", icon="schedule", value=False).classes(
-            "staff-panel w-full q-mt-sm"):
-            date_input = ui.input("日付", value=selected).props("outlined dense type=date").classes("w-full")
-            @ui.refreshable
-            def timecard_progress_summary(month):
-                progress = staffing.timecard_progress(month, today_jst().isoformat())
-                with ui.expansion(
-                    f"入力状況　{month.replace('-', '年')}月", icon="fact_check", value=True,
-                ).classes("timecard-progress w-full q-mt-sm"):
-                    with ui.element("div").classes("timecard-progress-grid w-full"):
-                        for name in staffing.STAFF:
-                            item = progress[name]
-                            latest = (f"最終入力：{int(item['latest_date'][8:10])}日"
-                                      if item["latest_date"] else "まだ入力なし")
-                            with ui.element("div").classes(
-                                    "timecard-progress-person entered" if item["latest_date"]
-                                    else "timecard-progress-person"):
-                                ui.label(name).classes("timecard-progress-name")
-                                ui.label(latest).classes("timecard-progress-latest")
-                                ui.label(f"{item['entered_count']}日分").classes(
-                                    "timecard-progress-count")
-                                ui.label("入力済み：" + ("・".join(map(str, item["entered_days"])) or "なし")).classes("text-xs break-words")
-                                ui.label("未確認：" + ("・".join(map(str, item["missing_days"])) or "なし")).classes("text-xs text-orange-9 break-words")
-                    ui.label("休みの日も、その人の入力欄を空欄のまま保存すると確認済みになります。未確認＝欠勤ではありません。").classes("text-xs q-mt-sm")
-
-            timecard_progress_summary(selected[:7])
-            hours_area = ui.column().classes("w-full gap-0")
-
-        def render_day(record_date):
-            hours_area.clear()
-            values = staffing.day(record_date)
-            with hours_area:
-                shift_inputs = {}
-                with ui.card().classes("surface-card w-full q-pa-md q-mt-sm"):
-                    ui.label("終了が開始より早い場合は翌日として計算します").classes("text-[9px] text-grey-6 q-mb-sm")
-                    for name in staffing.STAFF:
-                        shift_inputs[name] = {}
-                        entered = values[name].get("entry_confirmed") or values[name]["attended"] or any(
-                            values[name][key] for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"))
-                        with ui.expansion(f"{name}　{'入力済み' if entered else '未入力'}", value=False).classes("staff-shift w-full q-mb-xs") as staff_panel:
-                            if name in staffing.HOURLY_STAFF:
-                                for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
-                                    ui.label(label).classes("text-[10px] font-bold q-mt-xs")
-                                    with ui.row().classes("w-full gap-2 no-wrap"):
-                                        for title, suffix in (("開始", "start"), ("終了", "end")):
-                                            key = f"{prefix}_{suffix}"
-                                            shift_inputs[name][key] = ui.input(
-                                                title, value=values[name][key]
-                                            ).props(
-                                                "outlined dense inputmode=numeric placeholder='10:00'"
-                                            ).classes("grow")
-                                    ui.button(
-                                        f"{label}の入力を消す", icon="backspace",
-                                        on_click=lambda _, person=name, session=prefix: (
-                                            shift_inputs[person][f"{session}_start"].set_value(""),
-                                            shift_inputs[person][f"{session}_end"].set_value(""),
-                                        ),
-                                    ).props("flat dense no-caps color=negative").classes(
-                                        "timecard-clear-shift")
-                                shift_inputs[name]["break_minutes"] = ui.number(
-                                    "休憩時間（賄いを含む）", value=values[name]["break_minutes"] or None,
-                                    min=0, max=1440, step=1
-                                ).props("outlined dense suffix=分 inputmode=numeric").classes("w-full q-mt-xs")
-                            else:
-                                for key in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"):
-                                    shift_inputs[name][key] = ui.input(value="").props("type=hidden").classes("hidden")
-                                shift_inputs[name]["attended"] = ui.checkbox(
-                                    "この日は出勤", value=values[name]["attended"]
-                                ).classes("q-mt-xs")
-                                shift_inputs[name]["break_minutes"] = ui.number(value=0).props(
-                                    "disable").classes("hidden")
-                            if name in staffing.HOURLY_STAFF:
-                                shift_inputs[name]["attended"] = ui.checkbox(value=False).props("disable").classes("hidden")
-                            detail = staffing.day_detail(record_date, name)
-                            if detail["total_minutes"]:
-                                ui.label(
-                                    f"{detail['total_minutes']//60}時間{detail['total_minutes']%60}分"
-                                    f"（休憩 {detail['break_minutes']}分・支払対象 {detail['paid_minutes']//60}時間{detail['paid_minutes']%60}分・深夜 {detail['night_minutes']}分）　¥{detail['pay']:,}"
-                                ).classes("text-[10px] font-bold text-primary q-mt-sm")
-
-                            def save_person(_, person=name, panel=staff_panel):
-                                try:
-                                    staffing.save_person(record_date, person, {
-                                        key: field.value for key, field in shift_inputs[person].items()
-                                    })
-                                except ValueError as error:
-                                    ui.notify(str(error), type="negative")
-                                    return
-                                panel.set_text(f"{person}　入力済み")
-                                timecard_progress_summary.refresh(record_date[:7])
-                                attendance_days.refresh()
-                                totals.refresh()
-                                ui.notify(f"{person}の{record_date}を保存しました", type="positive")
-
-                            ui.button("この人の入力を保存（空欄なら休み）", icon="save", on_click=save_person).classes("w-full q-mt-sm")
-
-                    @ui.refreshable
-                    def totals():
-                        ui.label(f"この日の賃金・交通費　¥{staffing.day_total(record_date):,}").classes("text-base font-black text-primary q-mt-md")
-                        summary = staffing.month_cost_summary(record_date[:7], today_jst())
-                        ui.label(f"額面給与 ¥{summary['gross_wages']:,}＋交通費 ¥{summary['transportation']:,}＋会社負担保険 ¥{summary['employer_insurance']:,}").classes("text-xs text-grey-7 q-mt-xs")
-                        ui.label(f"現時点の会社総負担　¥{summary['company_cost']:,}").classes("text-lg font-black text-primary")
-                        ui.label(f"月末着地予測　¥{summary['forecast_company_cost']:,}").classes("text-sm font-black q-mt-xs")
-                    totals()
-        def change_timecard_date():
-            timecard_progress_summary.refresh(date_input.value[:7])
-            render_day(date_input.value)
-
-        date_input.on("change", change_timecard_date)
-        render_day(selected)
         ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}.checked-date-chip{padding:6px 2px;border-radius:9px;font-size:9px;font-weight:900;text-align:center}.checked-date-chip.attended{background:#DDF1E5;color:#28704A;border:1px solid #B9DEC8}.checked-date-chip.unchecked{background:#F1F3F2;color:#9AA39E;border:1px solid #E4E8E5}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
         ui.add_css(".staff-total-card *,.staff-group-card *,.attendance-progress-card *,.staff-panel *{min-width:0;box-sizing:border-box}.staff-total-card .text-2xl,.staff-total-card .text-xl,.staff-total-card .text-lg{max-width:100%;font-size:clamp(13px,5vw,22px)!important;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:clip;font-variant-numeric:tabular-nums}.timecard-progress{border-radius:15px!important;background:#F8FAF8!important;border:1px solid #E1E9E4!important}.timecard-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 10px 12px}.timecard-progress-person{min-width:0;padding:9px;border-radius:13px;background:#F1F3F2;border:1px solid #E4E8E5}.timecard-progress-person.entered{background:#E9F5ED;border-color:#C9E3D2}.timecard-progress-name{font-size:10px;font-weight:950}.timecard-progress-latest{font-size:11px;font-weight:950;color:#286B49}.timecard-progress-count{font-size:8px;color:#7A8780}.timecard-clear-shift{align-self:flex-end!important;margin-top:-2px!important;font-size:9px!important}@media(max-width:520px){.staff-total-card,.staff-panel,.attendance-progress-card{padding-left:13px!important;padding-right:13px!important}.staff-group-card{padding:8px 6px}}")
