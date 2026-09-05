@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#0d1427">
   <title>神獣札</title>
-  <link rel="stylesheet" href="style.css?v=4">
-  <link rel="stylesheet" href="effects.css?v=1">
+  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="effects.css?v=2">
 </head>
 <body>
   <main id="game">
@@ -16,6 +16,9 @@
     <section id="explore" class="screen active">
       <div class="notice"><b>近くで神印が震えている</b><span>参道の奥から、禍獣の気配……</span></div>
       <button id="sense" class="sense"><i>✦</i><span>気配を調べる</span></button>
+      <div class="journey">
+        <span class="done">夕凪神社</span><i></i><button id="river-node">水元河川敷</button><i></i><span class="locked-node">古い商店街</span>
+      </div>
       <p class="guide">光る場所をタップして探索</p>
     </section>
 
@@ -34,8 +37,15 @@
           <button data-move="狐火" data-damage="24">狐火</button>
           <button data-move="印返し" data-damage="15">印返し</button>
           <button data-move="見切る" data-damage="0">見切る</button>
+          <button id="switch-action">交代</button>
         </div>
-        <button id="seal-action" class="seal-action hidden">白紙の神獣札を投げる</button>
+        <button id="seal-action" class="seal-action hidden">神獣札を投げる<br><small>捕獲率 15%</small></button>
+      </div>
+      <div id="switch-panel" class="switch-panel hidden">
+        <b>交代する神獣を選ぶ</b>
+        <button data-beast="kohaku"><img src="assets/kohaku.png" alt="">炎狐 コハク</button>
+        <button id="switch-muu" data-beast="muu"><img src="assets/kagekui.png" alt="">夢獏 ムウ</button>
+        <button id="switch-close">戻る</button>
       </div>
     </section>
 
@@ -60,6 +70,6 @@
       <p id="book-note">神獣との縁は、ここに刻まれる。</p>
     </section>
   </main>
-  <script src="game.js?v=4"></script>
+  <script src="game.js?v=5"></script>
 </body>
 </html>
