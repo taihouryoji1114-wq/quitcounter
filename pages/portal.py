@@ -75,21 +75,6 @@ def portal():
 
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/daiou")):
-            with ui.row().classes("w-full items-center no-wrap"):
-                ui.image("/static/daiou_icon.png").classes(
-                    "w-14 h-14 rounded-xl q-mr-md"
-                )
-                with ui.column().classes("gap-0"):
-                    ui.label("大王").classes("text-xl font-bold")
-                    ui.label("十国の思惑を読み、自分の国を治める").classes(
-                        "text-grey-7 q-mt-xs"
-                    )
-                ui.space()
-                ui.icon("chevron_right").classes("text-2xl text-grey-7")
-
-        with ui.card().classes(
-            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/chess-coach")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/chess_coach_icon.svg").classes(

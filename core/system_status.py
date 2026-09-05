@@ -19,7 +19,7 @@ def _bytes(value):
 
 def _group_sizes(source):
     groups = {"Habitory": 0, "未来決算": 0, "店舗管理": 0, "スケジュール": 0,
-              "軍略駒": 0, "大王": 0, "ちゃんこっち": 0, "チェス指導": 0, "その他": 0}
+              "軍略駒": 0, "ちゃんこっち": 0, "チェス指導": 0, "その他": 0}
     for key, value in source.items():
         size = _bytes({key: value})
         lowered = key.lower()
@@ -35,8 +35,6 @@ def _group_sizes(source):
             groups["未来決算"] += size
         elif any(word in lowered for word in ("gunryaku", "commander", "campaign", "battle")):
             groups["軍略駒"] += size
-        elif "daiou" in lowered:
-            groups["大王"] += size
         elif "chess" in lowered:
             groups["チェス指導"] += size
         else:

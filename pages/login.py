@@ -82,12 +82,6 @@ def chankocchi_login():
                  "今日も一緒に暮らそう", app_name="chankocchi")
 
 
-@ui.page("/daiou/login")
-def daiou_login():
-    login_screen("daiou", "大王", "/daiou", "十国を見渡し、自分の国を治める",
-                 app_name="daiou")
-
-
 @ui.page("/chess-coach/login")
 def chess_coach_login():
     login_screen("chess_coach", "CHESS MENTOR", "/chess-coach",

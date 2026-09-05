@@ -26,10 +26,6 @@ class Theme:
             manifest = "/static/chankocchi-manifest.json"
             icon = "/static/chankocchi_stage1.png"
             theme_color = "#8A5C3C"
-        elif app_name == "daiou":
-            manifest = "/static/daiou-manifest.json"
-            icon = "/static/daiou_icon.png"
-            theme_color = "#0B1820"
         elif app_name == "chess_coach":
             manifest = "/static/chess-coach-manifest.json"
             icon = "/static/chess_coach_icon.svg"

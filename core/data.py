@@ -67,6 +67,8 @@ class DataManager:
         """Return the Ver3 model while preserving unknown root data."""
         if self._is_ver3(source):
             result = deepcopy(source)
+            # 大王は廃止済み。公開環境に残るゲーム進行データも削除する。
+            result.pop("daiou", None)
             self._ensure_required_users(result)
             # Replace only untouched placeholder names. User-edited names are preserved.
             placeholder_names = {"user1": "ユーザー1", "user2": "ユーザー2"}
@@ -91,7 +93,7 @@ class DataManager:
         result = {
             key: deepcopy(value)
             for key, value in source.items()
-            if key not in {"schema_version", "current_user", "current_user_id", "users", "smoking", "workout_records"}
+            if key not in {"schema_version", "current_user", "current_user_id", "users", "smoking", "workout_records", "daiou"}
         }
         result["schema_version"] = SCHEMA_VERSION
 
