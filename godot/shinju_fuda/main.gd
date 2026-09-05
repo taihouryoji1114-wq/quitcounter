@@ -15,6 +15,7 @@ var message: Label
 var action_row: HBoxContainer
 var summon_card: Button
 var intro_overlay: Control
+var intro_pulse: Tween
 
 func _ready() -> void:
 	var app_theme := Theme.new()
@@ -112,9 +113,10 @@ func _build_exploration() -> void:
 	marker.add_theme_stylebox_override("hover", panel_style(Color("#ffe6a8"), 90, Color.WHITE))
 	marker.pressed.connect(_enter_battle)
 	intro_overlay.add_child(marker)
-	var pulse := create_tween().set_loops()
-	pulse.tween_property(marker, "scale", Vector2(1.06, 1.06), .8).set_trans(Tween.TRANS_SINE)
-	pulse.tween_property(marker, "scale", Vector2.ONE, .8).set_trans(Tween.TRANS_SINE)
+	marker.pivot_offset = marker.size / 2
+	intro_pulse = create_tween().set_loops()
+	intro_pulse.tween_property(marker, "scale", Vector2(1.045, 1.045), .8).set_trans(Tween.TRANS_SINE)
+	intro_pulse.tween_property(marker, "scale", Vector2.ONE, .8).set_trans(Tween.TRANS_SINE)
 
 	var guide := _label("光る場所をタップして探索", 15, Color("#fff2d2"))
 	guide.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -123,6 +125,8 @@ func _build_exploration() -> void:
 	intro_overlay.add_child(guide)
 
 func _enter_battle() -> void:
+	if intro_pulse and intro_pulse.is_valid():
+		intro_pulse.kill()
 	var tw := create_tween()
 	tw.tween_property(intro_overlay, "modulate:a", 0.0, .55)
 	await tw.finished

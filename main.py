@@ -2,12 +2,14 @@ from pathlib import Path
 import os
 
 from nicegui import app, ui
+from starlette.middleware.gzip import GZipMiddleware
 
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
 app.add_static_files("/static", str(STATIC_DIR))
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)
 
 # ページ読み込み
 import pages.home
