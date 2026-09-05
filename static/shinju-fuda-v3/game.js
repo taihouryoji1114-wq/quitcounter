@@ -7,7 +7,6 @@ function refreshBook(){
   $('#book-count').textContent=hasMuu?'2':'1';
   $('#muu-entry').classList.toggle('locked',!hasMuu);
   $('#switch-muu').disabled=!hasMuu;
-  $('#river-node').classList.toggle('unlocked',hasMuu);
   $('#book-note').textContent=hasMuu?'新しい縁が、札帳に刻まれた。':'神獣との縁は、ここに刻まれる。';
 }
 refreshBook();
@@ -17,13 +16,35 @@ $('#keep-card').addEventListener('click',()=>{
   hasMuu=true; localStorage.setItem('shinju-fuda:muu','1'); refreshBook();
   $('#reward').classList.remove('active'); $('#book').classList.add('active');
 });
-$('#river-node').addEventListener('click',()=>{
-  const box=$('.notice');
-  box.innerHTML=hasMuu?'<b>水元河川敷に新しい反応</b><span>水面の下で、青い神印が瞬いている……</span>':'<b>まだ道が開いていない</b><span>夕凪神社の禍獣と縁を結ぼう。</span>';
-});
+const field={x:512,y:1320,kx:465,ky:1375,inputX:0,inputY:0,target:null,last:performance.now()};
+const world=$('#field-world'),viewport=$('#field-viewport'),player=$('#field-player'),companion=$('#field-kohaku');
+const sealSpot={x:570,y:930};
+function updateField(){
+  player.style.left=field.x+'px'; player.style.top=field.y+'px'; companion.style.left=field.kx+'px'; companion.style.top=field.ky+'px';
+  const vw=viewport.clientWidth,vh=viewport.clientHeight;
+  world.style.transform=`translate3d(${Math.min(0,Math.max(vw-1024,vw/2-field.x))}px,${Math.min(0,Math.max(vh-1536,vh/2-field.y))}px,0)`;
+  const distance=Math.hypot(field.x-sealSpot.x,field.y-sealSpot.y),near=distance<180;
+  $('#interact').disabled=!near; $('#interact').classList.toggle('ready',near);
+  $('#resonance-bar').style.width=Math.max(8,Math.min(100,112-distance/5.2))+'%';
+  $('#field-message').textContent=near?'封印石が脈打っている——調べられる':distance<330?'神印の震えが強くなってきた':'石段の先から神印の気配がする';
+}
+function fieldLoop(now){
+  const dt=Math.min(32,now-field.last)/16.67; field.last=now; let dx=field.inputX,dy=field.inputY;
+  if(field.target){const vx=field.target.x-field.x,vy=field.target.y-field.y,d=Math.hypot(vx,vy);if(d<8){field.target=null;dx=dy=0}else{dx=vx/d;dy=vy/d}}
+  const moving=Math.hypot(dx,dy)>.08;
+  if(moving){field.x=Math.max(110,Math.min(914,field.x+dx*4.3*dt));field.y=Math.max(180,Math.min(1440,field.y+dy*4.3*dt));field.kx+=(field.x-dx*60-field.kx)*.055*dt;field.ky+=(field.y-dy*60-field.ky)*.055*dt}
+  player.classList.toggle('walking',moving);companion.classList.toggle('walking',moving);player.classList.toggle('face-left',dx<-.05);companion.classList.toggle('face-left',field.kx>field.x);updateField();requestAnimationFrame(fieldLoop);
+}
+const joystick=$('#joystick'),stick=$('#joystick-stick');let pointerId=null;
+function joystickMove(event){if(event.pointerId!==pointerId)return;const r=joystick.getBoundingClientRect(),x=event.clientX-r.left-r.width/2,y=event.clientY-r.top-r.height/2,d=Math.hypot(x,y),m=Math.min(36,d),nx=d?x/d:0,ny=d?y/d:0;field.inputX=nx*m/36;field.inputY=ny*m/36;field.target=null;stick.style.transform=`translate(${nx*m}px,${ny*m}px)`}
+joystick.addEventListener('pointerdown',event=>{pointerId=event.pointerId;joystick.setPointerCapture(pointerId);joystickMove(event)});joystick.addEventListener('pointermove',joystickMove);
+function releaseJoystick(event){if(pointerId!==event.pointerId)return;pointerId=null;field.inputX=field.inputY=0;stick.style.transform='translate(0,0)'}
+joystick.addEventListener('pointerup',releaseJoystick);joystick.addEventListener('pointercancel',releaseJoystick);
+viewport.addEventListener('pointerup',event=>{if(event.target.closest('.field-character,.seal-spot'))return;const r=world.getBoundingClientRect();field.target={x:event.clientX-r.left,y:event.clientY-r.top}});
+requestAnimationFrame(fieldLoop);
 
-$('#sense').addEventListener('click',async()=>{
-  $('#sense').disabled=true;
+$('#interact').addEventListener('click',async()=>{
+  if($('#interact').disabled)return;field.inputX=field.inputY=0;field.target=null;$('#interact').disabled=true;$('#seal-spot').classList.add('opening');$('#field-message').textContent='封印の奥から禍獣が現れた！';await wait(850);
   $('#explore').classList.remove('active');
   await wait(420);
   $('#battle').classList.add('active');
