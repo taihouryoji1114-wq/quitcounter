@@ -114,6 +114,31 @@ class StoreOperationsManagerTest(unittest.TestCase):
                  if value["category"] == "備品"]
         self.assertEqual(items[:2], [second["id"], first["id"]])
 
+    def test_inventory_item_can_be_assigned_to_colored_subcategory(self):
+        item = self.manager.add_item("烏龍茶", "飲料")
+        group = next(value for value in self.manager.inventory_subcategories()
+                     if value["name"] == "ソフトドリンク")
+        self.manager.save_inventory_subcategory(
+            group["parent"], group["name"], "#AABBCC", group["id"])
+        self.manager.assign_inventory_subcategory(
+            item["id"], group["name"], group["parent"])
+        saved = next(value for value in self.manager.items() if value["id"] == item["id"])
+        updated_group = next(value for value in self.manager.inventory_subcategories()
+                             if value["id"] == group["id"])
+        self.assertEqual(saved["category"], "飲料")
+        self.assertEqual(saved["subcategory"], "ソフトドリンク")
+        self.assertEqual(updated_group["color"], "#AABBCC")
+
+    def test_inventory_drag_order_is_persisted(self):
+        first = self.manager.add_item("コーラ", "飲料")
+        second = self.manager.add_item("烏龍茶", "飲料")
+        self.manager.assign_inventory_subcategory(first["id"], "ソフトドリンク")
+        self.manager.assign_inventory_subcategory(second["id"], "ソフトドリンク")
+        self.manager.reorder_inventory_items([second["id"], first["id"]])
+        items = [value["id"] for value in self.manager.items()
+                 if value.get("subcategory") == "ソフトドリンク"]
+        self.assertEqual(items, [second["id"], first["id"]])
+
     def test_legacy_food_items_move_to_vegetable_purchasing(self):
         self.data.data["store_inventory_items"] = [{
             "id": "legacy-food", "name": "白菜", "category": "食材", "active": True,

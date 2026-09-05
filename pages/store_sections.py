@@ -129,26 +129,30 @@ def inventory_page():
     items = store_ops.items()
     is_owner = current_role() == "owner"
     categories = store_ops.inventory_categories()
-    category_meta = {value["name"]: value for value in categories}
+    subcategories = store_ops.inventory_subcategories()
     reset_at = store_ops.inventory_check_reset_at()
     content = section_shell("在庫確認", "現在の在庫をまとめて入力")
     with content:
         if is_owner:
             with ui.dialog() as category_dialog, ui.card().classes("surface-card w-96 q-pa-lg"):
-                ui.label("在庫の分類を設定").classes("text-xl font-black")
-                ui.label("分類名・色・表示順を変更できます").classes("text-xs text-grey-7")
+                ui.label("小分類を設定").classes("text-xl font-black")
+                ui.label("例：飲料の中に「ソフトドリンク」「焼酎」を作り、小枠だけ色分けします").classes("text-xs text-grey-7")
                 category_select = ui.select(
-                    {value["id"]: value["name"] for value in categories},
-                    label="編集する分類（新規なら未選択）",
+                    {value["id"]: f'{value["parent"]} ＞ {value["name"]}' for value in subcategories},
+                    label="編集する小分類（新規なら未選択）",
                 ).props("outlined dense clearable emit-value map-options").classes("w-full q-mt-md")
-                category_name = ui.input("分類名").props("outlined dense").classes("w-full")
-                category_color = ui.input("分類色", value="#E8F5E9").props(
+                parent_name = ui.select(
+                    [value["name"] for value in categories], label="入れる大分類",
+                ).props("outlined dense options-dense").classes("w-full")
+                category_name = ui.input("小分類名").props("outlined dense").classes("w-full")
+                category_color = ui.input("小枠の色", value="#E8F5E9").props(
                     "outlined dense type=color").classes("w-full")
 
                 def load_category(event):
-                    selected = next((value for value in categories
+                    selected = next((value for value in subcategories
                                      if value["id"] == event.value), None)
                     if selected:
+                        parent_name.value = selected["parent"]
                         category_name.value = selected["name"]
                         category_color.value = selected.get("color", "#F5F5F5")
 
@@ -156,8 +160,8 @@ def inventory_page():
 
                 def save_category():
                     try:
-                        store_ops.save_inventory_category(
-                            category_name.value, category_color.value,
+                        store_ops.save_inventory_subcategory(
+                            parent_name.value, category_name.value, category_color.value,
                             category_select.value)
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
@@ -166,8 +170,30 @@ def inventory_page():
                     ui.navigate.to("/store-ops/inventory")
 
                 ui.button("保存", icon="save", on_click=save_category).classes("w-full")
-            ui.button("分類・色・順番を設定", icon="palette", on_click=category_dialog.open).props(
-                "outline no-caps").classes("w-full q-mb-md")
+            with ui.dialog() as assign_dialog, ui.card().classes("surface-card w-96 q-pa-lg"):
+                ui.label("商品を小分類へ入れる").classes("text-xl font-black")
+                assign_item = ui.select({value["id"]: value["name"] for value in items},
+                                        label="商品").props("outlined dense emit-value map-options").classes("w-full")
+                assign_group = ui.select(
+                    {value["id"]: f'{value["parent"]} ＞ {value["name"]}' for value in subcategories},
+                    label="小分類").props("outlined dense emit-value map-options").classes("w-full")
+
+                def save_assignment():
+                    group = next((value for value in subcategories if value["id"] == assign_group.value), None)
+                    if not assign_item.value or not group:
+                        ui.notify("商品と小分類を選んでください", type="warning")
+                        return
+                    store_ops.assign_inventory_subcategory(
+                        assign_item.value, group["name"], group["parent"])
+                    assign_dialog.close()
+                    ui.navigate.to("/store-ops/inventory")
+
+                ui.button("この小分類へ入れる", icon="drive_file_move", on_click=save_assignment).classes("w-full")
+            with ui.row().classes("w-full gap-2 q-mb-md"):
+                ui.button("小分類と色を設定", icon="palette", on_click=category_dialog.open).props(
+                    "outline no-caps").classes("grow")
+                ui.button("商品を小分類へ", icon="drive_file_move", on_click=assign_dialog.open).props(
+                    "outline no-caps").classes("grow")
         fields = []
         grouped = {}
         for item in items:
@@ -176,50 +202,52 @@ def inventory_page():
         for category in sorted(grouped, key=lambda value: (
                 ordered_names.index(value) if value in ordered_names else 999, value)):
             category_items = grouped[category]
-            meta = category_meta.get(category, {"color": "#F5F5F5", "id": ""})
-            with ui.element("div").classes("inventory-category-wrap w-full q-mb-sm").style(
-                    f"--category-color:{meta.get('color', '#F5F5F5')}"):
-                if is_owner:
-                    with ui.row().classes("category-order-tools w-full justify-end gap-0"):
-                        ui.button(icon="arrow_upward", on_click=lambda _, cid=meta.get("id"): (
-                            store_ops.move_inventory_category(cid, "up"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round")
-                        ui.button(icon="arrow_downward", on_click=lambda _, cid=meta.get("id"): (
-                            store_ops.move_inventory_category(cid, "down"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round")
-                expansion = ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
-                                         value=False).classes("surface-card inventory-colored-category w-full")
+            expansion = ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
+                                     value=False).classes("surface-card inventory-main-category w-full q-mb-sm")
             with expansion:
-                with ui.element("div").classes("inventory-grid-new w-full"):
-                    for item in category_items:
-                        last_check = str(item.get("last_inventory_check_at", ""))
-                        was_reset = bool(reset_at and (not last_check or last_check <= reset_at))
-                        with ui.card().classes("inventory-item-new"):
-                            if is_owner:
-                                with ui.row().classes("item-order-tools w-full justify-end gap-0"):
-                                    ui.button(icon="keyboard_arrow_left", on_click=lambda _, iid=item["id"]: (
-                                        store_ops.move_inventory_item(iid, "up"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round size=xs")
-                                    ui.button(icon="keyboard_arrow_right", on_click=lambda _, iid=item["id"]: (
-                                        store_ops.move_inventory_item(iid, "down"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round size=xs")
-                            with ui.column().classes("gap-0 w-full min-w-0"):
-                                ui.label(item["name"]).classes("inventory-item-name")
-                                minimum = item.get("reorder_point")
-                                unit = item.get("unit", "個")
-                                if minimum is not None:
-                                    minimum_text = (str(int(minimum)) if float(minimum).is_integer()
-                                                    else str(minimum))
-                                    ui.label(f"最低 {minimum_text}{unit}").classes(
-                                        "minimum-stock-mark")
-                                else:
-                                    ui.label(f"単位 {unit}").classes("inventory-unit")
-                            if item.get("tracking_mode") == "count":
-                                field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
-                                                  suffix=item.get("unit", "個")).props(
-                                                      "outlined dense inputmode=decimal").classes("stock-field")
-                                fields.append((item["id"], "count", field))
-                            else:
-                                field = ui.select({"enough": "十分", "low": "少ない", "out": "なし"},
-                                                  value=None if was_reset else item.get("status", "enough")).props(
-                                                      "outlined dense options-dense").classes("stock-field")
-                                fields.append((item["id"], "status", field))
+                group_names = []
+                for item in category_items:
+                    name = item.get("subcategory") or "未分類"
+                    if name not in group_names:
+                        group_names.append(name)
+                configured = [value for value in subcategories if value["parent"] == category]
+                configured_order = [value["name"] for value in configured]
+                group_names.sort(key=lambda name: (configured_order.index(name)
+                                                   if name in configured_order else 999, name))
+                for group_name in group_names:
+                    meta = next((value for value in configured if value["name"] == group_name), {})
+                    group_items = [value for value in category_items
+                                   if (value.get("subcategory") or "未分類") == group_name]
+                    with ui.element("section").classes("inventory-subcategory w-full").style(
+                            f"--subcategory-color:{meta.get('color', '#F3F5F4')}"):
+                        ui.label(group_name).classes("inventory-subcategory-title")
+                        with ui.element("div").classes("inventory-grid-new inventory-sort-grid w-full"):
+                            for item in group_items:
+                                last_check = str(item.get("last_inventory_check_at", ""))
+                                was_reset = bool(reset_at and (not last_check or last_check <= reset_at))
+                                with ui.card().classes("inventory-item-new inventory-sort-card").props(
+                                        f'data-item-id="{item["id"]}"'):
+                                    with ui.column().classes("gap-0 w-full min-w-0"):
+                                        ui.label(item["name"]).classes("inventory-item-name")
+                                        minimum = item.get("reorder_point")
+                                        unit = item.get("unit", "個")
+                                        if minimum is not None:
+                                            minimum_text = (str(int(minimum)) if float(minimum).is_integer()
+                                                            else str(minimum))
+                                            ui.label(f"最低 {minimum_text}{unit}").classes(
+                                                "minimum-stock-mark")
+                                        else:
+                                            ui.label(f"単位 {unit}").classes("inventory-unit")
+                                    if item.get("tracking_mode") == "count":
+                                        field = ui.number(value=None if was_reset else item.get("current_stock"), step=.1,
+                                                          suffix=item.get("unit", "個")).props(
+                                                              "outlined dense inputmode=decimal").classes("stock-field")
+                                        fields.append((item["id"], "count", field))
+                                    else:
+                                        field = ui.select({"enough": "十分", "low": "少ない", "out": "なし"},
+                                                          value=None if was_reset else item.get("status", "enough")).props(
+                                                              "outlined dense options-dense").classes("stock-field")
+                                        fields.append((item["id"], "status", field))
 
         def save_all():
             updates = [{"item_id": item_id, kind: field.value}
@@ -252,6 +280,26 @@ def inventory_page():
         if is_owner:
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
                 "/store-ops/purchase-list")).props("outline no-caps").classes("w-full q-mt-sm")
+            ui.on("inventory_reordered", lambda event: store_ops.reorder_inventory_items(
+                (event.args or {}).get("ids", [])))
+            ui.run_javascript("""
+            (() => {
+              let card=null, timer=null, active=false, startX=0, startY=0;
+              const cancel=()=>{clearTimeout(timer);timer=null;if(card)card.classList.remove('drag-ready','dragging');card=null;active=false};
+              document.querySelectorAll('.inventory-sort-card').forEach(el=>{
+                el.addEventListener('pointerdown',e=>{if(e.target.closest('.q-field'))return;card=el;startX=e.clientX;startY=e.clientY;el.classList.add('drag-ready');timer=setTimeout(()=>{active=true;el.classList.add('dragging');navigator.vibrate?.(25)},550)});
+                el.addEventListener('pointermove',e=>{
+                  if(!card)return;
+                  if(!active&&Math.hypot(e.clientX-startX,e.clientY-startY)>10){cancel();return}
+                  if(!active)return;e.preventDefault();
+                  const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest('.inventory-sort-card');
+                  if(hit&&hit!==card&&hit.parentElement===card.parentElement){const r=hit.getBoundingClientRect();hit.parentElement.insertBefore(card,(e.clientY>r.top+r.height/2||e.clientX>r.left+r.width/2)?hit.nextSibling:hit)}
+                },{passive:false});
+                el.addEventListener('pointerup',()=>{if(active&&card){const ids=[...card.parentElement.querySelectorAll('.inventory-sort-card')].map(x=>x.dataset.itemId);emitEvent('inventory_reordered',{ids})}cancel()});
+                el.addEventListener('pointercancel',cancel);
+              });
+            })();
+            """)
         ui.add_css("""
         .inventory-grid-new{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:7px 1px 10px}
         .inventory-item-new{display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;min-height:132px;padding:11px!important;border-radius:16px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}
@@ -259,7 +307,7 @@ def inventory_page():
         .inventory-unit{margin-top:3px;font-size:8px;color:#8A9690}
         .stock-field{width:100%!important;margin-top:8px}.stock-field .q-field__control{min-height:40px!important;height:40px!important}.stock-field input{font-weight:900!important}
         .minimum-stock-mark{display:inline-flex;width:max-content;max-width:100%;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .inventory-category-wrap{padding:5px;border-radius:20px;background:var(--category-color)}.inventory-colored-category{margin:0!important;background:rgba(255,255,255,.82)!important}.category-order-tools{height:30px;padding-right:6px}.category-order-tools .q-btn{min-height:28px!important}.item-order-tools{height:22px;margin:-7px -6px 2px 0}.item-order-tools .q-btn{min-height:22px!important;width:24px!important}.inventory-item-new{touch-action:pan-y}.inventory-item-new:active{transform:scale(.985)}
+        .inventory-main-category{background:#fff!important}.inventory-subcategory{margin:9px 0 13px;padding:8px;border-radius:17px;background:var(--subcategory-color)}.inventory-subcategory-title{padding:2px 5px 6px;font-size:12px;font-weight:950;color:#17382C}.inventory-item-new{touch-action:pan-y;transition:transform .15s,box-shadow .15s}.inventory-item-new.drag-ready{box-shadow:0 4px 12px #17382C22!important}.inventory-item-new.dragging{z-index:20;transform:scale(1.035);box-shadow:0 12px 26px #17382C45!important}
         @media(min-width:760px){.inventory-grid-new{grid-template-columns:repeat(3,minmax(0,1fr))}.inventory-item-new{min-height:142px}.inventory-item-name{font-size:13px}}
         """)
 

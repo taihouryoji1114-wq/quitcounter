@@ -73,6 +73,59 @@ class StoreOperationsManager:
         return sorted((dict(value) for value in saved if isinstance(value, dict)),
                       key=lambda value: int(value.get("sort_order", 999)))
 
+    def inventory_subcategories(self):
+        saved = self._data_manager.data.get("store_inventory_subcategories")
+        if not isinstance(saved, list) or not saved:
+            saved = [
+                {"id": uuid4().hex, "parent": "飲料", "name": "ソフトドリンク",
+                 "color": "#E3F2FD", "sort_order": 0},
+                {"id": uuid4().hex, "parent": "飲料", "name": "焼酎",
+                 "color": "#FFF3E0", "sort_order": 1},
+            ]
+            self._data_manager.data["store_inventory_subcategories"] = saved
+            self._data_manager.save()
+        return sorted((dict(value) for value in saved if isinstance(value, dict)),
+                      key=lambda value: (value.get("parent", ""),
+                                         int(value.get("sort_order", 999))))
+
+    def save_inventory_subcategory(self, parent, name, color="#F5F5F5",
+                                   subcategory_id=None):
+        parent, name = str(parent or "").strip(), str(name or "").strip()
+        if not parent or not name:
+            raise ValueError("大分類と小分類名を入力してください。")
+        values = self._data_manager.data.setdefault("store_inventory_subcategories", [])
+        if subcategory_id:
+            target = next((value for value in values
+                           if value.get("id") == subcategory_id), None)
+            if target is None:
+                raise ValueError("小分類が見つかりません。")
+            old_parent, old_name = target.get("parent"), target.get("name")
+            target.update(parent=parent, name=name, color=str(color or "#F5F5F5"))
+            for item in self._data_manager.data.get("store_inventory_items", []):
+                if item.get("category") == old_parent and item.get("subcategory") == old_name:
+                    item.update(category=parent, subcategory=name)
+        else:
+            order = sum(value.get("parent") == parent for value in values)
+            values.append({"id": uuid4().hex, "parent": parent, "name": name,
+                           "color": str(color or "#F5F5F5"), "sort_order": order})
+        self._data_manager.save()
+
+    def assign_inventory_subcategory(self, item_id, subcategory="", parent=None):
+        item = self._find(item_id)
+        if parent:
+            item["category"] = str(parent).strip()
+        item["subcategory"] = str(subcategory or "").strip()
+        self._data_manager.save()
+
+    def reorder_inventory_items(self, item_ids):
+        ids = [str(value) for value in item_ids or []]
+        known = {value.get("id"): value for value in
+                 self._data_manager.data.get("store_inventory_items", [])}
+        for order, item_id in enumerate(ids):
+            if item_id in known:
+                known[item_id]["sort_order"] = order
+        self._data_manager.save()
+
     def save_inventory_category(self, name, color="#F5F5F5", category_id=None):
         name = str(name or "").strip()
         if not name:
