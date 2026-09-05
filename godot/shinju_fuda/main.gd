@@ -138,24 +138,18 @@ func _build_enemy() -> void:
 	enemy.position = Vector2(195, 105)
 	enemy.size = Vector2(185, 210)
 	add_child(enemy)
-	var aura := Polygon2D.new()
-	var points := PackedVector2Array()
-	for i in 48:
-		var a := TAU * i / 48.0
-		points.append(Vector2(92, 104) + Vector2(cos(a) * 78, sin(a) * 78))
-	aura.polygon = points
-	aura.color = Color(0.32, 0.08, 0.55, .45)
-	enemy.add_child(aura)
+	var beast := TextureRect.new()
+	beast.texture = load("res://assets/kagekui.png")
+	beast.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	beast.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	beast.position = Vector2(-15, 0)
+	beast.size = Vector2(215, 185)
+	enemy.add_child(beast)
 	var body := _label("影喰いの獏", 19, Color("#f0d9ff"))
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.position = Vector2(8, 76)
+	body.position = Vector2(8, 172)
 	body.size = Vector2(170, 38)
 	enemy.add_child(body)
-	var eyes := _label("◉　◉", 25, Color("#ff6af2"))
-	eyes.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	eyes.position = Vector2(25, 115)
-	eyes.size = Vector2(135, 38)
-	enemy.add_child(eyes)
 
 func _build_player() -> void:
 	kohaku = TextureRect.new()

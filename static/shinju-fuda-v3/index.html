@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#0d1427">
   <title>神獣札</title>
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
   <main id="game">
@@ -19,7 +19,8 @@
 
     <section id="battle" class="screen">
       <div class="enemy-hud"><span>禍獣　影喰いの獏　Lv.3</span><div class="bar"><i id="enemy-hp"></i></div></div>
-      <div id="enemy" class="enemy"><div class="enemy-aura"></div><b>影喰いの獏</b><span>◉　◉</span></div>
+      <div id="enemy" class="enemy"><img src="assets/kagekui.png" alt="影喰いの獏"><b>影喰いの獏</b></div>
+      <div id="fx" class="fx" aria-hidden="true"></div>
       <button id="card" class="card"><small>神獣札</small><strong>炎狐<br>コハク</strong><em>封</em></button>
       <img id="kohaku" class="kohaku" src="assets/kohaku.png" alt="炎狐コハク">
       <div class="command">
@@ -33,6 +34,6 @@
       </div>
     </section>
   </main>
-  <script src="game.js?v=1"></script>
+  <script src="game.js?v=2"></script>
 </body>
 </html>

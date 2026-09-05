@@ -35,13 +35,17 @@ async function act(move,damage){
     state.enemy=Math.max(0,state.enemy-damage-bonus);
     $('#enemy-hp').style.width=state.enemy+'%';
     message(`コハクの「${move}」！<br>結界を ${damage+bonus} 削った！`);
-    $('#kohaku').classList.add('attack'); await wait(360); $('#kohaku').classList.remove('attack');
+    $('#kohaku').classList.add('attack');
+    await wait(130); $('#fx').classList.add('fire'); $('#enemy').classList.add('hurt');
+    await wait(350); $('#kohaku').classList.remove('attack'); $('#fx').classList.remove('fire'); $('#enemy').classList.remove('hurt');
   }
   if(state.enemy<=0){await wait(500); showContract();state.busy=false;return;}
   await wait(500); state.player=Math.max(0,state.player-(move==='見切る'?5:12));
   $('#player-hp').style.width=state.player+'%';
+  $('#kohaku').classList.add('hurt');
   message('影喰いの獏の反撃！<br>コハクはまだ戦える。');
-  await wait(650); message('敵の気配が揺らいだ。どう指示する？');
+  await wait(380); $('#kohaku').classList.remove('hurt');
+  await wait(270); message('敵の気配が揺らいだ。どう指示する？');
   $('#actions').classList.remove('hidden'); state.busy=false;
 }
 function showContract(){
