@@ -30,7 +30,7 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/static/shinju-fuda-v2/index.html?v=3")):
+        ).on("click", lambda _: ui.navigate.to("/static/shinju-fuda-v3/index.html?v=1")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/shinju_fuda_icon.png").classes(
                     "w-14 h-14 rounded-xl q-mr-md"

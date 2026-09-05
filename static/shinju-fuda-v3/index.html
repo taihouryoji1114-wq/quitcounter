@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#0d1427">
+  <title>神獣札</title>
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <main id="game">
+    <header><h1>神 獣 札</h1><p>第一印　黄昏の社</p></header>
+
+    <section id="explore" class="screen active">
+      <div class="notice"><b>近くで神印が震えている</b><span>参道の奥から、禍獣の気配……</span></div>
+      <button id="sense" class="sense"><i>✦</i><span>気配を調べる</span></button>
+      <p class="guide">光る場所をタップして探索</p>
+    </section>
+
+    <section id="battle" class="screen">
+      <div class="enemy-hud"><span>禍獣　影喰いの獏　Lv.3</span><div class="bar"><i id="enemy-hp"></i></div></div>
+      <div id="enemy" class="enemy"><div class="enemy-aura"></div><b>影喰いの獏</b><span>◉　◉</span></div>
+      <button id="card" class="card"><small>神獣札</small><strong>炎狐<br>コハク</strong><em>封</em></button>
+      <img id="kohaku" class="kohaku" src="assets/kohaku.png" alt="炎狐コハク">
+      <div class="command">
+        <p id="message">禍獣が姿を現した！<br>神獣札をタップして相棒を呼ぼう。</p>
+        <div id="player-bar" class="bar player hidden"><i id="player-hp"></i></div>
+        <div id="actions" class="actions hidden">
+          <button data-move="狐火" data-damage="24">狐火</button>
+          <button data-move="印返し" data-damage="15">印返し</button>
+          <button data-move="見切る" data-damage="0">見切る</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="game.js?v=1"></script>
+</body>
+</html>
