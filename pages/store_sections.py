@@ -128,21 +128,77 @@ def inventory_page():
         return
     items = store_ops.items()
     is_owner = current_role() == "owner"
+    categories = store_ops.inventory_categories()
+    category_meta = {value["name"]: value for value in categories}
     reset_at = store_ops.inventory_check_reset_at()
     content = section_shell("在庫確認", "現在の在庫をまとめて入力")
     with content:
+        if is_owner:
+            with ui.dialog() as category_dialog, ui.card().classes("surface-card w-96 q-pa-lg"):
+                ui.label("在庫の分類を設定").classes("text-xl font-black")
+                ui.label("分類名・色・表示順を変更できます").classes("text-xs text-grey-7")
+                category_select = ui.select(
+                    {value["id"]: value["name"] for value in categories},
+                    label="編集する分類（新規なら未選択）",
+                ).props("outlined dense clearable emit-value map-options").classes("w-full q-mt-md")
+                category_name = ui.input("分類名").props("outlined dense").classes("w-full")
+                category_color = ui.input("分類色", value="#E8F5E9").props(
+                    "outlined dense type=color").classes("w-full")
+
+                def load_category(event):
+                    selected = next((value for value in categories
+                                     if value["id"] == event.value), None)
+                    if selected:
+                        category_name.value = selected["name"]
+                        category_color.value = selected.get("color", "#F5F5F5")
+
+                category_select.on_value_change(load_category)
+
+                def save_category():
+                    try:
+                        store_ops.save_inventory_category(
+                            category_name.value, category_color.value,
+                            category_select.value)
+                    except ValueError as error:
+                        ui.notify(str(error), type="negative")
+                        return
+                    category_dialog.close()
+                    ui.navigate.to("/store-ops/inventory")
+
+                ui.button("保存", icon="save", on_click=save_category).classes("w-full")
+            ui.button("分類・色・順番を設定", icon="palette", on_click=category_dialog.open).props(
+                "outline no-caps").classes("w-full q-mb-md")
         fields = []
         grouped = {}
         for item in items:
             grouped.setdefault(item.get("category", "その他"), []).append(item)
-        for category, category_items in grouped.items():
-            with ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
-                              value=False).classes("surface-card w-full q-mb-sm"):
+        ordered_names = [value["name"] for value in categories]
+        for category in sorted(grouped, key=lambda value: (
+                ordered_names.index(value) if value in ordered_names else 999, value)):
+            category_items = grouped[category]
+            meta = category_meta.get(category, {"color": "#F5F5F5", "id": ""})
+            with ui.element("div").classes("inventory-category-wrap w-full q-mb-sm").style(
+                    f"--category-color:{meta.get('color', '#F5F5F5')}"):
+                if is_owner:
+                    with ui.row().classes("category-order-tools w-full justify-end gap-0"):
+                        ui.button(icon="arrow_upward", on_click=lambda _, cid=meta.get("id"): (
+                            store_ops.move_inventory_category(cid, "up"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round")
+                        ui.button(icon="arrow_downward", on_click=lambda _, cid=meta.get("id"): (
+                            store_ops.move_inventory_category(cid, "down"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round")
+                expansion = ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
+                                         value=False).classes("surface-card inventory-colored-category w-full")
+            with expansion:
                 with ui.element("div").classes("inventory-grid-new w-full"):
                     for item in category_items:
                         last_check = str(item.get("last_inventory_check_at", ""))
                         was_reset = bool(reset_at and (not last_check or last_check <= reset_at))
                         with ui.card().classes("inventory-item-new"):
+                            if is_owner:
+                                with ui.row().classes("item-order-tools w-full justify-end gap-0"):
+                                    ui.button(icon="keyboard_arrow_left", on_click=lambda _, iid=item["id"]: (
+                                        store_ops.move_inventory_item(iid, "up"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round size=xs")
+                                    ui.button(icon="keyboard_arrow_right", on_click=lambda _, iid=item["id"]: (
+                                        store_ops.move_inventory_item(iid, "down"), ui.navigate.to("/store-ops/inventory"))).props("flat dense round size=xs")
                             with ui.column().classes("gap-0 w-full min-w-0"):
                                 ui.label(item["name"]).classes("inventory-item-name")
                                 minimum = item.get("reorder_point")
@@ -203,6 +259,7 @@ def inventory_page():
         .inventory-unit{margin-top:3px;font-size:8px;color:#8A9690}
         .stock-field{width:100%!important;margin-top:8px}.stock-field .q-field__control{min-height:40px!important;height:40px!important}.stock-field input{font-weight:900!important}
         .minimum-stock-mark{display:inline-flex;width:max-content;max-width:100%;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .inventory-category-wrap{padding:5px;border-radius:20px;background:var(--category-color)}.inventory-colored-category{margin:0!important;background:rgba(255,255,255,.82)!important}.category-order-tools{height:30px;padding-right:6px}.category-order-tools .q-btn{min-height:28px!important}.item-order-tools{height:22px;margin:-7px -6px 2px 0}.item-order-tools .q-btn{min-height:22px!important;width:24px!important}.inventory-item-new{touch-action:pan-y}.inventory-item-new:active{transform:scale(.985)}
         @media(min-width:760px){.inventory-grid-new{grid-template-columns:repeat(3,minmax(0,1fr))}.inventory-item-new{min-height:142px}.inventory-item-name{font-size:13px}}
         """)
 

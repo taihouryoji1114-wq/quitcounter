@@ -1,0 +1,12 @@
+{
+  "name": "CODE BEASTS",
+  "short_name": "CODE BEASTS",
+  "start_url": "/static/digital-monsters-v1/index.html?v=5",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#071521",
+  "theme_color": "#071521",
+  "icons": [
+    {"src": "assets/app_icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

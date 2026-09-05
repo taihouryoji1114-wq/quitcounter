@@ -18,6 +18,12 @@ class StoreOperationsManager:
         "デシャップ冷凍庫", "厨房冷凍庫", "外冷凍庫",
     )
     DAILY_ORDER_DESTINATIONS = ("鶏肉", "ミクリード", "豊洲", "酒屋")
+    DEFAULT_INVENTORY_CATEGORIES = (
+        ("野菜仕入れ", "#E8F5E9"), ("冷食", "#E3F2FD"),
+        ("冷凍庫", "#E8EAF6"), ("飲料", "#E0F7FA"),
+        ("調味料", "#FFF3E0"), ("備品", "#F3E5F5"),
+        ("清掃用品", "#EDE7F6"), ("その他", "#F5F5F5"),
+    )
 
     def __init__(self, data_manager=None):
         self._data_manager = data_manager or data
@@ -49,7 +55,72 @@ class StoreOperationsManager:
                 item.get("last_inventory_check_at") or last_checks.get(item.get("id"), ""))
         if active_only:
             items = [value for value in items if value.get("active", True)]
-        return sorted(items, key=lambda value: (value.get("category", ""), value.get("name", "")))
+        category_order = {value["name"]: index for index, value in enumerate(
+            self.inventory_categories())}
+        return sorted(items, key=lambda value: (
+            category_order.get(value.get("category", "その他"), 999),
+            int(value.get("sort_order", 999999)), value.get("name", "")))
+
+    def inventory_categories(self):
+        """Return configurable inventory sections in display order."""
+        saved = self._data_manager.data.get("store_inventory_categories")
+        if not isinstance(saved, list) or not saved:
+            saved = [{"id": uuid4().hex, "name": name, "color": color,
+                      "sort_order": index}
+                     for index, (name, color) in enumerate(self.DEFAULT_INVENTORY_CATEGORIES)]
+            self._data_manager.data["store_inventory_categories"] = saved
+            self._data_manager.save()
+        return sorted((dict(value) for value in saved if isinstance(value, dict)),
+                      key=lambda value: int(value.get("sort_order", 999)))
+
+    def save_inventory_category(self, name, color="#F5F5F5", category_id=None):
+        name = str(name or "").strip()
+        if not name:
+            raise ValueError("分類名を入力してください。")
+        categories = self._data_manager.data.setdefault("store_inventory_categories", [])
+        if category_id:
+            target = next((value for value in categories if value.get("id") == category_id), None)
+            if target is None:
+                raise ValueError("分類が見つかりません。")
+            old_name = target.get("name")
+            target.update(name=name, color=str(color or "#F5F5F5"))
+            for item in self._data_manager.data.get("store_inventory_items", []):
+                if item.get("category") == old_name:
+                    item["category"] = name
+        else:
+            if any(value.get("name") == name for value in categories):
+                raise ValueError("同じ分類名があります。")
+            categories.append({"id": uuid4().hex, "name": name,
+                               "color": str(color or "#F5F5F5"),
+                               "sort_order": len(categories)})
+        self._data_manager.save()
+
+    def move_inventory_category(self, category_id, direction):
+        categories = self.inventory_categories()
+        index = next((i for i, value in enumerate(categories)
+                      if value.get("id") == category_id), None)
+        if index is None:
+            raise ValueError("分類が見つかりません。")
+        other = index + (-1 if direction == "up" else 1)
+        if 0 <= other < len(categories):
+            categories[index]["sort_order"], categories[other]["sort_order"] = other, index
+            self._data_manager.data["store_inventory_categories"] = categories
+            self._data_manager.save()
+
+    def move_inventory_item(self, item_id, direction):
+        target = self._find(item_id)
+        siblings = [value for value in self.items()
+                    if value.get("category") == target.get("category")]
+        index = next((i for i, value in enumerate(siblings) if value["id"] == item_id), None)
+        other = index + (-1 if direction == "up" else 1) if index is not None else -1
+        if 0 <= other < len(siblings):
+            ordered_ids = [value["id"] for value in siblings]
+            ordered_ids[index], ordered_ids[other] = ordered_ids[other], ordered_ids[index]
+            order_map = {value: i for i, value in enumerate(ordered_ids)}
+            for item in self._data_manager.data.get("store_inventory_items", []):
+                if item.get("id") in order_map:
+                    item["sort_order"] = order_map[item["id"]]
+            self._data_manager.save()
 
     def add_item(self, name, category="野菜仕入れ", unit="個", supplier="", required_stock="",
                  tracking_mode="simple", reorder_point="", current_stock=""):

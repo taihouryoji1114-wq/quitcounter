@@ -97,6 +97,23 @@ class StoreOperationsManagerTest(unittest.TestCase):
         item = self.manager.add_item("長ねぎ")
         self.assertEqual(item["category"], "野菜仕入れ")
 
+    def test_inventory_categories_can_be_colored_and_reordered(self):
+        categories = self.manager.inventory_categories()
+        target = categories[1]
+        self.manager.save_inventory_category(target["name"], "#123456", target["id"])
+        self.manager.move_inventory_category(target["id"], "up")
+        updated = self.manager.inventory_categories()
+        self.assertEqual(updated[0]["id"], target["id"])
+        self.assertEqual(updated[0]["color"], "#123456")
+
+    def test_inventory_items_can_be_reordered_within_category(self):
+        first = self.manager.add_item("A商品", "備品")
+        second = self.manager.add_item("B商品", "備品")
+        self.manager.move_inventory_item(second["id"], "up")
+        items = [value["id"] for value in self.manager.items()
+                 if value["category"] == "備品"]
+        self.assertEqual(items[:2], [second["id"], first["id"]])
+
     def test_legacy_food_items_move_to_vegetable_purchasing(self):
         self.data.data["store_inventory_items"] = [{
             "id": "legacy-food", "name": "白菜", "category": "食材", "active": True,
