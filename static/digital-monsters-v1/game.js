@@ -1,0 +1,12 @@
+const $=s=>document.querySelector(s),screens=[...document.querySelectorAll('.screen')];let partner=0,enemy=100,busy=false;
+function show(id){screens.forEach(s=>s.classList.toggle('active',s.id===id))}
+$('#begin').onclick=()=>show('choose');
+document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{partner=+b.dataset.pick;document.querySelectorAll('[data-pick]').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');$('#choose-note').innerHTML=`<b>${b.querySelector('b').textContent}</b>を起動します。もう一度タップして決定。`;b.onclick=()=>{localStorage.setItem('codebeasts:partner',partner);show('field')}});
+const pos={x:32,y:62,px:27,py:67,dx:0,dy:0},stick=$('#stick'),nub=$('#stick i');let pid=null;
+function move(e){if(e.pointerId!==pid)return;const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,d=Math.hypot(x,y),m=Math.min(35,d),nx=d?x/d:0,ny=d?y/d:0;pos.dx=nx*m/35;pos.dy=ny*m/35;nub.style.transform=`translate(${nx*m}px,${ny*m}px)`}
+stick.onpointerdown=e=>{pid=e.pointerId;stick.setPointerCapture(pid);move(e)};stick.onpointermove=move;stick.onpointerup=stick.onpointercancel=e=>{if(e.pointerId!==pid)return;pid=null;pos.dx=pos.dy=0;nub.style.transform='none'};
+function loop(){pos.x=Math.max(3,Math.min(94,pos.x+pos.dx*.18));pos.y=Math.max(9,Math.min(90,pos.y+pos.dy*.25));pos.px+=(pos.x-5-pos.px)*.045;pos.py+=(pos.y+4-pos.py)*.045;$('#hero').style.left=pos.x+'%';$('#hero').style.top=pos.y+'%';$('#partner').style.left=pos.px+'%';$('#partner').style.top=pos.py+'%';if(pos.x>58&&pos.y<76&&Math.random()<.007){pos.dx=pos.dy=0;startBattle()}requestAnimationFrame(loop)}requestAnimationFrame(loop);
+function startBattle(){show('battle');const names=['イグニス','アクアロ','リーフィ'];$('#ally-name').textContent=names[partner]+'　Lv.5';$('#ally-art').style.backgroundPosition=['left','center','right'][partner];$('#message').textContent='野生のノイズラットが現れた！'}
+document.querySelector('[data-hit]').onclick=()=>{if(busy)return;busy=true;enemy=Math.max(0,enemy-22);$('#ehp').style.width=enemy+'%';$('#message').textContent='データパルス！ 効果はばつぐんだ！';setTimeout(()=>{busy=false;$('#message').textContent=enemy?'どうする？':'ノイズラットのデータが崩れた！'},650)};
+$('#capture').onclick=()=>{if(busy)return;const chance=enemy<30?.8:enemy<60?.45:.15;$('#message').textContent=Math.random()<chance?'リンク成功！ ノイズラットが仲間になった！':'リンクを弾かれた！ HPを減らそう。';$('#capture').disabled=true;setTimeout(()=>$('#capture').disabled=false,900)};
+$('#run').onclick=()=>show('field');

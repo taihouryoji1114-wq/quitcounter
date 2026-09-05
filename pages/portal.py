@@ -30,6 +30,18 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/static/digital-monsters-v1/index.html?v=1")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                with ui.element("div").classes("w-14 h-14 rounded-xl q-mr-md bg-cyan-10 text-white flex items-center justify-center"):
+                    ui.icon("memory").classes("text-3xl")
+                with ui.column().classes("gap-0"):
+                    ui.label("CODE BEASTS").classes("text-xl font-bold")
+                    ui.label("データ生命と出会い、育て、冒険する").classes("text-grey-7 q-mt-xs")
+                ui.space()
+                ui.icon("screen_rotation").classes("text-2xl text-cyan-8")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/static/shinju-fuda-v3/index.html?v=6")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/shinju_fuda_icon.png").classes(
