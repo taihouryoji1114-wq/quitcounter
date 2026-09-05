@@ -30,6 +30,21 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/static/shinju-fuda/index.html")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.image("/static/shinju_fuda_icon.png").classes(
+                    "w-14 h-14 rounded-xl q-mr-md"
+                )
+                with ui.column().classes("gap-0"):
+                    ui.label("神獣札").classes("text-xl font-bold")
+                    ui.label("札から神獣を呼び、禍獣と契約する").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("play_arrow").classes("text-2xl text-amber-8")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/chankocchi")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/chankocchi_stage1.png").classes(
