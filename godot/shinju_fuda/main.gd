@@ -14,6 +14,7 @@ var enemy: Control
 var message: Label
 var action_row: HBoxContainer
 var summon_card: Button
+var intro_overlay: Control
 
 func _ready() -> void:
 	var app_theme := Theme.new()
@@ -67,6 +68,66 @@ func _build_screen() -> void:
 	_build_enemy()
 	_build_player()
 	_build_hud()
+	_build_exploration()
+
+func _build_exploration() -> void:
+	intro_overlay = Control.new()
+	intro_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(intro_overlay)
+	var intro_bg := TextureRect.new()
+	intro_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	intro_bg.texture = load("res://assets/shrine_battle.png")
+	intro_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	intro_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	intro_overlay.add_child(intro_bg)
+	var veil := ColorRect.new()
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.color = Color(0.025, 0.045, 0.09, .34)
+	intro_overlay.add_child(veil)
+
+	var heading := _label("神 獣 札", 34, GOLD)
+	heading.position = Vector2(20, 24)
+	intro_overlay.add_child(heading)
+	var place := _label("葛飾・夕凪神社", 16, Color("#fff0d0"))
+	place.position = Vector2(23, 72)
+	intro_overlay.add_child(place)
+
+	var notice := PanelContainer.new()
+	notice.position = Vector2(22, 118)
+	notice.size = Vector2(346, 92)
+	notice.add_theme_stylebox_override("panel", panel_style(Color(0.03, 0.06, 0.13, .88), 18))
+	intro_overlay.add_child(notice)
+	var notice_text := _label("近くで神印が震えている\n参道の奥から、禍獣の気配……", 17, Color("#fff5dd"))
+	notice_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	notice_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	notice.add_child(notice_text)
+
+	var marker := Button.new()
+	marker.text = "✦\n気配を調べる"
+	marker.position = Vector2(105, 330)
+	marker.size = Vector2(180, 180)
+	marker.add_theme_font_size_override("font_size", 20)
+	marker.add_theme_color_override("font_color", Color("#2c1909"))
+	marker.add_theme_stylebox_override("normal", panel_style(Color("#f4cf78"), 90, Color("#fff0a5")))
+	marker.add_theme_stylebox_override("hover", panel_style(Color("#ffe6a8"), 90, Color.WHITE))
+	marker.pressed.connect(_enter_battle)
+	intro_overlay.add_child(marker)
+	var pulse := create_tween().set_loops()
+	pulse.tween_property(marker, "scale", Vector2(1.06, 1.06), .8).set_trans(Tween.TRANS_SINE)
+	pulse.tween_property(marker, "scale", Vector2.ONE, .8).set_trans(Tween.TRANS_SINE)
+
+	var guide := _label("光る場所をタップして探索", 15, Color("#fff2d2"))
+	guide.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	guide.position = Vector2(35, 735)
+	guide.size = Vector2(320, 30)
+	intro_overlay.add_child(guide)
+
+func _enter_battle() -> void:
+	var tw := create_tween()
+	tw.tween_property(intro_overlay, "modulate:a", 0.0, .55)
+	await tw.finished
+	intro_overlay.queue_free()
+	message.text = "禍獣が姿を現した！ 神獣札を選べ。"
 
 func _build_enemy() -> void:
 	enemy = Control.new()
