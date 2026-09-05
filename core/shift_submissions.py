@@ -210,7 +210,8 @@ class ShiftSubmissionManager:
                       thick_days=None, deputy_rest_priority=True,
                       employee_rest_priority=False,
                       require_manager_or_deputy=True,
-                      align_deputy_employee=True, manual_overrides=None):
+                      align_deputy_employee=True, manual_overrides=None,
+                      staffing_priority="employees", avoid_long_streaks=True):
         """Create a fair, editable draft from submitted availability.
 
         This never writes attendance records. It is deliberately a proposal so
@@ -227,6 +228,8 @@ class ShiftSubmissionManager:
                  if str(value).strip().isdigit()}
         manual = {str(day): dict(values) for day, values in
                   (manual_overrides or {}).items() if isinstance(values, dict)}
+        if staffing_priority not in {"employees", "hourly"}:
+            raise ValueError("シフトの優先方針が正しくありません。")
         assigned = {name: 0 for name in self.STAFF}
         days = {}
 
@@ -245,17 +248,38 @@ class ShiftSubmissionManager:
                 chosen = preferred[:needed]
                 chosen += [day for day in available if day not in chosen][:needed - len(chosen)]
             else:
-                offset = (index * 5) % max(1, len(available))
-                rotated = available[offset:] + available[:offset]
-                chosen = rotated[:needed]
+                # Spread days off across the half instead of placing five
+                # together; this prevents long streaks without making it an
+                # absolute rule when staffing is tight.
+                rotated = available[index:] + available[:index]
+                if name == "店長" and "副社長" in rest_days:
+                    non_deputy_rest = [day for day in rotated
+                                       if day not in rest_days["副社長"]]
+                    if len(non_deputy_rest) >= needed:
+                        rotated = non_deputy_rest
+                chosen = []
+                while len(chosen) < needed and rotated:
+                    target = round(len(chosen) * (len(rotated) - 1) / max(1, needed - 1))
+                    candidate = rotated[target]
+                    if candidate not in chosen:
+                        chosen.append(candidate)
+                    else:
+                        chosen.extend(day for day in rotated if day not in chosen)
+                        chosen = chosen[:needed]
             rest_days[name] = absolute | set(chosen)
 
-        def priority(name):
+        def priority(name, day=None):
             penalty = 0
             if deputy_rest_priority and name == "副社長":
                 penalty += 100
             if employee_rest_priority and name == "社員A":
                 penalty += 30
+            if avoid_long_streaks and day is not None:
+                previous = [days.get(str(value), {}).get("staff", {}).get(name, {})
+                            for value in range(max(period["start"], day - 4), day)]
+                if len(previous) == 4 and all(item.get("lunch") or item.get("dinner")
+                                              for item in previous):
+                    penalty += 1000
             return assigned[name] + penalty, assigned[name], self.STAFF.index(name)
 
         for day in range(period["start"], period["end"] + 1):
@@ -268,6 +292,7 @@ class ShiftSubmissionManager:
                 label = "ランチ" if meal == "lunch" else "ディナー"
                 selected = []
                 locked = manual.get(str(day), {})
+                salaried_candidates = []
                 for name in salaried:
                     override = str(locked.get(name, ""))
                     if override == "休み" or (override and override not in {label, "通し"}):
@@ -276,7 +301,7 @@ class ShiftSubmissionManager:
                         continue
                     value = self._day_value(submissions.get(name, {}).get(
                         "days", {}).get(str(day), {}))
-                    selected.append((name, value if value["type"] else {
+                    salaried_candidates.append((name, value if value["type"] else {
                         "type": "通し", "start": "", "end": ""}))
                 candidates = []
                 for name, record in submissions.items():
@@ -292,8 +317,16 @@ class ShiftSubmissionManager:
                     if value["type"] not in {label, "通し"}:
                         continue
                     candidates.append((name, value))
-                candidates.sort(key=lambda pair: priority(pair[0]))
-                selected += candidates[:max(0, required - len(selected))]
+                candidates.sort(key=lambda pair: priority(pair[0], day))
+                salaried_candidates.sort(key=lambda pair: priority(pair[0], day))
+                if staffing_priority == "hourly":
+                    # In hourly-priority mode submitted requests are accepted
+                    # first, even when that makes a deliberately thick shift.
+                    selected += candidates
+                    selected += salaried_candidates[:max(0, required - len(selected))]
+                else:
+                    selected += salaried_candidates
+                    selected += candidates[:max(0, required - len(selected))]
                 selected_names = {name for name, _value in selected}
                 for name, override in locked.items():
                     if name in selected_names or override not in {label, "通し"}:
@@ -301,7 +334,7 @@ class ShiftSubmissionManager:
                     selected.append((name, {"type": override, "start": "", "end": ""}))
                 if require_manager_or_deputy and required and not any(
                         pair[0] in {"副社長", "店長"} for pair in selected):
-                    leader = next((pair for pair in candidates
+                    leader = next((pair for pair in [*salaried_candidates, *candidates]
                                    if pair[0] in {"副社長", "店長"}), None)
                     if leader:
                         selected[-1:] = [leader]
@@ -310,7 +343,8 @@ class ShiftSubmissionManager:
                 if align_deputy_employee and required >= 2 and len(
                         selected_names & pair_names) == 1:
                     missing_name = (pair_names - selected_names).pop()
-                    missing = next((pair for pair in candidates if pair[0] == missing_name), None)
+                    missing = next((pair for pair in [*salaried_candidates, *candidates]
+                                    if pair[0] == missing_name), None)
                     if missing:
                         replace_index = next((index for index in range(len(selected) - 1, -1, -1)
                                               if selected[index][0] not in pair_names
@@ -326,7 +360,20 @@ class ShiftSubmissionManager:
                 shortages[meal] = max(0, required - len(selected))
             days[str(day)] = {"staff": day_plan, "shortages": shortages,
                               "thick": day in thick}
+        preference_summary = {}
+        for name in self.STAFF:
+            if name in salaried:
+                continue
+            record_days = submissions.get(name, {}).get("days", {})
+            requested = {day for day in all_days if self._day_value(
+                record_days.get(str(day), {}))["type"] in {"通し", "ランチ", "ディナー"}}
+            accepted = {day for day in requested if days[str(day)]["staff"][name]["lunch"]
+                        or days[str(day)]["staff"][name]["dinner"]}
+            preference_summary[name] = {"requested_days": len(requested),
+                                        "accepted_days": len(accepted),
+                                        "cut_days": len(requested - accepted)}
         result = {"period": period, "days": days, "assigned": assigned,
+                  "preference_summary": preference_summary,
                   "settings": {"lunch_required": lunch_required,
                                "dinner_required": dinner_required,
                                "thick_days": sorted(thick),
@@ -334,6 +381,8 @@ class ShiftSubmissionManager:
                                "employee_rest_priority": bool(employee_rest_priority),
                                "require_manager_or_deputy": bool(require_manager_or_deputy),
                                "align_deputy_employee": bool(align_deputy_employee),
+                               "staffing_priority": staffing_priority,
+                               "avoid_long_streaks": bool(avoid_long_streaks),
                                "manual_overrides": manual,
                                "salaried_rest_days": {name: sorted(value)
                                                        for name, value in rest_days.items()}}}

@@ -207,6 +207,30 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
             self.assertTrue(staff["副社長"][meal] or staff["店長"][meal])
             self.assertEqual(staff["副社長"][meal], staff["社員A"][meal])
 
+    def test_thick_day_adds_one_person_to_each_meal(self):
+        for name in ("スタッフA", "スタッフB", "スタッフC", "スタッフD"):
+            self.manager.save(name, 2099, 9, "first", {"2": {"type": "通し"}})
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3,
+            thick_days=[2], deputy_rest_priority=False)
+        staff = result["days"]["2"]["staff"]
+        self.assertEqual(sum(value["lunch"] for value in staff.values()), 4)
+        self.assertEqual(sum(value["dinner"] for value in staff.values()), 4)
+
+    def test_hourly_priority_accepts_all_submitted_days_and_reports_cuts(self):
+        for name in ("スタッフA", "スタッフB", "スタッフC"):
+            self.manager.save(name, 2099, 9, "first", {"1": {"type": "通し"}})
+        hourly = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="hourly", require_manager_or_deputy=False)
+        employee = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", require_manager_or_deputy=False)
+        self.assertTrue(all(hourly["days"]["1"]["staff"][name]["lunch"]
+                            for name in ("スタッフA", "スタッフB", "スタッフC")))
+        self.assertGreater(employee["preference_summary"]["スタッフA"]["cut_days"], -1)
+        self.assertEqual(hourly["preference_summary"]["スタッフA"]["cut_days"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

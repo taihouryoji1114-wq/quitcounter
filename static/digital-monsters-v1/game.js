@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s),screens=[...document.querySelectorAll('.screen')];
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="team.css?v=1">');
-document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="field-menu.css?v=1">');
+document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="field-menu.css?v=2">');
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="phone-landscape.css?v=1">');
 const names=['イグニス','アクアロ','リーフィ'],positions=['left','center','right'];
 const partnerImages=['assets/ignis.png','assets/aquaro.png','assets/leafy.png'];
@@ -9,13 +9,14 @@ let experience=Number(localStorage.getItem('codebeasts:exp')||0),party=JSON.pars
 let activeCreature=localStorage.getItem('codebeasts:active')||'starter';
 if(activeCreature==='noise'&&!party.includes('ノイズラット'))activeCreature='starter';
 $('#battle').insertAdjacentHTML('beforeend','<aside id="team-panel" class="hidden"><h3>チーム編成</h3><p>戦わせるデータ生命を選択</p><div id="team-list"></div><button id="team-close">バトルへ戻る</button></aside>');
-$('#field').insertAdjacentHTML('beforeend','<aside id="field-menu-panel" class="hidden"><header><h3>データ端末</h3><button id="field-menu-close">×</button></header><div class="field-profile"><img id="field-profile-art"><span><b id="field-profile-name"></b><small id="field-profile-exp"></small></span></div><div class="field-menu-grid"><button id="field-team">チーム<small>編成を確認</small></button><button id="field-book">図鑑<small>発見データ</small></button><button id="field-save">記録<small>冒険を保存</small></button></div><div id="field-menu-detail">メニューを選んでください。</div></aside>');
+$('#field').insertAdjacentHTML('beforeend','<aside id="field-menu-panel" class="hidden"><header><h3>メニュー</h3><button id="field-menu-close">×</button></header><div class="field-profile"><img id="field-profile-art"><span><b id="field-profile-name"></b><small id="field-profile-exp"></small></span></div><div class="field-menu-grid"><button id="field-team">なかま<small>一緒に旅する</small></button><button id="field-book">ずかん<small>出会ったビースト</small></button><button id="field-save">レポート<small>冒険を記録</small></button></div><div id="field-menu-detail">見たいものを選んでください。</div></aside>');
 function show(id){mode=id;screens.forEach(s=>s.classList.toggle('active',s.id===id))}
 async function requestLandscape(){
   try{if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen()}catch(error){}
   try{if(screen.orientation?.lock)await screen.orientation.lock('landscape')}catch(error){}
 }
-$('#begin').onclick=async()=>{await requestLandscape();show('choose')};
+$('#begin').onclick=async()=>{await requestLandscape();show('story')};
+$('#story-next').onclick=()=>show('choose');
 document.querySelectorAll('[data-pick]').forEach(button=>button.onclick=()=>{
   const picked=Number(button.dataset.pick);
   if(button.classList.contains('selected')){partner=picked;localStorage.setItem('codebeasts:partner',partner);setPartnerArt();show('field');return}
@@ -25,14 +26,14 @@ document.querySelectorAll('[data-pick]').forEach(button=>button.onclick=()=>{
 function currentLevel(){return 5+Math.floor(experience/50)}
 function activeName(){return activeCreature==='noise'?'ノイズラット':names[partner]}
 function activeImage(){return activeCreature==='noise'?'assets/noise_rat.png':partnerImages[partner]}
-function setPartnerArt(){$('#partner img').src=activeImage();$('#ally-art').src=activeImage();$('#ally-name').textContent=activeName()+'　Lv.'+currentLevel()}setPartnerArt();
+function setPartnerArt(){$('#partner img').src=activeImage();const art=$('#ally-art');art.removeAttribute('src');art.className=activeCreature==='noise'?'noise-back':`back-${partner}`;art.style.backgroundImage=activeCreature==='noise'?'url("assets/noise_rat.png")':'';$('#ally-name').textContent=activeName()+'　Lv.'+currentLevel()}setPartnerArt();
 const pos={x:32,y:62,px:27,py:67,dx:0,dy:0},stick=$('#stick'),nub=$('#stick i');let pid=null;
 const obstacles=[[0,0,29,43],[0,68,27,100],[0,43,12,68],[35,0,55,31],[91,0,100,100],[29,0,35,27],[48,27,58,47],[69,0,91,13],[75,82,91,100],[34,86,75,100]];
-function blocked(x,y){return obstacles.some(([l,t,r,b])=>x>l&&x<r&&y>t&&y<b)}
+function blocked(x,y){const radius=2.2;return obstacles.some(([l,t,r,b])=>x+radius>l&&x-radius<r&&y+radius>t&&y-radius<b)}
 function move(event){if(event.pointerId!==pid||mode!=='field')return;const rect=stick.getBoundingClientRect(),x=event.clientX-rect.left-rect.width/2,y=event.clientY-rect.top-rect.height/2,d=Math.hypot(x,y),m=Math.min(35,d),nx=d?x/d:0,ny=d?y/d:0;pos.dx=nx*m/35;pos.dy=ny*m/35;nub.style.transform=`translate(${nx*m}px,${ny*m}px)`}
 stick.onpointerdown=event=>{if(mode!=='field')return;pid=event.pointerId;stick.setPointerCapture(pid);move(event)};stick.onpointermove=move;
 stick.onpointerup=stick.onpointercancel=event=>{if(event.pointerId!==pid)return;pid=null;pos.dx=pos.dy=0;nub.style.transform='none'};
-function loop(){if(mode==='field'){if(encounterCooldown>0)encounterCooldown--;const nx=Math.max(3,Math.min(94,pos.x+pos.dx*.18)),ny=Math.max(9,Math.min(90,pos.y+pos.dy*.25));if(!blocked(nx,pos.y))pos.x=nx;if(!blocked(pos.x,ny))pos.y=ny;pos.px+=(pos.x-5-pos.px)*.045;pos.py+=(pos.y+4-pos.py)*.045;$('#hero').style.left=pos.x+'%';$('#hero').style.top=pos.y+'%';$('#partner').style.left=pos.px+'%';$('#partner').style.top=pos.py+'%';const inGrass=pos.x>58&&pos.x<89&&pos.y>14&&pos.y<80,moving=Math.hypot(pos.dx,pos.dy)>.1;if(inGrass&&moving&&encounterCooldown===0&&Math.random()<.012)startBattle()}requestAnimationFrame(loop)}requestAnimationFrame(loop);
+function loop(){if(mode==='field'){if(encounterCooldown>0)encounterCooldown--;const moving=Math.hypot(pos.dx,pos.dy)>.1,nx=Math.max(3,Math.min(94,pos.x+pos.dx*.18)),ny=Math.max(9,Math.min(90,pos.y+pos.dy*.25));let hit=false;if(!blocked(nx,pos.y))pos.x=nx;else hit=true;if(!blocked(pos.x,ny))pos.y=ny;else hit=true;pos.px+=(pos.x-5-pos.px)*.045;pos.py+=(pos.y+4-pos.py)*.045;const hero=$('#hero');hero.style.left=pos.x+'%';hero.style.top=pos.y+'%';hero.classList.toggle('walking',moving&&!hit);hero.classList.toggle('bump',moving&&hit);if(Math.abs(pos.dx)>.15)hero.style.scale=pos.dx<0?'-1 1':'1 1';$('#partner').style.left=pos.px+'%';$('#partner').style.top=pos.py+'%';const inGrass=pos.x>58&&pos.x<89&&pos.y>14&&pos.y<80;if(inGrass&&moving&&encounterCooldown===0&&Math.random()<.012)startBattle()}requestAnimationFrame(loop)}requestAnimationFrame(loop);
 function setHp(id,value){const bar=$(id);bar.style.width=value+'%';bar.classList.toggle('low',value<=50&&value>25);bar.classList.toggle('danger',value<=25)}
 function startBattle(){if(mode!=='field')return;pos.dx=pos.dy=0;nub.style.transform='none';enemy=100;ally=100;setHp('#ehp',enemy);setHp('#ahp',ally);$('#ally-hp-text').textContent='28 / 28';busy=false;setPartnerArt();$('#main-actions').classList.remove('hidden');$('#move-actions').classList.add('hidden');show('battle');$('#message').textContent='野生のノイズラットが現れた！'}
 function returnToField(){pos.x=52;pos.y=67;pos.px=47;pos.py=72;encounterCooldown=240;show('field');$('#objective').textContent='別の草むらを調査しよう'}
@@ -51,4 +52,4 @@ $('#menu').onclick=()=>{refreshFieldMenu();$('#field-menu-panel').classList.remo
 $('#field-menu-close').onclick=()=>$('#field-menu-panel').classList.add('hidden');
 $('#field-team').onclick=()=>{$('#field-menu-detail').textContent='チーム：'+names[partner]+(party.length?'・'+party.join('・'):'　ほかのデータ生命はまだいません。')};
 $('#field-book').onclick=()=>{$('#field-menu-detail').textContent=party.includes('ノイズラット')?'図鑑 2種：相棒データ／ノイズラット':'図鑑 1種：相棒データ　未知データを探しましょう。'};
-$('#field-save').onclick=()=>{$('#field-menu-detail').textContent='冒険の記録を端末に保存しました。';localStorage.setItem('codebeasts:lastSave',new Date().toISOString())};
+$('#field-save').onclick=()=>{$('#field-menu-detail').textContent='ここまでの冒険をレポートに記録しました。';localStorage.setItem('codebeasts:lastSave',new Date().toISOString())};

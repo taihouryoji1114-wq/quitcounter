@@ -217,6 +217,15 @@ def shift_submission_page():
                 auto_pair_together = ui.switch(
                     "副社長と社員Aは出勤・休みを極力そろえる", value=True,
                 ).classes("text-[10px] font-bold")
+                auto_avoid_streaks = ui.switch(
+                    "5連勤以上をなるべく作らない", value=True,
+                ).classes("text-[10px] font-bold")
+                auto_priority = ui.toggle(
+                    {"employees": "社員優先", "hourly": "バイト優先"},
+                    value="employees",
+                ).props("unelevated spread no-caps").classes("w-full q-mt-xs")
+                ui.label("社員優先＝人件費を抑える／バイト優先＝提出希望をほぼ通す").classes(
+                    "text-[9px] text-grey-6")
                 ui.separator().classes("q-my-sm")
                 ui.label("手動で固定して再計算").classes("text-xs font-black")
                 ui.label("変更したマスは固定したまま、残りを自動で組み直します").classes(
@@ -258,10 +267,16 @@ def shift_submission_page():
                     try:
                         result = shift_submissions.auto_schedule(
                             int(year.value), int(month.value), half.value,
-                            auto_lunch.value, auto_dinner.value, thick_days,
-                            auto_deputy_rest.value, auto_employee_rest.value,
-                            auto_leader_required.value, auto_pair_together.value,
-                            manual_overrides,
+                            lunch_required=auto_lunch.value,
+                            dinner_required=auto_dinner.value,
+                            thick_days=thick_days,
+                            deputy_rest_priority=auto_deputy_rest.value,
+                            employee_rest_priority=auto_employee_rest.value,
+                            require_manager_or_deputy=auto_leader_required.value,
+                            align_deputy_employee=auto_pair_together.value,
+                            manual_overrides=manual_overrides,
+                            staffing_priority=auto_priority.value,
+                            avoid_long_streaks=auto_avoid_streaks.value,
                         )
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
@@ -311,6 +326,12 @@ def shift_submission_page():
                             table.append(f'<td class="shift-cell shortage">{shortage_text or "—"}</td></tr>')
                         table.append('</tbody></table></div>')
                         ui.html(''.join(table), sanitize=False).classes("w-full")
+                        ui.label("バイト希望の反映状況").classes("text-xs font-black q-mt-sm")
+                        for name, summary in result["preference_summary"].items():
+                            if summary["requested_days"]:
+                                ui.label(
+                                    f'{name}：希望 {summary["requested_days"]}日／採用 {summary["accepted_days"]}日／削減 {summary["cut_days"]}日'
+                                ).classes("text-[10px] text-grey-7")
                         ui.label("L＝ランチ、D＝ディナー。これは編集前提の下書きです。").classes(
                             "text-[9px] text-grey-6 q-mt-xs")
                     ui.notify("シフト案を作成しました", type="positive")
