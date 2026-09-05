@@ -16,6 +16,10 @@ var action_row: HBoxContainer
 var summon_card: Button
 
 func _ready() -> void:
+	var app_theme := Theme.new()
+	app_theme.default_font = load("res://assets/NotoSansJP-Variable.ttf")
+	app_theme.default_font_size = 16
+	theme = app_theme
 	_build_screen()
 
 func panel_style(color: Color, radius := 18, border := GOLD) -> StyleBoxFlat:
@@ -53,11 +57,11 @@ func _build_screen() -> void:
 	shade.color = Color(0.02, 0.04, 0.10, .26)
 	add_child(shade)
 
-	var title := _label("神 獣 札", 36, GOLD)
-	title.position = Vector2(38, 24)
+	var title := _label("神 獣 札", 29, GOLD)
+	title.position = Vector2(20, 18)
 	add_child(title)
-	var chapter := _label("第一印　黄昏の社", 17, Color("#f4ead7"))
-	chapter.position = Vector2(42, 72)
+	var chapter := _label("第一印　黄昏の社", 14, Color("#f4ead7"))
+	chapter.position = Vector2(22, 57)
 	add_child(chapter)
 
 	_build_enemy()
@@ -66,26 +70,26 @@ func _build_screen() -> void:
 
 func _build_enemy() -> void:
 	enemy = Control.new()
-	enemy.position = Vector2(720, 145)
-	enemy.size = Vector2(330, 310)
+	enemy.position = Vector2(195, 105)
+	enemy.size = Vector2(185, 210)
 	add_child(enemy)
 	var aura := Polygon2D.new()
 	var points := PackedVector2Array()
 	for i in 48:
 		var a := TAU * i / 48.0
-		points.append(Vector2(165, 160) + Vector2(cos(a) * 128, sin(a) * 128))
+		points.append(Vector2(92, 104) + Vector2(cos(a) * 78, sin(a) * 78))
 	aura.polygon = points
 	aura.color = Color(0.32, 0.08, 0.55, .45)
 	enemy.add_child(aura)
-	var body := _label("影喰いの獏", 30, Color("#f0d9ff"))
+	var body := _label("影喰いの獏", 19, Color("#f0d9ff"))
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.position = Vector2(25, 105)
-	body.size = Vector2(280, 55)
+	body.position = Vector2(8, 76)
+	body.size = Vector2(170, 38)
 	enemy.add_child(body)
-	var eyes := _label("◉　　◉", 38, Color("#ff6af2"))
+	var eyes := _label("◉　◉", 25, Color("#ff6af2"))
 	eyes.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	eyes.position = Vector2(55, 155)
-	eyes.size = Vector2(220, 50)
+	eyes.position = Vector2(25, 115)
+	eyes.size = Vector2(135, 38)
 	enemy.add_child(eyes)
 
 func _build_player() -> void:
@@ -93,8 +97,8 @@ func _build_player() -> void:
 	kohaku.texture = load("res://assets/kohaku.png")
 	kohaku.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	kohaku.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	kohaku.position = Vector2(75, 175)
-	kohaku.size = Vector2(390, 390)
+	kohaku.position = Vector2(-10, 255)
+	kohaku.size = Vector2(285, 285)
 	kohaku.modulate.a = 0.0
 	kohaku.scale = Vector2(.15, .15)
 	kohaku.pivot_offset = kohaku.size / 2
@@ -102,9 +106,9 @@ func _build_player() -> void:
 
 	summon_card = Button.new()
 	summon_card.text = "神獣札\n炎狐 コハク"
-	summon_card.position = Vector2(155, 260)
-	summon_card.size = Vector2(205, 290)
-	summon_card.add_theme_font_size_override("font_size", 24)
+	summon_card.position = Vector2(105, 245)
+	summon_card.size = Vector2(180, 255)
+	summon_card.add_theme_font_size_override("font_size", 21)
 	summon_card.add_theme_color_override("font_color", Color("#38200e"))
 	summon_card.add_theme_stylebox_override("normal", panel_style(Color("#f5e4b8"), 14, Color("#c98b31")))
 	summon_card.add_theme_stylebox_override("hover", panel_style(Color("#fff2cb"), 14, Color("#fff0a1")))
@@ -112,25 +116,27 @@ func _build_player() -> void:
 	add_child(summon_card)
 
 func _build_hud() -> void:
-	var enemy_name := _label("禍獣　影喰いの獏　Lv.3", 19)
-	enemy_name.position = Vector2(720, 102)
+	var enemy_name := _label("禍獣　影喰いの獏　Lv.3", 14)
+	enemy_name.position = Vector2(202, 82)
 	add_child(enemy_name)
 	enemy_bar = ProgressBar.new()
-	enemy_bar.position = Vector2(720, 132)
-	enemy_bar.size = Vector2(330, 18)
+	enemy_bar.position = Vector2(202, 105)
+	enemy_bar.size = Vector2(168, 13)
 	enemy_bar.value = 100
 	enemy_bar.show_percentage = false
 	add_child(enemy_bar)
 
 	var box := PanelContainer.new()
-	box.position = Vector2(35, 555)
-	box.size = Vector2(1100, 120)
+	box.position = Vector2(12, 630)
+	box.size = Vector2(366, 196)
 	box.add_theme_stylebox_override("panel", panel_style(Color(0.035, 0.055, 0.11, .92), 20))
 	add_child(box)
 	var v := VBoxContainer.new()
 	box.add_child(v)
-	message = _label("石版が震えている……札をタップして、コハクを呼び出そう。", 21, Color("#fff3d6"))
+	message = _label("石版が震えている……\n札をタップして、コハクを呼び出そう。", 16, Color("#fff3d6"))
 	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	message.custom_minimum_size = Vector2(320, 55)
 	v.add_child(message)
 	player_bar = ProgressBar.new()
 	player_bar.value = 100
@@ -139,14 +145,14 @@ func _build_hud() -> void:
 	v.add_child(player_bar)
 	action_row = HBoxContainer.new()
 	action_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	action_row.add_theme_constant_override("separation", 14)
+	action_row.add_theme_constant_override("separation", 7)
 	action_row.visible = false
 	v.add_child(action_row)
 	for data in [["狐火", 24], ["印返し", 15], ["見切る", 0]]:
 		var b := Button.new()
 		b.text = data[0]
-		b.custom_minimum_size = Vector2(190, 45)
-		b.add_theme_font_size_override("font_size", 19)
+		b.custom_minimum_size = Vector2(105, 52)
+		b.add_theme_font_size_override("font_size", 16)
 		b.add_theme_stylebox_override("normal", panel_style(Color("#69331f"), 12, GOLD))
 		b.pressed.connect(_act.bind(data[0], data[1]))
 		action_row.add_child(b)
@@ -182,16 +188,16 @@ func _act(move: String, damage: int) -> void:
 		enemy_bar.value = enemy_hp
 		message.text = "コハクの「%s」！　禍獣の結界を %d 削った！" % [move, damage + bonus]
 		var tw := create_tween()
-		tw.tween_property(kohaku, "position:x", 155.0, .14)
-		tw.tween_property(kohaku, "position:x", 75.0, .22).set_trans(Tween.TRANS_BACK)
+		tw.tween_property(kohaku, "position:x", 35.0, .14)
+		tw.tween_property(kohaku, "position:x", -10.0, .22).set_trans(Tween.TRANS_BACK)
 		await tw.finished
 	if enemy_hp <= 0:
 		message.text = "契りの刻！ 禍獣の心に触れ、白紙の札へ迎えよう。"
 		await get_tree().create_timer(.8).timeout
 		var contract := Button.new()
 		contract.text = "神獣契約を結ぶ"
-		contract.custom_minimum_size = Vector2(300, 48)
-		contract.add_theme_font_size_override("font_size", 21)
+		contract.custom_minimum_size = Vector2(250, 52)
+		contract.add_theme_font_size_override("font_size", 18)
 		contract.add_theme_stylebox_override("normal", panel_style(Color("#8b561d"), 12, Color("#ffe8a2")))
 		action_row.add_child(contract)
 		action_row.visible = true
