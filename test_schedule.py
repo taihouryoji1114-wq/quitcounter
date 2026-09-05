@@ -20,6 +20,17 @@ class ScheduleManagerTest(unittest.TestCase):
         self.assertEqual(len(self.manager.events("user1")), 1)
         self.assertEqual(self.manager.events("user2"), [])
 
+    def test_notification_settings_are_private_per_user(self):
+        self.manager.save_notification_settings("user1", True, "08:00")
+        self.assertEqual(self.manager.notification_settings("user1"),
+                         {"enabled": True, "time": "08:00"})
+        self.assertEqual(self.manager.notification_settings("user2"),
+                         {"enabled": False, "time": "08:00"})
+
+    def test_notification_time_is_validated(self):
+        with self.assertRaises(ValueError):
+            self.manager.save_notification_settings("user1", True, "25:00")
+
     def test_events_are_sorted_and_filtered(self):
         self.manager.add_event("user1", "夜", "2026-08-21", "18:00")
         self.manager.add_event("user1", "朝", "2026-08-20", "09:00")

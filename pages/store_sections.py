@@ -140,7 +140,7 @@ def inventory_page():
                 category_select = ui.select(
                     {value["id"]: f'{value["parent"]} ＞ {value["name"]}' for value in subcategories},
                     label="編集する小分類（新規なら未選択）",
-                ).props("outlined dense clearable emit-value map-options").classes("w-full q-mt-md")
+                ).props("outlined dense clearable options-dense").classes("w-full q-mt-md")
                 parent_name = ui.select(
                     [value["name"] for value in categories], label="入れる大分類",
                 ).props("outlined dense options-dense").classes("w-full")
@@ -173,10 +173,10 @@ def inventory_page():
             with ui.dialog() as assign_dialog, ui.card().classes("surface-card w-96 q-pa-lg"):
                 ui.label("商品を小分類へ入れる").classes("text-xl font-black")
                 assign_item = ui.select({value["id"]: value["name"] for value in items},
-                                        label="商品").props("outlined dense emit-value map-options").classes("w-full")
+                                        label="商品").props("outlined dense options-dense").classes("w-full")
                 assign_group = ui.select(
                     {value["id"]: f'{value["parent"]} ＞ {value["name"]}' for value in subcategories},
-                    label="小分類").props("outlined dense emit-value map-options").classes("w-full")
+                    label="小分類").props("outlined dense options-dense").classes("w-full")
 
                 def save_assignment():
                     group = next((value for value in subcategories if value["id"] == assign_group.value), None)
@@ -189,6 +189,14 @@ def inventory_page():
                     ui.navigate.to("/store-ops/inventory")
 
                 ui.button("この小分類へ入れる", icon="drive_file_move", on_click=save_assignment).classes("w-full")
+
+            def open_assignment(item):
+                assign_item.value = item["id"]
+                current_group = next((value for value in subcategories
+                                      if value["parent"] == item.get("category")
+                                      and value["name"] == item.get("subcategory")), None)
+                assign_group.value = current_group["id"] if current_group else None
+                assign_dialog.open()
             with ui.row().classes("w-full gap-2 q-mb-md"):
                 ui.button("小分類と色を設定", icon="palette", on_click=category_dialog.open).props(
                     "outline no-caps").classes("grow")
@@ -228,7 +236,13 @@ def inventory_page():
                                 with ui.card().classes("inventory-item-new inventory-sort-card").props(
                                         f'data-item-id="{item["id"]}"'):
                                     with ui.column().classes("gap-0 w-full min-w-0"):
-                                        ui.label(item["name"]).classes("inventory-item-name")
+                                        with ui.row().classes("w-full items-start no-wrap gap-1"):
+                                            ui.label(item["name"]).classes("inventory-item-name grow")
+                                            if is_owner:
+                                                ui.button(icon="folder_open", on_click=lambda _, value=item:
+                                                          open_assignment(value)).props(
+                                                    "flat round dense size=sm aria-label='小分類を変更'").classes(
+                                                    "inventory-group-button")
                                         minimum = item.get("reorder_point")
                                         unit = item.get("unit", "個")
                                         if minimum is not None:
@@ -307,7 +321,7 @@ def inventory_page():
         .inventory-unit{margin-top:3px;font-size:8px;color:#8A9690}
         .stock-field{width:100%!important;margin-top:8px}.stock-field .q-field__control{min-height:40px!important;height:40px!important}.stock-field input{font-weight:900!important}
         .minimum-stock-mark{display:inline-flex;width:max-content;max-width:100%;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .inventory-main-category{background:#fff!important}.inventory-subcategory{margin:9px 0 13px;padding:8px;border-radius:17px;background:var(--subcategory-color)}.inventory-subcategory-title{padding:2px 5px 6px;font-size:12px;font-weight:950;color:#17382C}.inventory-item-new{touch-action:pan-y;transition:transform .15s,box-shadow .15s}.inventory-item-new.drag-ready{box-shadow:0 4px 12px #17382C22!important}.inventory-item-new.dragging{z-index:20;transform:scale(1.035);box-shadow:0 12px 26px #17382C45!important}
+        .inventory-main-category{background:#fff!important}.inventory-subcategory{margin:9px 0 13px;padding:8px;border-radius:17px;background:var(--subcategory-color)}.inventory-subcategory-title{padding:2px 5px 6px;font-size:12px;font-weight:950;color:#17382C}.inventory-group-button{margin:-7px -8px 0 0;color:#527269}.inventory-item-new{touch-action:pan-y;transition:transform .15s,box-shadow .15s}.inventory-item-new.drag-ready{box-shadow:0 4px 12px #17382C22!important}.inventory-item-new.dragging{z-index:20;transform:scale(1.035);box-shadow:0 12px 26px #17382C45!important}
         @media(min-width:760px){.inventory-grid-new{grid-template-columns:repeat(3,minmax(0,1fr))}.inventory-item-new{min-height:142px}.inventory-item-name{font-size:13px}}
         """)
 

@@ -23,6 +23,7 @@ def schedule_page():
     user_id = selected_user_id()
     today = today_jst()
     schedule.roll_over_unfinished(user_id, today.isoformat())
+    notification_settings = schedule.notification_settings(user_id)
     viewed_month = [today.replace(day=1)]
 
     def reload(message=None):
@@ -41,6 +42,33 @@ def schedule_page():
     content = Theme.shell("My Schedule", "仕事も暮らしも、ひとつの流れに",
                           action=logout_action, brand="My Schedule")
     with content:
+        with ui.dialog() as notification_dialog, ui.card().classes("schedule-dialog q-pa-lg"):
+            ui.label("毎日の予定通知").classes("text-xl font-black")
+            ui.label("この端末へ、自分の当日予定だけを通知します").classes("text-xs text-grey-7")
+            notification_enabled = ui.switch(
+                "通知を受け取る", value=notification_settings["enabled"]).props(
+                    "color=primary").classes("w-full q-mt-md")
+            notification_time = ui.input(
+                "通知時刻", value=notification_settings["time"]).props(
+                    "outlined dense type=time").classes("w-full")
+
+            async def save_notification():
+                saved = schedule.save_notification_settings(
+                    user_id, notification_enabled.value, notification_time.value)
+                if saved["enabled"]:
+                    permission = await ui.run_javascript(
+                        "typeof Notification === 'undefined' ? 'unsupported' : "
+                        "(Notification.permission === 'granted' ? 'granted' : Notification.requestPermission())",
+                        timeout=10)
+                    if permission != "granted":
+                        schedule.save_notification_settings(user_id, False, saved["time"])
+                        ui.notify("端末の通知を許可してください", type="warning")
+                        return
+                notification_dialog.close()
+                reload("通知設定を保存しました")
+
+            ui.button("設定を保存", icon="notifications_active",
+                      on_click=save_notification).classes("w-full q-mt-md")
         with ui.dialog() as add_dialog, ui.card().classes("schedule-dialog q-pa-lg"):
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label("予定を追加").classes("text-xl font-black")
@@ -237,6 +265,30 @@ def schedule_page():
                     ui.label("残り").classes("text-[9px] opacity-70")
             ui.button("新しい予定", icon="add", on_click=add_dialog.open).props(
                 "unelevated no-caps").classes("schedule-add w-full q-mt-lg")
+            ui.button("毎朝の通知", icon="notifications", on_click=notification_dialog.open).props(
+                "flat no-caps").classes("schedule-notification-button w-full q-mt-xs")
+
+        if notification_settings["enabled"]:
+            notification_titles = [item["title"] for item in today_events]
+            ui.run_javascript(f"""
+            (() => {{
+              const notifyTime = {notification_settings['time']!r};
+              const titles = {notification_titles!r};
+              const check = () => {{
+                const now = new Date();
+                const today = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
+                const current = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+                const key = 'schedule:notified:' + today;
+                if (typeof Notification !== 'undefined' && current >= notifyTime && !localStorage.getItem(key) && Notification.permission === 'granted') {{
+                  const body = titles.length ? `本日の予定は${{titles.length}}件です。${{titles.slice(0,3).join('、')}}` : '本日の予定はありません。';
+                  new Notification('今日のスケジュール', {{body, icon:'/static/schedule_icon.svg'}});
+                  localStorage.setItem(key, '1');
+                }}
+              }};
+              check(); window.scheduleNotifyTimer && clearInterval(window.scheduleNotifyTimer);
+              window.scheduleNotifyTimer = setInterval(check, 30000);
+            }})();
+            """)
 
         @ui.refreshable
         def calendar_view():

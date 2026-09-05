@@ -28,6 +28,22 @@ class ScheduleManager:
         return sorted(result, key=lambda value: (value.get("date", ""), value.get("start_time", ""),
                                                   value.get("created_at", "")))
 
+    def notification_settings(self, user_id):
+        saved = self._data_manager.data.get("personal_schedule_notifications", {}).get(
+            user_id, {})
+        return {"enabled": bool(saved.get("enabled", False)),
+                "time": str(saved.get("time") or "08:00")}
+
+    def save_notification_settings(self, user_id, enabled, notify_time="08:00"):
+        notify_time = self._time(notify_time)
+        if not notify_time:
+            notify_time = "08:00"
+        saved = {"enabled": bool(enabled), "time": notify_time}
+        self._data_manager.data.setdefault("personal_schedule_notifications", {})[
+            user_id] = saved
+        self._data_manager.save()
+        return dict(saved)
+
     def add_event(self, user_id, title, event_date, start_time="", end_time="",
                   category="個人", note="", event_end_date="", requires_check=False,
                   repeat_monthly=False):

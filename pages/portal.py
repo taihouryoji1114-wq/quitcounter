@@ -30,7 +30,7 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/static/digital-monsters-v1/index.html?v=6")):
+        ).on("click", lambda _: ui.navigate.to("/static/digital-monsters-v1/index.html?v=7")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/digital-monsters-v1/assets/app_icon.png").classes(
                     "w-14 h-14 rounded-xl q-mr-md")

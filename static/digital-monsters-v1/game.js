@@ -1,8 +1,12 @@
 const $=s=>document.querySelector(s),screens=[...document.querySelectorAll('.screen')];
+document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="team.css?v=1">');
 const names=['イグニス','アクアロ','リーフィ'],positions=['left','center','right'];
 const partnerImages=['assets/ignis.png','assets/aquaro.png','assets/leafy.png'];
 let partner=Number(localStorage.getItem('codebeasts:partner')||0),enemy=100,ally=100,busy=false,mode='start',encounterCooldown=0;
 let experience=Number(localStorage.getItem('codebeasts:exp')||0),party=JSON.parse(localStorage.getItem('codebeasts:party')||'[]');
+let activeCreature=localStorage.getItem('codebeasts:active')||'starter';
+if(activeCreature==='noise'&&!party.includes('ノイズラット'))activeCreature='starter';
+$('#battle').insertAdjacentHTML('beforeend','<aside id="team-panel" class="hidden"><h3>チーム編成</h3><p>戦わせるデータ生命を選択</p><div id="team-list"></div><button id="team-close">バトルへ戻る</button></aside>');
 function show(id){mode=id;screens.forEach(s=>s.classList.toggle('active',s.id===id))}
 async function requestLandscape(){
   try{if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen()}catch(error){}
@@ -16,7 +20,9 @@ document.querySelectorAll('[data-pick]').forEach(button=>button.onclick=()=>{
   $('#choose-note').innerHTML=`<b>${names[picked]}</b>を選択中。もう一度タップして決定。`;
 });
 function currentLevel(){return 5+Math.floor(experience/50)}
-function setPartnerArt(){$('#partner img').src=partnerImages[partner];$('#ally-art').src=partnerImages[partner];$('#ally-name').textContent=names[partner]+'　Lv.'+currentLevel()}setPartnerArt();
+function activeName(){return activeCreature==='noise'?'ノイズラット':names[partner]}
+function activeImage(){return activeCreature==='noise'?'assets/noise_rat.png':partnerImages[partner]}
+function setPartnerArt(){$('#partner img').src=activeImage();$('#ally-art').src=activeImage();$('#ally-name').textContent=activeName()+'　Lv.'+currentLevel()}setPartnerArt();
 const pos={x:32,y:62,px:27,py:67,dx:0,dy:0},stick=$('#stick'),nub=$('#stick i');let pid=null;
 const obstacles=[[0,0,29,43],[0,68,27,100],[0,43,12,68],[35,0,55,31],[91,0,100,100],[29,0,35,27],[48,27,58,47],[69,0,91,13],[75,82,91,100],[34,86,75,100]];
 function blocked(x,y){return obstacles.some(([l,t,r,b])=>x>l&&x<r&&y>t&&y<b)}
@@ -33,5 +39,7 @@ $('#moves-back').onclick=()=>{$('#move-actions').classList.add('hidden');$('#mai
 document.querySelectorAll('[data-hit]').forEach(button=>button.onclick=()=>{if(busy||mode!=='battle')return;const damage=Number(button.dataset.hit);if(!damage){$('#message').textContent='解析：ノイズラットは電脳型。残りHPは約'+enemy+'%。';return}busy=true;$('#move-actions').classList.add('hidden');$('.ally').classList.add('ally-attack');$('#message').textContent=`${names[partner]}の「${button.querySelector('b').textContent}」！`;setTimeout(()=>{$('.ally').classList.remove('ally-attack');$('.enemy').classList.add('enemy-hurt');$('#battle').classList.add('battle-hit');enemy=Math.max(0,enemy-damage);setHp('#ehp',enemy)},330);setTimeout(()=>{$('.enemy').classList.remove('enemy-hurt');$('#battle').classList.remove('battle-hit');if(enemy===0){$('#message').textContent='ノイズラットを倒した！'+gainExperience(18);setTimeout(returnToField,1250);return}$('#message').textContent='ノイズラットのグリッチバイト！';$('.ally').classList.add('ally-hurt');ally=Math.max(0,ally-18);setHp('#ahp',ally);$('#ally-hp-text').textContent=Math.ceil(28*ally/100)+' / 28';setTimeout(()=>{$('.ally').classList.remove('ally-hurt');busy=false;$('#main-actions').classList.remove('hidden');$('#message').textContent=ally?'次の行動を選ぼう。':'相棒のデータが停止した……'},430)},760)});
 $('#capture').onclick=()=>{if(busy||mode!=='battle')return;busy=true;const chance=enemy<30?.8:enemy<60?.45:.15,success=Math.random()<chance;$('#battle').classList.add('battle-hit');if(success&&!party.includes('ノイズラット')){party.push('ノイズラット');localStorage.setItem('codebeasts:party',JSON.stringify(party))}$('#message').textContent=success?'LINK COMPLETE——ノイズラットがチームに加わった！'+gainExperience(10):'LINK ERROR——接続を弾かれた！';setTimeout(()=>{$('#battle').classList.remove('battle-hit');busy=false;if(success)returnToField()},1400)};
 $('#bag').onclick=()=>{$('#message').textContent='バッグは次の更新で使えるようになります。'};
-$('#party').onclick=()=>{$('#message').textContent=`チーム：${names[partner]}${party.length?'・'+party.join('・'):'（空き5枠）'}`};
+function openTeam(){const members=[{id:'starter',name:names[partner],image:partnerImages[partner]}];if(party.includes('ノイズラット'))members.push({id:'noise',name:'ノイズラット',image:'assets/noise_rat.png'});$('#team-list').innerHTML=members.map(value=>`<button data-member="${value.id}" class="${activeCreature===value.id?'active':''}"><img src="${value.image}"><span><b>${value.name}</b><small>Lv.${currentLevel()}</small></span><em>${activeCreature===value.id?'戦闘中':'交代'}</em></button>`).join('')+`<div class="team-empty">空き ${6-members.length}枠</div>`;$('#team-panel').classList.remove('hidden');document.querySelectorAll('[data-member]').forEach(button=>button.onclick=()=>{activeCreature=button.dataset.member;localStorage.setItem('codebeasts:active',activeCreature);setPartnerArt();$('#team-panel').classList.add('hidden');$('#message').textContent=activeName()+'に交代した！'})}
+$('#party').onclick=openTeam;
+$('#team-close').onclick=()=>$('#team-panel').classList.add('hidden');
 $('#run').onclick=()=>{if(!busy)returnToField()};
