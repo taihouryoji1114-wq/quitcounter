@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#0d1427">
   <title>神獣札</title>
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <main id="game">
     <header><h1>神 獣 札</h1><p>第一印　黄昏の社</p></header>
+    <button id="book-button" class="book-button">札帳 <b id="book-count">1</b></button>
 
     <section id="explore" class="screen active">
       <div class="notice"><b>近くで神印が震えている</b><span>参道の奥から、禍獣の気配……</span></div>
@@ -33,7 +34,28 @@
         </div>
       </div>
     </section>
+
+    <section id="reward" class="screen reward">
+      <p class="reward-kicker">神 獣 契 約</p>
+      <h2>新たな縁が結ばれた</h2>
+      <article class="beast-card">
+        <span class="rarity">稀少札　SR</span>
+        <img src="assets/kagekui.png" alt="夢獏ムウ">
+        <div><small>夢を食み、悪夢を祓う神獣</small><strong>夢獏 ムウ</strong><em>夢属性　　結び Lv.1</em></div>
+      </article>
+      <button id="keep-card" class="primary">札帳に収める</button>
+    </section>
+
+    <section id="book" class="screen book">
+      <button id="book-close" class="close">×</button>
+      <p class="reward-kicker">神 獣 札 帳</p><h2>結ばれた神獣</h2>
+      <div class="book-grid">
+        <article><img src="assets/kohaku.png" alt="炎狐コハク"><b>炎狐 コハク</b><span>炎属性　Lv.5</span></article>
+        <article id="muu-entry" class="locked"><img src="assets/kagekui.png" alt="夢獏ムウ"><b>夢獏 ムウ</b><span>夢属性　Lv.1</span></article>
+      </div>
+      <p id="book-note">神獣との縁は、ここに刻まれる。</p>
+    </section>
   </main>
-  <script src="game.js?v=2"></script>
+  <script src="game.js?v=3"></script>
 </body>
 </html>

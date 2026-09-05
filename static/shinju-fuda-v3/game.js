@@ -1,6 +1,20 @@
 const $=s=>document.querySelector(s), wait=ms=>new Promise(r=>setTimeout(r,ms));
 const state={enemy:100,player:100,turn:0,busy:false,summoned:false};
 const message=(text)=>{$('#message').innerHTML=text};
+let hasMuu=localStorage.getItem('shinju-fuda:muu')==='1';
+
+function refreshBook(){
+  $('#book-count').textContent=hasMuu?'2':'1';
+  $('#muu-entry').classList.toggle('locked',!hasMuu);
+  $('#book-note').textContent=hasMuu?'新しい縁が、札帳に刻まれた。':'神獣との縁は、ここに刻まれる。';
+}
+refreshBook();
+$('#book-button').addEventListener('click',()=>$('#book').classList.add('active'));
+$('#book-close').addEventListener('click',()=>$('#book').classList.remove('active'));
+$('#keep-card').addEventListener('click',()=>{
+  hasMuu=true; localStorage.setItem('shinju-fuda:muu','1'); refreshBook();
+  $('#reward').classList.remove('active'); $('#book').classList.add('active');
+});
 
 $('#sense').addEventListener('click',async()=>{
   $('#sense').disabled=true;
@@ -54,6 +68,7 @@ function showContract(){
   $('#actions').style.gridTemplateColumns='1fr'; $('#actions').classList.remove('hidden');
   $('#contract').addEventListener('click',()=>{
     $('#enemy').style.transition='.55s'; $('#enemy').style.opacity='0'; $('#enemy').style.transform='scale(.08)';
-    $('#actions').classList.add('hidden'); message('新たな神獣札「夢獏 ムウ」を手に入れた！<br><b>—— 試作版クリア ——</b>');
+    $('#actions').classList.add('hidden'); message('禍の気がほどけ、<br>新しい神獣札が生まれる——');
+    setTimeout(()=>{$('#battle').classList.remove('active');$('#reward').classList.add('active')},700);
   });
 }
