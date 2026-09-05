@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s),screens=[...document.querySelectorAll('.screen')];
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="team.css?v=1">');
+document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="field-menu.css?v=1">');
 const names=['イグニス','アクアロ','リーフィ'],positions=['left','center','right'];
 const partnerImages=['assets/ignis.png','assets/aquaro.png','assets/leafy.png'];
 let partner=Number(localStorage.getItem('codebeasts:partner')||0),enemy=100,ally=100,busy=false,mode='start',encounterCooldown=0;
@@ -7,6 +8,7 @@ let experience=Number(localStorage.getItem('codebeasts:exp')||0),party=JSON.pars
 let activeCreature=localStorage.getItem('codebeasts:active')||'starter';
 if(activeCreature==='noise'&&!party.includes('ノイズラット'))activeCreature='starter';
 $('#battle').insertAdjacentHTML('beforeend','<aside id="team-panel" class="hidden"><h3>チーム編成</h3><p>戦わせるデータ生命を選択</p><div id="team-list"></div><button id="team-close">バトルへ戻る</button></aside>');
+$('#field').insertAdjacentHTML('beforeend','<aside id="field-menu-panel" class="hidden"><header><h3>データ端末</h3><button id="field-menu-close">×</button></header><div class="field-profile"><img id="field-profile-art"><span><b id="field-profile-name"></b><small id="field-profile-exp"></small></span></div><div class="field-menu-grid"><button id="field-team">チーム<small>編成を確認</small></button><button id="field-book">図鑑<small>発見データ</small></button><button id="field-save">記録<small>冒険を保存</small></button></div><div id="field-menu-detail">メニューを選んでください。</div></aside>');
 function show(id){mode=id;screens.forEach(s=>s.classList.toggle('active',s.id===id))}
 async function requestLandscape(){
   try{if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen()}catch(error){}
@@ -43,3 +45,9 @@ function openTeam(){const members=[{id:'starter',name:names[partner],image:partn
 $('#party').onclick=openTeam;
 $('#team-close').onclick=()=>$('#team-panel').classList.add('hidden');
 $('#run').onclick=()=>{if(!busy)returnToField()};
+function refreshFieldMenu(){const next=50-experience%50;$('#field-profile-art').src=activeImage();$('#field-profile-name').textContent=activeName()+'　Lv.'+currentLevel();$('#field-profile-exp').textContent='次のレベルまで '+next+' EXP'}
+$('#menu').onclick=()=>{refreshFieldMenu();$('#field-menu-panel').classList.remove('hidden')};
+$('#field-menu-close').onclick=()=>$('#field-menu-panel').classList.add('hidden');
+$('#field-team').onclick=()=>{$('#field-menu-detail').textContent='チーム：'+names[partner]+(party.length?'・'+party.join('・'):'　ほかのデータ生命はまだいません。')};
+$('#field-book').onclick=()=>{$('#field-menu-detail').textContent=party.includes('ノイズラット')?'図鑑 2種：相棒データ／ノイズラット':'図鑑 1種：相棒データ　未知データを探しましょう。'};
+$('#field-save').onclick=()=>{$('#field-menu-detail').textContent='冒険の記録を端末に保存しました。';localStorage.setItem('codebeasts:lastSave',new Date().toISOString())};

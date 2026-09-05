@@ -1,0 +1,7 @@
+#field-menu-panel{position:absolute;inset:5% 4%;z-index:60;padding:20px;border:2px solid #77f6e7;border-radius:20px;background:linear-gradient(145deg,#061826f5,#0a3040f5);box-shadow:0 22px 60px #000b}
+#field-menu-panel header{display:flex;justify-content:space-between;align-items:center;padding:0;text-align:left}
+#field-menu-panel h3{margin:0;font-size:28px}#field-menu-close{width:44px;height:44px;border:1px solid #6ad8d0;border-radius:50%;background:#102f3c;font-size:22px}
+.field-profile{display:flex;align-items:center;gap:18px;margin:16px 0;padding:12px;border:1px solid #326775;border-radius:15px;background:#071923}
+.field-profile img{width:82px;height:82px;object-fit:contain}.field-profile span{display:flex;flex-direction:column;gap:3px}.field-profile b{font-size:22px}.field-profile small{color:#91c9cc}
+.field-menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.field-menu-grid button{min-height:76px;border:1px solid #43818b;border-radius:13px;background:#103747;font-weight:900}.field-menu-grid small{display:block;margin-top:4px;color:#98c7ca;font-weight:500}
+#field-menu-detail{margin-top:12px;padding:12px;border-radius:12px;background:#04121c;color:#b9e0df}

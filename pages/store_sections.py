@@ -137,32 +137,42 @@ def inventory_page():
             with ui.dialog() as category_dialog, ui.card().classes("surface-card w-96 q-pa-lg"):
                 ui.label("小分類を設定").classes("text-xl font-black")
                 ui.label("例：飲料の中に「ソフトドリンク」「焼酎」を作り、小枠だけ色分けします").classes("text-xs text-grey-7")
-                category_select = ui.select(
-                    {value["id"]: f'{value["parent"]} ＞ {value["name"]}' for value in subcategories},
-                    label="編集する小分類（新規なら未選択）",
-                ).props("outlined dense clearable options-dense").classes("w-full q-mt-md")
+                selected_category_id = [None]
                 parent_name = ui.select(
                     [value["name"] for value in categories], label="入れる大分類",
-                ).props("outlined dense options-dense").classes("w-full")
+                ).props("outlined dense options-dense").classes("w-full q-mt-md")
                 category_name = ui.input("小分類名").props("outlined dense").classes("w-full")
-                category_color = ui.input("小枠の色", value="#E8F5E9").props(
-                    "outlined dense type=color").classes("w-full")
+                category_color = ui.input("小枠の色コード", value="#E8F5E9").props(
+                    "outlined dense maxlength=7").classes("w-full")
+                ui.label("色を選ぶ").classes("text-[10px] text-grey-6")
+                with ui.row().classes("w-full gap-2"):
+                    for color in ("#E3F2FD", "#E8F5E9", "#FFF3E0", "#F3E5F5", "#FFEBEE"):
+                        ui.button(on_click=lambda _, value=color: category_color.set_value(value)).style(
+                            f"background:{color};border:1px solid #CAD4CE;width:42px;height:34px").props(
+                                "flat aria-label='色を選択'")
 
-                def load_category(event):
-                    selected = next((value for value in subcategories
-                                     if value["id"] == event.value), None)
-                    if selected:
-                        parent_name.value = selected["parent"]
-                        category_name.value = selected["name"]
-                        category_color.value = selected.get("color", "#F5F5F5")
+                def load_category(selected):
+                    selected_category_id[0] = selected["id"]
+                    parent_name.set_value(selected["parent"])
+                    category_name.set_value(selected["name"])
+                    category_color.set_value(selected.get("color", "#F5F5F5"))
 
-                category_select.on_value_change(load_category)
+                ui.label("編集する小分類").classes("text-[10px] text-grey-6 q-mt-sm")
+                with ui.row().classes("w-full gap-2"):
+                    for group in subcategories:
+                        ui.button(f'{group["parent"]} ＞ {group["name"]}',
+                                  on_click=lambda _, value=group: load_category(value)).props(
+                                      "outline dense no-caps")
+                    ui.button("＋ 新しい小分類", on_click=lambda: (
+                        selected_category_id.__setitem__(0, None),
+                        category_name.set_value(""), category_color.set_value("#E8F5E9"))).props(
+                            "flat dense no-caps")
 
                 def save_category():
                     try:
                         store_ops.save_inventory_subcategory(
                             parent_name.value, category_name.value, category_color.value,
-                            category_select.value)
+                            selected_category_id[0])
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
                         return
@@ -197,11 +207,8 @@ def inventory_page():
                                       and value["name"] == item.get("subcategory")), None)
                 assign_group.value = current_group["id"] if current_group else None
                 assign_dialog.open()
-            with ui.row().classes("w-full gap-2 q-mb-md"):
-                ui.button("小分類と色を設定", icon="palette", on_click=category_dialog.open).props(
-                    "outline no-caps").classes("grow")
-                ui.button("商品を小分類へ", icon="drive_file_move", on_click=assign_dialog.open).props(
-                    "outline no-caps").classes("grow")
+            ui.button("小分類と色を設定", icon="palette", on_click=category_dialog.open).props(
+                "outline no-caps").classes("w-full q-mb-md")
         fields = []
         grouped = {}
         for item in items:
