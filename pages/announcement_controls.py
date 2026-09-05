@@ -26,7 +26,7 @@ def announcement_player():
 
 
 def announcement_settings():
-    with ui.expansion("① スマホで時刻・セリフを設定", icon="campaign", value=True).classes("w-full q-mb-sm"):
+    with ui.expansion("① スマホで時刻・セリフを設定", icon="campaign", value=False).classes("w-full q-mb-sm"):
         ui.label("ここで保存した設定は店のiPadにも共有されます。保存しただけでは音は鳴りません。iPadで「アナウンス」を開き「店内スピーカーを開始」を押してください。").classes("text-sm")
         ui.button("② 鳴らす端末の準備画面へ", icon="tablet_mac", on_click=lambda: ui.navigate.to("/store-ops/announcements")).classes("w-full")
         @ui.refreshable

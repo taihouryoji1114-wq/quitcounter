@@ -313,13 +313,28 @@ def shift_submission_page():
                                     ui.label(f"申請日時 {request.get('requested_at', '')[5:].replace('-', '/')}").classes(
                                         "text-[9px] text-grey-6")
                                     changes = []
-                                    for request_day, request_value in sorted(
-                                            request.get("days", {}).items(), key=lambda value: int(value[0])):
-                                        value = shift_submissions._day_value(request_value)
-                                        text = value["type"] or "時間指定"
+                                    original_days = request.get("original_days", {})
+                                    requested_days = request.get("days", {})
+
+                                    def shift_text(raw):
+                                        value = shift_submissions._day_value(raw)
+                                        text = value["type"] or "休み"
                                         if value["start"] or value["end"]:
                                             text += f" {value['start'] or '指定なし'}〜{value['end'] or '指定なし'}"
-                                        changes.append(f"{request_day}日：{text}")
+                                        return text
+
+                                    for request_day in sorted(
+                                            set(original_days) | set(requested_days), key=int):
+                                        before = shift_submissions._day_value(
+                                            original_days.get(request_day, {}))
+                                        after = shift_submissions._day_value(
+                                            requested_days.get(request_day, {}))
+                                        if before != after:
+                                            changes.append(
+                                                f"{request_day}日：{shift_text(before)} → {shift_text(after)}")
+                                    if request.get("original_note", "") != request.get("note", ""):
+                                        changes.append(
+                                            f"連絡事項：{request.get('original_note') or 'なし'} → {request.get('note') or 'なし'}")
                                     ui.label("半月分の提出取消 → 承認すると未提出に戻ります" if request.get("action") == "cancel" else ("／".join(changes) if changes else "全日希望なし")).classes(
                                         "request-summary q-mt-sm")
                                     with ui.row().classes("w-full gap-2 q-mt-sm"):

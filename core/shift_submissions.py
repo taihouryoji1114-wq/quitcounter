@@ -77,7 +77,9 @@ class ShiftSubmissionManager:
             period["key"], {})
         existing = submissions.get(staff)
         if existing and today_jst() > date.fromisoformat(period["deadline"]):
-            request = {**record, "status": "pending", "requested_at": record["submitted_at"]}
+            request = {**record, "status": "pending", "requested_at": record["submitted_at"],
+                       "original_days": dict(existing.get("days", {})),
+                       "original_note": str(existing.get("note", ""))}
             self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(
                 period["key"], {})[staff] = request
             self._data_manager.save()
@@ -226,6 +228,26 @@ class ShiftSubmissionManager:
         assigned = {name: 0 for name in self.STAFF}
         days = {}
 
+        salaried = tuple(StaffingManager.SALARIED_STAFF)
+        all_days = list(range(period["start"], period["end"] + 1))
+        rest_days = {}
+        for index, name in enumerate(salaried):
+            record = submissions.get(name, {})
+            absolute = {day for day in all_days if self._day_value(
+                record.get("days", {}).get(str(day), {}))["type"] == "絶対休み"}
+            needed = max(0, 5 - len(absolute))
+            available = [day for day in all_days if day not in absolute and day not in thick]
+            available += [day for day in all_days if day not in absolute and day in thick]
+            if align_deputy_employee and name == "社員A" and "副社長" in rest_days:
+                preferred = [day for day in rest_days["副社長"] if day not in absolute]
+                chosen = preferred[:needed]
+                chosen += [day for day in available if day not in chosen][:needed - len(chosen)]
+            else:
+                offset = (index * 5) % max(1, len(available))
+                rotated = available[offset:] + available[:offset]
+                chosen = rotated[:needed]
+            rest_days[name] = absolute | set(chosen)
+
         def priority(name):
             penalty = 0
             if deputy_rest_priority and name == "副社長":
@@ -242,14 +264,24 @@ class ShiftSubmissionManager:
             for meal, required in (("lunch", lunch_required + extra),
                                    ("dinner", dinner_required + extra)):
                 label = "ランチ" if meal == "lunch" else "ディナー"
+                selected = []
+                for name in salaried:
+                    if day in rest_days[name]:
+                        continue
+                    value = self._day_value(submissions.get(name, {}).get(
+                        "days", {}).get(str(day), {}))
+                    selected.append((name, value if value["type"] else {
+                        "type": "通し", "start": "", "end": ""}))
                 candidates = []
                 for name, record in submissions.items():
+                    if name in salaried:
+                        continue
                     value = self._day_value(record.get("days", {}).get(str(day), {}))
                     if value["type"] not in {label, "通し"}:
                         continue
                     candidates.append((name, value))
                 candidates.sort(key=lambda pair: priority(pair[0]))
-                selected = candidates[:required]
+                selected += candidates[:max(0, required - len(selected))]
                 if require_manager_or_deputy and required and not any(
                         pair[0] in {"副社長", "店長"} for pair in selected):
                     leader = next((pair for pair in candidates
@@ -284,7 +316,9 @@ class ShiftSubmissionManager:
                                "deputy_rest_priority": bool(deputy_rest_priority),
                                "employee_rest_priority": bool(employee_rest_priority),
                                "require_manager_or_deputy": bool(require_manager_or_deputy),
-                               "align_deputy_employee": bool(align_deputy_employee)}}
+                               "align_deputy_employee": bool(align_deputy_employee),
+                               "salaried_rest_days": {name: sorted(value)
+                                                       for name, value in rest_days.items()}}}
         self._data_manager.data.setdefault("store_auto_shift_drafts", {})[
             period["key"]] = result
         self._data_manager.save()

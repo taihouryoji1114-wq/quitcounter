@@ -117,6 +117,8 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
             self.manager.submission("スタッフA", 2026, 8, "second")["days"], first)
         self.assertIn(
             "スタッフA", self.manager.pending_changes(2026, 8, "second"))
+        pending = self.manager.pending_changes(2026, 8, "second")["スタッフA"]
+        self.assertEqual(pending["original_days"], first)
         self.assertTrue(
             self.manager.review_change("スタッフA", 2026, 8, "second", True))
         self.assertEqual(
@@ -146,15 +148,37 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertIn("2099-09-first", self.data.data["store_auto_shift_drafts"])
 
     def test_auto_schedule_reports_shortage_and_respects_absolute_day_off(self):
-        self.manager.save("スタッフA", 2099, 9, "first", {
-            "1": {"type": "絶対休み", "start": "", "end": ""},
-        })
+        for name in ("副社長", "店長", "社員A"):
+            self.manager.save(name, 2099, 9, "first", {
+                "1": {"type": "絶対休み", "start": "", "end": ""},
+            })
         result = self.manager.auto_schedule(
             2099, 9, "first", lunch_required=1, dinner_required=1)
         self.assertEqual(result["days"]["1"]["shortages"], {
             "lunch": 1, "dinner": 1,
         })
         self.assertFalse(result["days"]["1"]["staff"]["スタッフA"]["lunch"])
+
+    def test_unsubmitted_hourly_staff_is_off_but_salaried_staff_get_five_days_off(self):
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3,
+            deputy_rest_priority=False)
+        for name in ("副社長", "店長", "社員A"):
+            worked = sum(1 for value in result["days"].values()
+                         if value["staff"][name]["lunch"])
+            self.assertEqual(worked, 10)
+        self.assertFalse(any(value["staff"]["スタッフA"]["lunch"]
+                             for value in result["days"].values()))
+
+    def test_salaried_absolute_days_are_included_in_five_days_off(self):
+        self.manager.save("社員A", 2099, 9, "first", {
+            "3": {"type": "絶対休み"}, "7": {"type": "絶対休み"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3)
+        rest = result["settings"]["salaried_rest_days"]["社員A"]
+        self.assertEqual(len(rest), 5)
+        self.assertTrue({3, 7}.issubset(rest))
 
     def test_auto_schedule_keeps_a_leader_and_pairs_deputy_with_employee(self):
         for name in ("副社長", "店長", "社員A", "スタッフA"):
