@@ -217,6 +217,39 @@ def shift_submission_page():
                 auto_pair_together = ui.switch(
                     "副社長と社員Aは出勤・休みを極力そろえる", value=True,
                 ).classes("text-[10px] font-bold")
+                ui.separator().classes("q-my-sm")
+                ui.label("手動で固定して再計算").classes("text-xs font-black")
+                ui.label("変更したマスは固定したまま、残りを自動で組み直します").classes(
+                    "text-[9px] text-grey-6")
+                manual_overrides = {}
+                with ui.row().classes("w-full gap-1 no-wrap q-mt-xs"):
+                    manual_day = ui.select(list(range(1, 32)), label="日").props(
+                        "outlined dense options-dense").classes("w-20")
+                    manual_staff = ui.select(list(shift_submissions.STAFF), label="スタッフ").props(
+                        "outlined dense options-dense").classes("grow")
+                    manual_type = ui.select(
+                        ["自動", "通し", "ランチ", "ディナー", "休み"], value="自動",
+                        label="勤務").props("outlined dense options-dense").classes("w-28")
+                manual_list = ui.label("固定した変更はありません").classes(
+                    "text-[9px] text-grey-6 w-full")
+
+                def set_manual_override():
+                    if not manual_day.value or not manual_staff.value:
+                        ui.notify("日付とスタッフを選んでください", type="warning")
+                        return
+                    day_key = str(int(manual_day.value))
+                    if manual_type.value == "自動":
+                        manual_overrides.get(day_key, {}).pop(manual_staff.value, None)
+                    else:
+                        manual_overrides.setdefault(day_key, {})[
+                            manual_staff.value] = manual_type.value
+                    summary = [f"{day}日 {name}＝{value}"
+                               for day, records in sorted(manual_overrides.items(), key=lambda pair: int(pair[0]))
+                               for name, value in records.items()]
+                    manual_list.set_text("／".join(summary) if summary else "固定した変更はありません")
+
+                ui.button("変更を固定", icon="push_pin", on_click=set_manual_override).props(
+                    "outline dense no-caps").classes("w-full")
                 auto_result = ui.column().classes("w-full gap-1 q-mt-sm")
 
                 def build_auto_schedule():
@@ -228,6 +261,7 @@ def shift_submission_page():
                             auto_lunch.value, auto_dinner.value, thick_days,
                             auto_deputy_rest.value, auto_employee_rest.value,
                             auto_leader_required.value, auto_pair_together.value,
+                            manual_overrides,
                         )
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
@@ -283,6 +317,9 @@ def shift_submission_page():
 
                 ui.button("シフト案を作る", icon="auto_awesome", on_click=build_auto_schedule).props(
                     "unelevated no-caps").classes("shift-submit w-full q-mt-sm")
+                ui.button("固定した変更を踏まえて再作成", icon="refresh",
+                          on_click=build_auto_schedule).props(
+                    "outline no-caps").classes("w-full q-mt-sm")
 
             with ui.expansion("管理者用・提出状況", icon="fact_check", value=False).classes(
                     "surface-card w-full q-mt-md"):

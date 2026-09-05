@@ -210,7 +210,7 @@ class ShiftSubmissionManager:
                       thick_days=None, deputy_rest_priority=True,
                       employee_rest_priority=False,
                       require_manager_or_deputy=True,
-                      align_deputy_employee=True):
+                      align_deputy_employee=True, manual_overrides=None):
         """Create a fair, editable draft from submitted availability.
 
         This never writes attendance records. It is deliberately a proposal so
@@ -225,6 +225,8 @@ class ShiftSubmissionManager:
             raise ValueError("必要人数は数字で入力してください。") from error
         thick = {int(value) for value in (thick_days or [])
                  if str(value).strip().isdigit()}
+        manual = {str(day): dict(values) for day, values in
+                  (manual_overrides or {}).items() if isinstance(values, dict)}
         assigned = {name: 0 for name in self.STAFF}
         days = {}
 
@@ -265,7 +267,11 @@ class ShiftSubmissionManager:
                                    ("dinner", dinner_required + extra)):
                 label = "ランチ" if meal == "lunch" else "ディナー"
                 selected = []
+                locked = manual.get(str(day), {})
                 for name in salaried:
+                    override = str(locked.get(name, ""))
+                    if override == "休み" or (override and override not in {label, "通し"}):
+                        continue
                     if day in rest_days[name]:
                         continue
                     value = self._day_value(submissions.get(name, {}).get(
@@ -276,12 +282,23 @@ class ShiftSubmissionManager:
                 for name, record in submissions.items():
                     if name in salaried:
                         continue
+                    override = str(locked.get(name, ""))
+                    if override in {label, "通し"}:
+                        selected.append((name, {"type": override, "start": "", "end": ""}))
+                        continue
+                    if override:
+                        continue
                     value = self._day_value(record.get("days", {}).get(str(day), {}))
                     if value["type"] not in {label, "通し"}:
                         continue
                     candidates.append((name, value))
                 candidates.sort(key=lambda pair: priority(pair[0]))
                 selected += candidates[:max(0, required - len(selected))]
+                selected_names = {name for name, _value in selected}
+                for name, override in locked.items():
+                    if name in selected_names or override not in {label, "通し"}:
+                        continue
+                    selected.append((name, {"type": override, "start": "", "end": ""}))
                 if require_manager_or_deputy and required and not any(
                         pair[0] in {"副社長", "店長"} for pair in selected):
                     leader = next((pair for pair in candidates
@@ -317,6 +334,7 @@ class ShiftSubmissionManager:
                                "employee_rest_priority": bool(employee_rest_priority),
                                "require_manager_or_deputy": bool(require_manager_or_deputy),
                                "align_deputy_employee": bool(align_deputy_employee),
+                               "manual_overrides": manual,
                                "salaried_rest_days": {name: sorted(value)
                                                        for name, value in rest_days.items()}}}
         self._data_manager.data.setdefault("store_auto_shift_drafts", {})[

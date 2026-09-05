@@ -180,6 +180,19 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertEqual(len(rest), 5)
         self.assertTrue({3, 7}.issubset(rest))
 
+    def test_manual_shift_changes_are_locked_during_recalculation(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "通し"}, "2": {"type": "通し"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3,
+            manual_overrides={"1": {"スタッフA": "休み"},
+                              "2": {"スタッフA": "通し"}})
+        self.assertFalse(result["days"]["1"]["staff"]["スタッフA"]["lunch"])
+        self.assertTrue(result["days"]["2"]["staff"]["スタッフA"]["lunch"])
+        self.assertEqual(result["settings"]["manual_overrides"]["1"]["スタッフA"],
+                         "休み")
+
     def test_auto_schedule_keeps_a_leader_and_pairs_deputy_with_employee(self):
         for name in ("副社長", "店長", "社員A", "スタッフA"):
             self.manager.save(name, 2099, 9, "first", {

@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s),screens=[...document.querySelectorAll('.screen')];
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="team.css?v=1">');
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="field-menu.css?v=1">');
+document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="phone-landscape.css?v=1">');
 const names=['イグニス','アクアロ','リーフィ'],positions=['left','center','right'];
 const partnerImages=['assets/ignis.png','assets/aquaro.png','assets/leafy.png'];
 let partner=Number(localStorage.getItem('codebeasts:partner')||0),enemy=100,ally=100,busy=false,mode='start',encounterCooldown=0;
