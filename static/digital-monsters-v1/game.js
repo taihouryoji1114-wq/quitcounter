@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s),screens=[...document.querySelectorAll('.screen')];
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="team.css?v=1">');
-document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="field-menu.css?v=3">');
+document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="field-menu.css?v=4">');
 document.head.insertAdjacentHTML('beforeend','<link rel="stylesheet" href="phone-landscape.css?v=1">');
 const names=['イグニス','アクアロ','リーフィ'],positions=['left','center','right'];
 const partnerImages=['assets/ignis.png','assets/aquaro.png','assets/leafy.png'];
