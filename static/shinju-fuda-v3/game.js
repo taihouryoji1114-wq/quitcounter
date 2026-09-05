@@ -38,22 +38,30 @@ $('#card').addEventListener('click',async()=>{
 });
 
 document.querySelectorAll('#actions button').forEach(btn=>btn.addEventListener('click',()=>act(btn.dataset.move,+btn.dataset.damage)));
+$('#seal-action').addEventListener('click',captureBeast);
+function effect(name,duration=760){
+  const layer=$('#battle-effect'); layer.className='battle-effect '+name;
+  setTimeout(()=>layer.className='battle-effect',duration);
+}
 async function act(move,damage){
-  if(state.busy||state.enemy<=0)return;
+  if(state.busy)return;
   state.busy=true; $('#actions').classList.add('hidden'); state.turn++;
   if(move==='見切る'){
+    effect('read',1000);
     message('コハクは気配を読む……<br>次の攻撃は「夢喰らい」だ！');
     await wait(850); state.player=Math.max(0,state.player-5);
   }else{
     const bonus=move==='印返し'&&state.turn%2===0?8:0;
-    state.enemy=Math.max(0,state.enemy-damage-bonus);
+    effect(move==='狐火'?'foxfire':'reflect',850);
+    state.enemy=Math.max(1,state.enemy-damage-bonus);
     $('#enemy-hp').style.width=state.enemy+'%';
     message(`コハクの「${move}」！<br>結界を ${damage+bonus} 削った！`);
     $('#kohaku').classList.add('attack');
-    await wait(130); $('#fx').classList.add('fire'); $('#enemy').classList.add('hurt');
+    await wait(130); $('#fx').classList.add('fire'); $('#enemy').classList.add('hurt'); $('#game').classList.add('game-shake');
     await wait(350); $('#kohaku').classList.remove('attack'); $('#fx').classList.remove('fire'); $('#enemy').classList.remove('hurt');
+    $('#game').classList.remove('game-shake');
   }
-  if(state.enemy<=0){await wait(500); showContract();state.busy=false;return;}
+  if(state.enemy<=35){await wait(420);readyToSeal();state.busy=false;return;}
   await wait(500); state.player=Math.max(0,state.player-(move==='見切る'?5:12));
   $('#player-hp').style.width=state.player+'%';
   $('#kohaku').classList.add('hurt');
@@ -62,13 +70,17 @@ async function act(move,damage){
   await wait(270); message('敵の気配が揺らいだ。どう指示する？');
   $('#actions').classList.remove('hidden'); state.busy=false;
 }
-function showContract(){
-  message('契りの刻！<br>白紙の札へ迎えよう。');
-  $('#actions').innerHTML='<button id="contract">神獣契約を結ぶ</button>';
-  $('#actions').style.gridTemplateColumns='1fr'; $('#actions').classList.remove('hidden');
-  $('#contract').addEventListener('click',()=>{
-    $('#enemy').style.transition='.55s'; $('#enemy').style.opacity='0'; $('#enemy').style.transform='scale(.08)';
-    $('#actions').classList.add('hidden'); message('禍の気がほどけ、<br>新しい神獣札が生まれる——');
-    setTimeout(()=>{$('#battle').classList.remove('active');$('#reward').classList.add('active')},700);
-  });
+function readyToSeal(){
+  $('#actions').classList.add('hidden'); $('#seal-action').classList.remove('hidden');
+  message('禍獣が弱った！ 倒す前に、<br><b>白紙の神獣札で封じよう。</b>');
+}
+async function captureBeast(){
+  if(state.busy)return; state.busy=true;
+  $('#seal-action').classList.add('hidden');
+  message('白紙の神獣札——<br><b>その魂を結べ！</b>');
+  const seal=$('#seal-throw'); seal.classList.add('throw');
+  await wait(720); $('#enemy').classList.add('sealed'); $('#game').classList.add('capture-flash');
+  message('一度……　二度……<br>札の中で気配が揺れている！');
+  await wait(900); message('三度——<br><b>神獣の魂が札と結ばれた！</b>');
+  await wait(850); $('#battle').classList.remove('active'); $('#reward').classList.add('active');
 }

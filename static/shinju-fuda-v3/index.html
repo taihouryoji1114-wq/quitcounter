@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#0d1427">
   <title>神獣札</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="effects.css?v=1">
 </head>
 <body>
   <main id="game">
@@ -22,6 +23,8 @@
       <div class="enemy-hud"><span>禍獣　影喰いの獏　Lv.3</span><div class="bar"><i id="enemy-hp"></i></div></div>
       <div id="enemy" class="enemy"><img src="assets/kagekui.png" alt="影喰いの獏"><b>影喰いの獏</b></div>
       <div id="fx" class="fx" aria-hidden="true"></div>
+      <div id="battle-effect" class="battle-effect" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div id="seal-throw" class="seal-throw" aria-hidden="true">封</div>
       <button id="card" class="card"><small>神獣札</small><strong>炎狐<br>コハク</strong><em>封</em></button>
       <img id="kohaku" class="kohaku" src="assets/kohaku.png" alt="炎狐コハク">
       <div class="command">
@@ -32,6 +35,7 @@
           <button data-move="印返し" data-damage="15">印返し</button>
           <button data-move="見切る" data-damage="0">見切る</button>
         </div>
+        <button id="seal-action" class="seal-action hidden">白紙の神獣札を投げる</button>
       </div>
     </section>
 
@@ -56,6 +60,6 @@
       <p id="book-note">神獣との縁は、ここに刻まれる。</p>
     </section>
   </main>
-  <script src="game.js?v=3"></script>
+  <script src="game.js?v=4"></script>
 </body>
 </html>
