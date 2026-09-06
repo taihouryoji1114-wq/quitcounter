@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import unicodedata
 from uuid import uuid4
 
 from core.data import data
@@ -23,6 +24,25 @@ class StoreOperationsManager:
         ("冷凍庫", "#E8EAF6"), ("飲料", "#E0F7FA"),
         ("調味料", "#FFF3E0"), ("備品", "#F3E5F5"),
         ("清掃用品", "#EDE7F6"), ("その他", "#F5F5F5"),
+    )
+    VEGETABLE_PURCHASE_ROUTE = (
+        ("玉ねぎ", "たまねぎ", "玉葱"),
+        ("しいたけ", "椎茸"),
+        ("きゅうり", "胡瓜"),
+        ("ごぼう", "牛蒡"),
+        ("にんにく", "ニンニク", "大蒜"),
+        ("しょうが", "ショウガ", "生姜"),
+        ("万能", "万能ねぎ", "万能ネギ"),
+        ("大葉",),
+        ("三つ葉", "みつば", "三葉"),
+        ("水菜",),
+        ("ニラ", "にら", "韮"),
+        ("トマト",),
+        ("レモン",),
+        ("こんにゃく", "蒟蒻"),
+        ("大根",),
+        ("油揚げ", "油あげ", "あぶらあげ"),
+        ("とうふ", "豆腐"),
     )
 
     def __init__(self, data_manager=None):
@@ -477,10 +497,31 @@ class StoreOperationsManager:
                 continue
             result.append({**item, "purchase_quantity": quantity, "auto_added": True,
                            "completed": completed})
-        return sorted(result, key=lambda value: (
-            float(value.get("current_stock", 0)) - float(value.get("reorder_point", 0)),
-            value.get("name", ""),
-        ))
+        category_order = {value["name"]: index for index, value in enumerate(
+            self.inventory_categories())}
+
+        def purchase_order(value):
+            category = value.get("category", "その他")
+            if category == "野菜仕入れ":
+                return (category_order.get(category, 999), 0,
+                        self._vegetable_route_index(value.get("name", "")),
+                        int(value.get("sort_order", 999999)), value.get("name", ""))
+            return (category_order.get(category, 999), 1,
+                    float(value.get("current_stock", 0))
+                    - float(value.get("reorder_point", 0)),
+                    int(value.get("sort_order", 999999)), value.get("name", ""))
+
+        return sorted(result, key=purchase_order)
+
+    @classmethod
+    def _vegetable_route_index(cls, name):
+        normalized = unicodedata.normalize("NFKC", str(name or ""))
+        normalized = "".join(normalized.split()).lower()
+        for index, aliases in enumerate(cls.VEGETABLE_PURCHASE_ROUTE):
+            if any(unicodedata.normalize("NFKC", alias).lower() in normalized
+                   for alias in aliases):
+                return index
+        return len(cls.VEGETABLE_PURCHASE_ROUTE)
 
     def daily_order_checks(self, record_date):
         self._date(record_date)

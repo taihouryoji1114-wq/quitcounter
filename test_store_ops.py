@@ -139,6 +139,20 @@ class StoreOperationsManagerTest(unittest.TestCase):
                  if value.get("subcategory") == "ソフトドリンク"]
         self.assertEqual(items, [second["id"], first["id"]])
 
+    def test_purchase_list_follows_the_vegetable_shopping_route(self):
+        names = ["豆腐", "大根", "玉ねぎ", "万能ねぎ", "しいたけ", "レモン"]
+        for name in names:
+            self.manager.add_item(
+                name, "野菜仕入れ", tracking_mode="count",
+                reorder_point=2, current_stock=0,
+            )
+
+        purchase_names = [value["name"] for value in self.manager.purchase_list("2026-09-07")]
+
+        self.assertEqual(purchase_names, [
+            "玉ねぎ", "しいたけ", "万能ねぎ", "レモン", "大根", "豆腐",
+        ])
+
     def test_legacy_food_items_move_to_vegetable_purchasing(self):
         self.data.data["store_inventory_items"] = [{
             "id": "legacy-food", "name": "白菜", "category": "食材", "active": True,
