@@ -231,6 +231,25 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertTrue(plan["dinner"])
         self.assertEqual(plan["cut_meals"], [])
 
+    def test_turning_a_cut_request_on_adds_staff_without_removing_coworkers(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "通し"},
+        })
+        baseline = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", require_manager_or_deputy=False)
+        changed = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", require_manager_or_deputy=False,
+            manual_overrides={"1": {"スタッフA": "通し"}})
+        for name, plan in baseline["days"]["1"]["staff"].items():
+            if name != "スタッフA":
+                self.assertEqual(changed["days"]["1"]["staff"][name], plan)
+        self.assertEqual(
+            sum(plan["lunch"] for plan in changed["days"]["1"]["staff"].values()),
+            sum(plan["lunch"] for plan in baseline["days"]["1"]["staff"].values()) + 1,
+        )
+
     def test_auto_schedule_keeps_a_leader_and_pairs_deputy_with_employee(self):
         for name in ("副社長", "店長", "社員A", "スタッフA"):
             self.manager.save(name, 2099, 9, "first", {

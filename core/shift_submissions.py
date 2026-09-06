@@ -310,10 +310,7 @@ class ShiftSubmissionManager:
                     if name in salaried:
                         continue
                     override = str(locked.get(name, ""))
-                    if override in {label, "通し"}:
-                        selected.append((name, {"type": override, "start": "", "end": ""}))
-                        continue
-                    if override:
+                    if override and override not in {label, "通し"}:
                         continue
                     value = self._day_value(record.get("days", {}).get(str(day), {}))
                     if value["type"] not in {label, "通し"}:
@@ -330,10 +327,12 @@ class ShiftSubmissionManager:
                     selected += salaried_candidates
                     selected += candidates[:max(0, required - len(selected))]
                 selected_names = {name for name, _value in selected}
+                forced_additions = set()
                 for name, override in locked.items():
                     if name in selected_names or override not in {label, "通し"}:
                         continue
                     selected.append((name, {"type": override, "start": "", "end": ""}))
+                    forced_additions.add(name)
                 if require_manager_or_deputy and required and not any(
                         pair[0] in {"副社長", "店長"} for pair in selected):
                     leader = next((pair for pair in [*salaried_candidates, *candidates]
@@ -364,7 +363,8 @@ class ShiftSubmissionManager:
                     day_plan[name]["time"] = (
                         f"{value['start'] or '—'}〜{value['end'] or '—'}"
                         if value["start"] or value["end"] else value["type"])
-                    assigned[name] += 1
+                    if name not in forced_additions:
+                        assigned[name] += 1
                 shortages[meal] = max(0, required - len(selected))
             for name in self.STAFF:
                 requested_type = self._day_value(
