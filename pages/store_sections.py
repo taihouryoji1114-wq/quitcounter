@@ -307,39 +307,50 @@ def inventory_page():
             (() => {
               if(window.__inventoryHomeSortInstalled)return;
               window.__inventoryHomeSortInstalled=true;
-              let card=null,grid=null,ghost=null,timer=null,active=false,pointerId=null;
+              let card=null,grid=null,ghost=null,timer=null,dragging=false,pointerId=null,editMode=false;
               let startX=0,startY=0,offsetX=0,offsetY=0;
-              const cards=()=>[...document.querySelectorAll('.inventory-sort-card')];
+              const done=document.createElement('button');
+              done.type='button';done.className='inventory-sort-done';done.textContent='完了';
+              done.addEventListener('click',()=>exitEditMode());document.body.appendChild(done);
+              const enterEditMode=()=>{
+                editMode=true;document.body.classList.add('inventory-reorder-mode');
+                navigator.vibrate?.(30);finish(false);
+              };
+              const exitEditMode=()=>{
+                finish(false);editMode=false;document.body.classList.remove('inventory-reorder-mode');
+              };
               const finish=(save=false)=>{
                 clearTimeout(timer);timer=null;
-                if(save&&active&&grid){
+                if(save&&dragging&&grid){
                   const ids=[...grid.querySelectorAll('.inventory-sort-card')].map(x=>x.dataset.itemId);
                   emitEvent('inventory_reordered',{ids});
                 }
                 ghost?.remove();ghost=null;
                 card?.classList.remove('drag-ready','drag-placeholder');
                 grid?.classList.remove('sorting');
-                card=null;grid=null;active=false;pointerId=null;
+                card=null;grid=null;dragging=false;pointerId=null;
+              };
+              const beginDrag=(target,e)=>{
+                card=target;grid=target.closest('.inventory-sort-grid');pointerId=e.pointerId;
+                const rect=card.getBoundingClientRect();offsetX=e.clientX-rect.left;offsetY=e.clientY-rect.top;
+                dragging=true;grid.classList.add('sorting');card.classList.add('drag-placeholder');
+                ghost=card.cloneNode(true);ghost.classList.remove('drag-ready','drag-placeholder');
+                ghost.classList.add('inventory-drag-ghost');
+                Object.assign(ghost.style,{width:rect.width+'px',height:rect.height+'px',left:(e.clientX-offsetX)+'px',top:(e.clientY-offsetY)+'px'});
+                document.body.appendChild(ghost);card.setPointerCapture?.(pointerId);
               };
               const start=e=>{
                 const target=e.target.closest('.inventory-sort-card');
                 if(!target||e.target.closest('.q-field,button,input,select,textarea'))return;
+                if(editMode){e.preventDefault();beginDrag(target,e);return}
                 card=target;grid=target.closest('.inventory-sort-grid');pointerId=e.pointerId;
                 startX=e.clientX;startY=e.clientY;
-                const rect=card.getBoundingClientRect();offsetX=e.clientX-rect.left;offsetY=e.clientY-rect.top;
                 card.classList.add('drag-ready');
-                timer=setTimeout(()=>{
-                  if(!card||!grid)return;
-                  active=true;grid.classList.add('sorting');card.classList.add('drag-placeholder');
-                  ghost=card.cloneNode(true);ghost.classList.remove('drag-ready','drag-placeholder');
-                  ghost.classList.add('inventory-drag-ghost');
-                  Object.assign(ghost.style,{width:rect.width+'px',height:rect.height+'px',left:(startX-offsetX)+'px',top:(startY-offsetY)+'px'});
-                  document.body.appendChild(ghost);card.setPointerCapture?.(pointerId);navigator.vibrate?.(30);
-                },1000);
+                timer=setTimeout(()=>{if(card&&grid)enterEditMode()},1000);
               };
               const move=e=>{
                 if(!card||e.pointerId!==pointerId)return;
-                if(!active){
+                if(!dragging){
                   if(Math.hypot(e.clientX-startX,e.clientY-startY)>9)finish(false);
                   return;
                 }
@@ -351,9 +362,9 @@ def inventory_page():
                 if(nearest){const r=nearest.getBoundingClientRect();const after=e.clientY>r.top+r.height/2||(Math.abs(e.clientY-(r.top+r.height/2))<r.height/3&&e.clientX>r.left+r.width/2);grid.insertBefore(card,after?nearest.nextSibling:nearest)}
                 const edge=64;if(e.clientY<edge)window.scrollBy({top:-10,behavior:'auto'});else if(e.clientY>innerHeight-edge)window.scrollBy({top:10,behavior:'auto'});
               };
-              document.addEventListener('pointerdown',start,{passive:true});
+              document.addEventListener('pointerdown',start,{passive:false});
               document.addEventListener('pointermove',move,{passive:false});
-              document.addEventListener('pointerup',e=>{if(card&&e.pointerId===pointerId)finish(active)});
+              document.addEventListener('pointerup',e=>{if(card&&e.pointerId===pointerId)finish(dragging)});
               document.addEventListener('pointercancel',()=>finish(false));
             })();
             """)
@@ -364,7 +375,7 @@ def inventory_page():
         .inventory-unit{margin-top:3px;font-size:8px;color:#8A9690}
         .stock-field{width:100%!important;margin-top:8px}.stock-field .q-field__control{min-height:40px!important;height:40px!important}.stock-field input{font-weight:900!important}
         .minimum-stock-mark{display:inline-flex;width:max-content;max-width:100%;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .inventory-main-category{background:#fff!important}.inventory-subcategory{margin:9px 0 13px;padding:8px;border-radius:17px;background:var(--subcategory-color)}.inventory-subcategory-title{padding:2px 5px 6px;font-size:12px;font-weight:950;color:#17382C}.inventory-group-button{margin:-7px -8px 0 0;color:#527269}.inventory-item-new{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .15s,box-shadow .15s,opacity .12s}.inventory-item-new.drag-ready{box-shadow:0 4px 12px #17382C22!important}.inventory-item-new.drag-placeholder{opacity:.18!important;border:2px dashed #467561!important;background:#E8F1EC!important;box-shadow:none!important}.inventory-drag-ghost{position:fixed!important;z-index:99999!important;margin:0!important;pointer-events:none!important;opacity:.96!important;transform:scale(1.04)!important;box-shadow:0 18px 38px #17382C55!important;touch-action:none!important}.inventory-drag-ghost .q-field,.inventory-drag-ghost button{pointer-events:none!important}
+        .inventory-main-category{background:#fff!important}.inventory-subcategory{margin:9px 0 13px;padding:8px;border-radius:17px;background:var(--subcategory-color)}.inventory-subcategory-title{padding:2px 5px 6px;font-size:12px;font-weight:950;color:#17382C}.inventory-group-button{margin:-7px -8px 0 0;color:#527269}.inventory-item-new{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .15s,box-shadow .15s,opacity .12s}.inventory-item-new.drag-ready{box-shadow:0 4px 12px #17382C22!important}.inventory-reorder-mode .inventory-item-new{touch-action:none;box-shadow:0 4px 14px #17382C20!important}.inventory-reorder-mode .inventory-item-new:before{content:'⋮⋮';position:absolute;top:5px;left:7px;color:#739184;font-size:12px;font-weight:900}.inventory-item-new.drag-placeholder{opacity:.18!important;border:2px dashed #467561!important;background:#E8F1EC!important;box-shadow:none!important}.inventory-drag-ghost{position:fixed!important;z-index:99999!important;margin:0!important;pointer-events:none!important;opacity:.96!important;transform:scale(1.04)!important;box-shadow:0 18px 38px #17382C55!important;touch-action:none!important}.inventory-drag-ghost .q-field,.inventory-drag-ghost button{pointer-events:none!important}.inventory-sort-done{display:none;position:fixed;right:16px;top:max(12px,env(safe-area-inset-top));z-index:100000;padding:9px 20px;border:0;border-radius:999px;background:#167A54;color:#fff;font-size:14px;font-weight:900;box-shadow:0 7px 20px #17382C50}.inventory-reorder-mode .inventory-sort-done{display:block}
         @media(min-width:760px){.inventory-grid-new{grid-template-columns:repeat(3,minmax(0,1fr))}.inventory-item-new{min-height:142px}.inventory-item-name{font-size:13px}}
         """)
 
