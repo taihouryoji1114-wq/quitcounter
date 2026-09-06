@@ -37,23 +37,38 @@ def purchase_list_page():
                 ui.label("在庫不足の商品は自動表示され、完了済みは下から戻せます").classes(
                     "text-[10px] text-grey-6 q-mt-xs")
         else:
-            with ui.card().classes("purchase-card w-full q-pa-lg"):
-                ui.label("今日仕入れるもの").classes("text-[10px] font-black text-primary")
-                for item in purchase_items:
-                    quantity = item["purchase_quantity"]
-                    if isinstance(quantity, float) and quantity.is_integer():
-                        quantity = int(quantity)
-                    with ui.row().classes("purchase-row w-full items-center no-wrap"):
-                        ui.checkbox(value=False, on_change=lambda _, selected=item:
-                                    set_completed(selected["id"], True)).props(
-                                        "dense color=positive aria-label='仕入れ完了'")
-                        with ui.column().classes("gap-0 grow min-w-0"):
-                            ui.label(item["name"]).classes("text-sm font-black")
-                            ui.label(
-                                f"現在 {item.get('current_stock')} / 最低 {item.get('reorder_point')} {item.get('unit', '個')}"
-                            ).classes("text-[9px] text-grey-6")
-                        ui.label(f"{quantity}{item.get('unit', '個')}").classes(
-                            "text-lg font-black text-negative")
+            ui.label("今日仕入れるもの").classes("text-[10px] font-black text-primary q-ml-xs")
+            category_order = {value["name"]: index for index, value in enumerate(
+                store_ops.inventory_categories())}
+            grouped = {}
+            for item in purchase_items:
+                grouped.setdefault(item.get("category") or "その他", []).append(item)
+            for category in sorted(grouped, key=lambda name: (
+                    category_order.get(name, 999), name)):
+                category_items = grouped[category]
+                with ui.card().classes("purchase-card w-full q-pa-lg q-mb-sm"):
+                    with ui.row().classes("w-full items-center no-wrap q-mb-xs"):
+                        ui.icon("folder").classes("purchase-category-icon")
+                        ui.label(category).classes("purchase-category-title grow")
+                        ui.label(f"{len(category_items)}品").classes("purchase-category-count")
+                    for item in category_items:
+                        quantity = item["purchase_quantity"]
+                        if isinstance(quantity, float) and quantity.is_integer():
+                            quantity = int(quantity)
+                        with ui.row().classes("purchase-row w-full items-center no-wrap"):
+                            ui.checkbox(value=False, on_change=lambda _, selected=item:
+                                        set_completed(selected["id"], True)).props(
+                                            "dense color=positive aria-label='仕入れ完了'")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label(item["name"]).classes("text-sm font-black")
+                                subcategory = item.get("subcategory")
+                                if subcategory:
+                                    ui.label(subcategory).classes("purchase-subcategory")
+                                ui.label(
+                                    f"現在 {item.get('current_stock')} / 最低 {item.get('reorder_point')} {item.get('unit', '個')}"
+                                ).classes("text-[9px] text-grey-6")
+                            ui.label(f"{quantity}{item.get('unit', '個')}").classes(
+                                "text-lg font-black text-negative")
             ui.label("在庫数が最低在庫数を上回ると、自動でリストから外れます").classes(
                 "text-[9px] text-grey-6 text-center w-full q-mt-sm")
         if completed_items:
@@ -69,5 +84,5 @@ def purchase_list_page():
                                   set_completed(selected["id"], False)).props(
                                       "flat dense no-caps color=primary")
         ui.add_css("""
-        .purchase-card{border-radius:22px!important;border:1px solid #E1E9E4!important;box-shadow:0 8px 24px rgba(39,55,45,.05)!important}.purchase-row{padding:12px 0;border-bottom:1px solid #EDF1EE}.purchase-row:last-child{border-bottom:0}.purchase-completed{border:1px solid #E1E9E4!important;border-radius:18px!important;background:#fff!important}.purchase-completed .q-expansion-item__content{padding:5px 14px 12px}
+        .purchase-card{border-radius:22px!important;border:1px solid #E1E9E4!important;box-shadow:0 8px 24px rgba(39,55,45,.05)!important}.purchase-category-icon{color:#47745F}.purchase-category-title{font-size:15px;font-weight:950;color:#17382C}.purchase-category-count{padding:3px 8px;border-radius:999px;background:#E8F1EC;color:#315E49;font-size:9px;font-weight:900}.purchase-subcategory{display:inline-flex;width:max-content;margin:2px 0;padding:1px 6px;border-radius:999px;background:#F0F3F1;color:#64736B;font-size:8px;font-weight:900}.purchase-row{padding:12px 0;border-bottom:1px solid #EDF1EE}.purchase-row:last-child{border-bottom:0}.purchase-completed{border:1px solid #E1E9E4!important;border-radius:18px!important;background:#fff!important}.purchase-completed .q-expansion-item__content{padding:5px 14px 12px}
         """)
