@@ -193,6 +193,17 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertEqual(result["settings"]["manual_overrides"]["1"]["スタッフA"],
                          "休み")
 
+    def test_auto_schedule_marks_each_cut_hourly_preference_in_the_day(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "通し"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", require_manager_or_deputy=False)
+        plan = result["days"]["1"]["staff"]["スタッフA"]
+        self.assertEqual(plan["requested_type"], "通し")
+        self.assertEqual(plan["cut_meals"], ["L", "D"])
+
     def test_auto_schedule_keeps_a_leader_and_pairs_deputy_with_employee(self):
         for name in ("副社長", "店長", "社員A", "スタッフA"):
             self.manager.save(name, 2099, 9, "first", {

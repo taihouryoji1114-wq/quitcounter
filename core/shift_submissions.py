@@ -358,6 +358,22 @@ class ShiftSubmissionManager:
                         if value["start"] or value["end"] else value["type"])
                     assigned[name] += 1
                 shortages[meal] = max(0, required - len(selected))
+            for name in self.STAFF:
+                requested_type = self._day_value(
+                    submissions.get(name, {}).get("days", {}).get(str(day), {})
+                )["type"] if name not in salaried else ""
+                requested_meals = set()
+                if requested_type in {"ランチ", "通し"}:
+                    requested_meals.add("L")
+                if requested_type in {"ディナー", "通し"}:
+                    requested_meals.add("D")
+                assigned_meals = ({"L"} if day_plan[name]["lunch"] else set()) | (
+                    {"D"} if day_plan[name]["dinner"] else set())
+                day_plan[name]["requested_type"] = requested_type
+                day_plan[name]["cut_meals"] = [
+                    meal for meal in ("L", "D")
+                    if meal in requested_meals - assigned_meals
+                ]
             days[str(day)] = {"staff": day_plan, "shortages": shortages,
                               "thick": day in thick}
         preference_summary = {}
