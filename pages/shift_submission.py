@@ -227,41 +227,33 @@ def shift_submission_page():
                 ui.label("社員優先＝人件費を抑える／バイト優先＝提出希望をほぼ通す").classes(
                     "text-[9px] text-grey-6")
                 ui.separator().classes("q-my-sm")
-                ui.label("手動で固定して再計算").classes("text-xs font-black")
-                ui.label("変更したマスは固定したまま、残りを自動で組み直します").classes(
+                ui.label("作成後の表を直接タップして変更").classes("text-xs font-black")
+                ui.label("変更したマスは固定され、もう一度自動作成しても維持されます").classes(
                     "text-[9px] text-grey-6")
                 manual_overrides = {}
-                with ui.row().classes("w-full gap-1 no-wrap q-mt-xs"):
-                    manual_day = ui.select(list(range(1, 32)), label="日").props(
-                        "outlined dense options-dense").classes("w-20")
-                    manual_staff = ui.select(list(shift_submissions.STAFF), label="スタッフ").props(
-                        "outlined dense options-dense").classes("grow")
-                    manual_type = ui.select(
-                        ["自動", "通し", "ランチ", "ディナー", "休み"], value="自動",
-                        label="勤務").props("outlined dense options-dense").classes("w-28")
                 manual_list = ui.label("固定した変更はありません").classes(
                     "text-[9px] text-grey-6 w-full")
 
-                def set_manual_override():
-                    if not manual_day.value or not manual_staff.value:
-                        ui.notify("日付とスタッフを選んでください", type="warning")
-                        return
-                    day_key = str(int(manual_day.value))
-                    if manual_type.value == "自動":
-                        manual_overrides.get(day_key, {}).pop(manual_staff.value, None)
-                    else:
-                        manual_overrides.setdefault(day_key, {})[
-                            manual_staff.value] = manual_type.value
+                def update_manual_summary():
                     summary = [f"{day}日 {name}＝{value}"
                                for day, records in sorted(manual_overrides.items(), key=lambda pair: int(pair[0]))
                                for name, value in records.items()]
                     manual_list.set_text("／".join(summary) if summary else "固定した変更はありません")
 
-                ui.button("変更を固定", icon="push_pin", on_click=set_manual_override).props(
-                    "outline dense no-caps").classes("w-full")
+                def set_manual_override(day, staff_name, shift_type):
+                    day_key = str(int(day))
+                    if shift_type == "自動":
+                        manual_overrides.get(day_key, {}).pop(staff_name, None)
+                        if not manual_overrides.get(day_key):
+                            manual_overrides.pop(day_key, None)
+                    else:
+                        manual_overrides.setdefault(day_key, {})[staff_name] = shift_type
+                    update_manual_summary()
+                    build_auto_schedule(notify=False)
+
                 auto_result = ui.column().classes("w-full gap-1 q-mt-sm")
 
-                def build_auto_schedule():
+                def build_auto_schedule(notify=True):
                     raw_days = str(auto_thick_days.value or "").replace("、", ",")
                     thick_days = [value.strip() for value in raw_days.split(",")]
                     try:
@@ -292,40 +284,51 @@ def shift_submission_page():
                         else:
                             ui.label("必要人数を満たす案ができました").classes(
                                 "auto-shift-success w-full")
-                        table = ['<div class="shift-sheet-scroll"><table class="shift-sheet auto-shift-sheet">',
-                                 '<thead><tr><th class="date-head">日付</th>']
-                        for name in shift_submissions.STAFF:
-                            table.append(f'<th class="staff-head">{escape(name)}</th>')
-                        table.append('<th class="staff-head">不足</th></tr></thead><tbody>')
                         period = result["period"]
-                        for day in range(period["start"], period["end"] + 1):
-                            value = result["days"][str(day)]
-                            weekday = date(period["year"], period["month"], day).strftime("%a")
-                            weekday_jp = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木",
-                                          "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
-                            table.append(f'<tr><th class="date-cell"><b>{day}</b><span>{weekday_jp}</span></th>')
-                            for name in shift_submissions.STAFF:
-                                staff_plan = value["staff"][name]
-                                lunch_on, dinner_on = staff_plan["lunch"], staff_plan["dinner"]
-                                if lunch_on and dinner_on:
-                                    text, css = "通し", "both-on"
-                                elif lunch_on:
-                                    text, css = "L", "lunch-on"
-                                elif dinner_on:
-                                    text, css = "D", "dinner-on"
-                                else:
-                                    text, css = "", "day-off"
-                                if text and staff_plan["time"] not in {"ランチ", "ディナー", "通し"}:
-                                    text += f'<small>{escape(staff_plan["time"])}</small>'
-                                table.append(f'<td class="shift-cell {css}">{text}</td>')
-                            shortage = value["shortages"]
-                            shortage_text = " / ".join(part for part in (
-                                f'L {shortage["lunch"]}' if shortage["lunch"] else "",
-                                f'D {shortage["dinner"]}' if shortage["dinner"] else "",
-                            ) if part)
-                            table.append(f'<td class="shift-cell shortage">{shortage_text or "—"}</td></tr>')
-                        table.append('</tbody></table></div>')
-                        ui.html(''.join(table), sanitize=False).classes("w-full")
+                        columns = f"58px repeat({len(shift_submissions.STAFF)},80px) 80px"
+                        with ui.element("div").classes("direct-shift-scroll w-full"):
+                            with ui.element("div").classes("direct-shift-grid").style(
+                                    f"grid-template-columns:{columns}"):
+                                ui.label("日付").classes("direct-head direct-date")
+                                for name in shift_submissions.STAFF:
+                                    ui.label(name).classes("direct-head")
+                                ui.label("不足").classes("direct-head")
+                                for day in range(period["start"], period["end"] + 1):
+                                    value = result["days"][str(day)]
+                                    weekday = date(period["year"], period["month"], day).strftime("%a")
+                                    weekday_jp = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木",
+                                                  "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
+                                    ui.label(f"{day}\n{weekday_jp}").classes(
+                                        f"direct-day {'saturday' if weekday == 'Sat' else 'sunday' if weekday == 'Sun' else ''}")
+                                    for name in shift_submissions.STAFF:
+                                        staff_plan = value["staff"][name]
+                                        lunch_on, dinner_on = staff_plan["lunch"], staff_plan["dinner"]
+                                        if lunch_on and dinner_on:
+                                            text, css = "通し", "both-on"
+                                        elif lunch_on:
+                                            text, css = "L", "lunch-on"
+                                        elif dinner_on:
+                                            text, css = "D", "dinner-on"
+                                        else:
+                                            text, css = "休", "day-off"
+                                        fixed = name in manual_overrides.get(str(day), {})
+                                        with ui.button(
+                                                ("📌 " if fixed else "") + text,
+                                        ).props("flat dense no-caps").classes(
+                                                f"direct-shift-cell {css} {'manual-fixed' if fixed else ''}"):
+                                            with ui.menu().props("auto-close"):
+                                                for choice in ("通し", "ランチ", "ディナー", "休み", "自動"):
+                                                    ui.menu_item(
+                                                        "自動作成に戻す" if choice == "自動" else choice,
+                                                        on_click=lambda _=None, d=day, n=name, c=choice:
+                                                        set_manual_override(d, n, c),
+                                                    )
+                                    shortage = value["shortages"]
+                                    shortage_text = " / ".join(part for part in (
+                                        f'L {shortage["lunch"]}' if shortage["lunch"] else "",
+                                        f'D {shortage["dinner"]}' if shortage["dinner"] else "",
+                                    ) if part)
+                                    ui.label(shortage_text or "—").classes("direct-shortage")
                         ui.label("バイト希望の反映状況").classes("text-xs font-black q-mt-sm")
                         for name, summary in result["preference_summary"].items():
                             if summary["requested_days"]:
@@ -334,7 +337,8 @@ def shift_submission_page():
                                 ).classes("text-[10px] text-grey-7")
                         ui.label("L＝ランチ、D＝ディナー。これは編集前提の下書きです。").classes(
                             "text-[9px] text-grey-6 q-mt-xs")
-                    ui.notify("シフト案を作成しました", type="positive")
+                    if notify:
+                        ui.notify("シフト案を作成しました", type="positive")
 
                 ui.button("シフト案を作る", icon="auto_awesome", on_click=build_auto_schedule).props(
                     "unelevated no-caps").classes("shift-submit w-full q-mt-sm")
@@ -456,4 +460,5 @@ def shift_submission_page():
         .shift-day-row{padding:9px 0;border-bottom:1px solid #EDF1EE}.shift-day-label{font-size:11px;font-weight:900}.shift-input-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:start}.shift-kind{width:100%}.shift-time-pair{width:100%}.shift-time{width:50%;min-width:0;flex:1}.shift-time .q-field__label{font-size:9px}.pending-notice{padding:9px 11px;border-radius:10px;background:#FFF2D9;color:#966317;font-size:10px;font-weight:900}.shift-submit{background:#2F7457!important;color:#fff!important;border-radius:14px!important;font-weight:900!important}.change-request-card{border:1px solid #E6B65E!important;border-radius:17px!important;box-shadow:none!important;background:#FFFBF2!important}.request-summary{padding:8px 10px;border-radius:9px;background:#fff;font-size:9px;line-height:1.6}.admin-day-card{border:1px solid #E1E9E4!important;border-radius:17px!important;box-shadow:none!important}.admin-shift-row{padding:5px 0;border-top:1px solid #F0F2F1}.admin-staff-name{width:64px;flex:0 0 64px;font-size:10px;font-weight:900}.admin-shift-value{min-width:0;padding:5px 8px;border-radius:8px;font-size:9px;font-weight:800}.admin-shift-value.available{background:#DFF2E7;color:#276D49}.admin-shift-value.absolute-off{background:#FFE2E2;color:#A43E3E}.admin-shift-value.day-off{background:#F1F3F2;color:#7C8781}.admin-shift-value.not-submitted{background:#FFF0D7;color:#9A671D}
         .shift-sheet-scroll{width:100%;max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.shift-sheet{border-collapse:separate;border-spacing:0;min-width:max-content;font-size:9px}.shift-sheet th,.shift-sheet td{border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;text-align:center}.shift-sheet thead th{position:sticky;z-index:4;background:#243E34;color:#fff}.shift-sheet thead tr:first-child th{top:0;height:36px}.shift-sheet thead tr:nth-child(2) th{top:36px;height:28px}.date-head{left:0;z-index:7!important;min-width:58px}.staff-head{min-width:156px;font-size:10px}.lunch-head,.dinner-head{width:78px;min-width:78px}.lunch-head{background:#315F72!important}.dinner-head{background:#795B35!important}.date-cell{position:sticky;left:0;z-index:3;width:58px;height:48px;background:#F5F7F5;color:#34443C}.date-cell b,.date-cell span{display:block}.date-cell b{font-size:13px}.date-cell.saturday{color:#2E6FA2;background:#EFF7FC}.date-cell.sunday{color:#B24B4B;background:#FFF2F1}.shift-cell{width:78px;max-width:78px;height:48px;padding:4px;white-space:normal;font-weight:800;line-height:1.25}.shift-cell.lunch-on{background:#D9F0FA;color:#245D75}.shift-cell.dinner-on{background:#F8E8C9;color:#79551F}.shift-cell.absolute-off{background:#F8DADA;color:#9A3C3C}.shift-cell.not-submitted{color:#A08760;background:#FFF9ED;font-size:8px}.shift-cell.day-off{background:#FAFBFA}
         .auto-shift-warning,.auto-shift-success{padding:9px 11px;border-radius:10px;font-size:10px;font-weight:900}.auto-shift-warning{background:#FFF0D7;color:#946018}.auto-shift-success{background:#DFF2E7;color:#276D49}.auto-shift-sheet .staff-head{min-width:80px}.auto-shift-sheet .shift-cell{width:80px;max-width:80px}.auto-shift-sheet .both-on{background:#E6E0F7;color:#5B438D}.auto-shift-sheet .shortage{background:#FFF1EE;color:#B2463E}.auto-shift-sheet small{display:block;font-size:7px;line-height:1.2;margin-top:2px}
+        .direct-shift-scroll{max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.direct-shift-grid{display:grid;min-width:max-content;align-items:stretch}.direct-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;min-height:38px;padding:4px;border-right:1px solid #496057;background:#243E34;color:#fff;font-size:9px;font-weight:900}.direct-date{left:0;z-index:7}.direct-day{position:sticky;left:0;z-index:3;display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;background:#F5F7F5;color:#34443C;text-align:center;font-size:11px;font-weight:900}.direct-day.saturday{color:#2E6FA2;background:#EFF7FC}.direct-day.sunday{color:#B24B4B;background:#FFF2F1}.direct-shift-cell{width:80px!important;min-height:48px!important;border-radius:0!important;border-right:1px solid #E1E7E3!important;border-bottom:1px solid #E1E7E3!important;font-size:10px!important;font-weight:900!important}.direct-shift-cell.lunch-on{background:#D9F0FA!important;color:#245D75!important}.direct-shift-cell.dinner-on{background:#F8E8C9!important;color:#79551F!important}.direct-shift-cell.both-on{background:#E6E0F7!important;color:#5B438D!important}.direct-shift-cell.day-off{background:#FAFBFA!important;color:#8B9690!important}.direct-shift-cell.manual-fixed{box-shadow:inset 0 0 0 2px #E6A91A!important}.direct-shortage{display:flex;align-items:center;justify-content:center;min-height:48px;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;background:#FFF1EE;color:#B2463E;font-size:9px;font-weight:900}
         """)
