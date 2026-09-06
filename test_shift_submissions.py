@@ -204,6 +204,33 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertEqual(plan["requested_type"], "通し")
         self.assertEqual(plan["cut_meals"], ["L", "D"])
 
+    def test_partial_cut_counts_as_a_cut_day(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "通し"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", require_manager_or_deputy=False,
+            manual_overrides={"1": {"スタッフA": "ランチ"}})
+        summary = result["preference_summary"]["スタッフA"]
+        self.assertEqual(summary["accepted_days"], 0)
+        self.assertEqual(summary["partially_accepted_days"], 1)
+        self.assertEqual(summary["cut_days"], 1)
+
+    def test_manual_on_override_is_never_replaced_by_other_rules(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "通し"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", require_manager_or_deputy=True,
+            align_deputy_employee=True,
+            manual_overrides={"1": {"スタッフA": "通し"}})
+        plan = result["days"]["1"]["staff"]["スタッフA"]
+        self.assertTrue(plan["lunch"])
+        self.assertTrue(plan["dinner"])
+        self.assertEqual(plan["cut_meals"], [])
+
     def test_auto_schedule_keeps_a_leader_and_pairs_deputy_with_employee(self):
         for name in ("副社長", "店長", "社員A", "スタッフA"):
             self.manager.save(name, 2099, 9, "first", {

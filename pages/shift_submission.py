@@ -338,7 +338,7 @@ def shift_submission_page():
                         for name, summary in result["preference_summary"].items():
                             if summary["requested_days"]:
                                 ui.label(
-                                    f'{name}：希望 {summary["requested_days"]}日／採用 {summary["accepted_days"]}日／削減 {summary["cut_days"]}日'
+                                    f'{name}：希望 {summary["requested_days"]}日／希望通り {summary["accepted_days"]}日／一部含む削減 {summary["cut_days"]}日'
                                 ).classes("text-[10px] text-grey-7")
                         ui.label("L＝ランチ、D＝ディナー。これは編集前提の下書きです。").classes(
                             "text-[9px] text-grey-6 q-mt-xs")

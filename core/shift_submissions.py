@@ -292,6 +292,8 @@ class ShiftSubmissionManager:
                 label = "ランチ" if meal == "lunch" else "ディナー"
                 selected = []
                 locked = manual.get(str(day), {})
+                forced_on = {name for name, override in locked.items()
+                             if override in {label, "通し"}}
                 salaried_candidates = []
                 for name in salaried:
                     override = str(locked.get(name, ""))
@@ -337,7 +339,12 @@ class ShiftSubmissionManager:
                     leader = next((pair for pair in [*salaried_candidates, *candidates]
                                    if pair[0] in {"副社長", "店長"}), None)
                     if leader:
-                        selected[-1:] = [leader]
+                        replace_index = next((index for index in range(len(selected) - 1, -1, -1)
+                                              if selected[index][0] not in forced_on), None)
+                        if replace_index is None:
+                            selected.append(leader)
+                        else:
+                            selected[replace_index] = leader
                 selected_names = {name for name, _value in selected}
                 pair_names = {"副社長", "社員A"}
                 if align_deputy_employee and required >= 2 and len(
@@ -348,7 +355,8 @@ class ShiftSubmissionManager:
                     if missing:
                         replace_index = next((index for index in range(len(selected) - 1, -1, -1)
                                               if selected[index][0] not in pair_names
-                                              and selected[index][0] != "店長"), None)
+                                              and selected[index][0] != "店長"
+                                              and selected[index][0] not in forced_on), None)
                         if replace_index is not None:
                             selected[replace_index] = missing
                 for name, value in selected:
@@ -383,10 +391,15 @@ class ShiftSubmissionManager:
             record_days = submissions.get(name, {}).get("days", {})
             requested = {day for day in all_days if self._day_value(
                 record_days.get(str(day), {}))["type"] in {"通し", "ランチ", "ディナー"}}
-            accepted = {day for day in requested if days[str(day)]["staff"][name]["lunch"]
-                        or days[str(day)]["staff"][name]["dinner"]}
+            accepted = {day for day in requested
+                        if not days[str(day)]["staff"][name]["cut_meals"]}
+            partially_accepted = {day for day in requested
+                                  if (days[str(day)]["staff"][name]["lunch"]
+                                      or days[str(day)]["staff"][name]["dinner"])
+                                  and days[str(day)]["staff"][name]["cut_meals"]}
             preference_summary[name] = {"requested_days": len(requested),
                                         "accepted_days": len(accepted),
+                                        "partially_accepted_days": len(partially_accepted),
                                         "cut_days": len(requested - accepted)}
         result = {"period": period, "days": days, "assigned": assigned,
                   "preference_summary": preference_summary,
