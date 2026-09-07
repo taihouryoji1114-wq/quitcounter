@@ -1,0 +1,304 @@
+/* Future Financials themes. NORMAL intentionally inherits the existing UI. */
+:root {
+  --mirai-motion-fast: 140ms;
+  --mirai-motion-enter: 320ms;
+}
+
+.mirai-theme-console {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+}
+.mirai-theme-console.open { display: grid; }
+.mirai-theme-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(3, 8, 14, .72);
+  backdrop-filter: blur(8px);
+}
+.mirai-theme-console-card {
+  position: relative;
+  width: min(100%, 420px);
+  padding: 26px;
+  border: 1px solid #2F5962;
+  border-radius: 22px;
+  color: #ECF8F7;
+  background: linear-gradient(150deg, #13222D, #080F18 72%);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .55), inset 0 1px rgba(255, 255, 255, .06);
+}
+.mirai-theme-console-kicker { color: #62D9D1; font: 800 9px/1.2 ui-monospace, monospace; letter-spacing: .2em; }
+.mirai-theme-console-card h2 { margin: 8px 0 5px; font-size: 25px; letter-spacing: .08em; }
+.mirai-theme-console-card p { margin: 0 0 18px; color: #93A9AE; font-size: 11px; line-height: 1.6; }
+.mirai-theme-console-card input {
+  width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  border: 1px solid #365460;
+  border-radius: 12px;
+  outline: none;
+  padding: 0 14px;
+  color: #EAFBFA;
+  background: #07121B;
+  font: 800 15px ui-monospace, monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.mirai-theme-console-card input:focus { border-color: #64D8D0; box-shadow: 0 0 0 3px rgba(100, 216, 208, .12); }
+.mirai-theme-code-error { min-height: 19px; padding-top: 6px; color: #FF8C82; font-size: 10px; }
+.mirai-theme-console-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 8px; }
+.mirai-theme-console-actions button { min-height: 45px; border: 1px solid #35505B; border-radius: 11px; color: #AFC0C4; background: transparent; font-weight: 800; }
+.mirai-theme-console-actions #mirai-theme-apply { border-color: #4ECBC1; color: #03110F; background: linear-gradient(135deg, #49C7BE, #8DE8C8); }
+.mirai-theme-toast {
+  position: fixed;
+  z-index: 10001;
+  left: 50%;
+  bottom: 28px;
+  translate: -50% 18px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  color: #F3FFFC;
+  background: #173F34;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, .25);
+  font-size: 11px;
+  font-weight: 850;
+  transition: opacity .18s ease, translate .18s ease;
+}
+.mirai-theme-toast.show { opacity: 1; translate: -50% 0; }
+
+html[data-mirai-theme="godot"] {
+  color-scheme: dark;
+  --cockpit-bg: #050A12;
+  --cockpit-panel: #0D1722;
+  --cockpit-panel-2: #101E2B;
+  --cockpit-panel-soft: #142432;
+  --cockpit-line: #233A49;
+  --cockpit-line-hot: #39778A;
+  --cockpit-text: #EAF4F5;
+  --cockpit-muted: #83979F;
+  --cockpit-cyan: #52C8D5;
+  --cockpit-blue: #5599EE;
+  --cockpit-green: #54D09B;
+  --cockpit-yellow: #E9BC59;
+  --cockpit-orange: #F09A4A;
+  --cockpit-red: #EF6D67;
+  --cockpit-gold: #DDB763;
+}
+html[data-mirai-theme="godot"] body {
+  color: var(--cockpit-text) !important;
+  background:
+    radial-gradient(circle at 16% -5%, rgba(41, 103, 132, .18), transparent 31%),
+    radial-gradient(circle at 95% 12%, rgba(43, 126, 111, .10), transparent 26%),
+    var(--cockpit-bg) !important;
+}
+html[data-mirai-theme="godot"] body::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  opacity: .17;
+  background-image: linear-gradient(rgba(85, 153, 238, .12) 1px, transparent 1px), linear-gradient(90deg, rgba(85, 153, 238, .1) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+html[data-mirai-theme="godot"] .app-shell { width: min(100%, 820px); }
+html[data-mirai-theme="godot"] .app-shell > .q-label.text-xl,
+html[data-mirai-theme="godot"] .app-shell > .q-row .q-label.text-xl {
+  color: #CDEEF0;
+  font-size: 15px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+html[data-mirai-theme="godot"] .app-shell > .text-4xl {
+  color: #F4FAFA;
+  font-size: clamp(28px, 6vw, 42px) !important;
+  letter-spacing: -.045em;
+  text-shadow: 0 0 24px rgba(82, 200, 213, .09);
+}
+html[data-mirai-theme="godot"] .text-grey-5,
+html[data-mirai-theme="godot"] .text-grey-6,
+html[data-mirai-theme="godot"] .text-grey-7,
+html[data-mirai-theme="godot"] .text-grey-8 { color: var(--cockpit-muted) !important; }
+html[data-mirai-theme="godot"] .text-primary { color: var(--cockpit-cyan) !important; }
+html[data-mirai-theme="godot"] .text-positive { color: var(--cockpit-green) !important; }
+
+html[data-mirai-theme="godot"] .surface-card,
+html[data-mirai-theme="godot"] .hero-card,
+html[data-mirai-theme="godot"] .mk-card,
+html[data-mirai-theme="godot"] .report-kpi,
+html[data-mirai-theme="godot"] .health-card,
+html[data-mirai-theme="godot"] .diagnostic-metric {
+  color: var(--cockpit-text) !important;
+  border: 1px solid var(--cockpit-line) !important;
+  background: linear-gradient(145deg, rgba(18, 33, 46, .98), rgba(9, 18, 28, .98)) !important;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .025) !important;
+}
+html[data-mirai-theme="godot"] .surface-card { border-radius: 22px !important; }
+html[data-mirai-theme="godot"] .surface-card,
+html[data-mirai-theme="godot"] .report-kpi,
+html[data-mirai-theme="godot"] .health-card { animation: mirai-panel-enter var(--mirai-motion-enter) ease-out both; }
+html[data-mirai-theme="godot"] .surface-card:hover { border-color: #315363 !important; }
+
+html[data-mirai-theme="godot"] .q-btn {
+  border: 1px solid #294657;
+  color: #DCEAED;
+  background: linear-gradient(180deg, #152736, #0D1A25);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .045), 0 6px 16px rgba(0, 0, 0, .14);
+  transition: transform var(--mirai-motion-fast) ease, border-color var(--mirai-motion-fast) ease, filter var(--mirai-motion-fast) ease;
+}
+html[data-mirai-theme="godot"] .q-btn:hover { border-color: var(--cockpit-line-hot); filter: brightness(1.08); }
+html[data-mirai-theme="godot"] .q-btn:active { transform: translateY(1px) scale(.985); }
+html[data-mirai-theme="godot"] .q-btn.bg-primary,
+html[data-mirai-theme="godot"] .audit-shortcut,
+html[data-mirai-theme="godot"] .report-shortcut,
+html[data-mirai-theme="godot"] .evaluation-button {
+  border-color: #398CA0 !important;
+  color: #EFFFFF !important;
+  background: linear-gradient(135deg, #14465B, #176B72) !important;
+  box-shadow: 0 9px 24px rgba(32, 133, 146, .16), inset 0 1px rgba(255, 255, 255, .1) !important;
+}
+html[data-mirai-theme="godot"] .q-field__control {
+  color: var(--cockpit-text) !important;
+  border-radius: 12px !important;
+  background: #09131D !important;
+}
+html[data-mirai-theme="godot"] .q-field__native,
+html[data-mirai-theme="godot"] .q-field__input,
+html[data-mirai-theme="godot"] .q-field__prefix,
+html[data-mirai-theme="godot"] .q-field__suffix,
+html[data-mirai-theme="godot"] .q-field__marginal { color: #E5F0F1 !important; }
+html[data-mirai-theme="godot"] .q-field__label { color: #8FA5AC !important; }
+html[data-mirai-theme="godot"] .q-field--outlined .q-field__control::before { border-color: #29404E !important; }
+html[data-mirai-theme="godot"] .q-field--focused .q-field__control::after { border-color: var(--cockpit-cyan) !important; }
+html[data-mirai-theme="godot"] .q-menu,
+html[data-mirai-theme="godot"] .q-dialog .q-card,
+html[data-mirai-theme="godot"] .future-menu { color: var(--cockpit-text) !important; background: #0C1721 !important; border: 1px solid var(--cockpit-line) !important; }
+html[data-mirai-theme="godot"] .q-item { color: var(--cockpit-text); }
+html[data-mirai-theme="godot"] .q-item--active { color: var(--cockpit-cyan); background: rgba(82, 200, 213, .08); box-shadow: inset 3px 0 var(--cockpit-cyan); }
+html[data-mirai-theme="godot"] .q-separator { background: #223541 !important; }
+
+/* Dashboard cockpit */
+html[data-mirai-theme="godot"] .app-shell .surface-card + .surface-card { position: relative; }
+html[data-mirai-theme="godot"] .app-shell .cursor-pointer[style*="linear-gradient"] {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #2D6873 !important;
+  background: linear-gradient(145deg, #102C3B 0%, #0A1A27 68%, #17372F 120%) !important;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, .34), inset 0 1px rgba(132, 230, 222, .1) !important;
+}
+html[data-mirai-theme="godot"] .app-shell .cursor-pointer[style*="linear-gradient"]::after {
+  content: "LIVE MANAGEMENT STATUS";
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  color: rgba(116, 211, 216, .38);
+  font: 800 7px ui-monospace, monospace;
+  letter-spacing: .17em;
+}
+html[data-mirai-theme="godot"] .health-chip { border: 1px solid currentColor; background: rgba(4, 13, 20, .48); }
+html[data-mirai-theme="godot"] .snapshot-ratio-card,
+html[data-mirai-theme="godot"] .snapshot-profit-card,
+html[data-mirai-theme="godot"] .landing-line { border: 1px solid rgba(126, 187, 196, .18); background: rgba(5, 15, 23, .48); }
+html[data-mirai-theme="godot"] .snapshot-ratio-card.safe { box-shadow: inset 0 -3px var(--cockpit-green); }
+html[data-mirai-theme="godot"] .snapshot-ratio-card.warning { box-shadow: inset 0 -3px var(--cockpit-yellow); }
+html[data-mirai-theme="godot"] .snapshot-ratio-card.danger { box-shadow: inset 0 -3px var(--cockpit-red); }
+html[data-mirai-theme="godot"] .snapshot-warning { border: 1px solid rgba(240, 154, 74, .35); color: #FFD79B; background: rgba(134, 72, 25, .24); }
+
+html[data-mirai-theme="godot"] .monthly-evaluation {
+  border-color: rgba(221, 183, 99, .45) !important;
+  background: radial-gradient(circle at 92% 3%, rgba(221, 183, 99, .11), transparent 30%), linear-gradient(145deg, #141D27, #0A111A) !important;
+}
+html[data-mirai-theme="godot"] .evaluation-rank {
+  color: #FFE09A !important;
+  border: 1px solid #C69A42;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(221, 183, 99, .17), rgba(9, 17, 26, .9) 68%) !important;
+  box-shadow: 0 0 0 5px rgba(221, 183, 99, .07), 0 0 28px rgba(221, 183, 99, .14);
+}
+html[data-mirai-theme="godot"] .evaluation-score { color: #F5D994; }
+html[data-mirai-theme="godot"] .evaluation-summary { color: #A8B7BB; }
+html[data-mirai-theme="godot"] .evaluation-list.good { color: #9BE7BF; background: rgba(39, 111, 78, .22); }
+html[data-mirai-theme="godot"] .evaluation-list.warning { color: #F2CE80; background: rgba(139, 92, 29, .22); }
+html[data-mirai-theme="godot"] .evaluation-list.action { color: #99C9FF; background: rgba(45, 86, 137, .24); }
+html[data-mirai-theme="godot"] .evaluation-detail,
+html[data-mirai-theme="godot"] .meaning-row,
+html[data-mirai-theme="godot"] .trend-row { color: var(--cockpit-text) !important; border-color: #243641 !important; background: transparent !important; }
+html[data-mirai-theme="godot"] .meaning-label,
+html[data-mirai-theme="godot"] .meaning-delta,
+html[data-mirai-theme="godot"] .meaning-extra,
+html[data-mirai-theme="godot"] .trend-month { color: var(--cockpit-muted) !important; }
+html[data-mirai-theme="godot"] .meaning-value,
+html[data-mirai-theme="godot"] .trend-sales { color: #DDEDEF !important; }
+html[data-mirai-theme="godot"] .trend-track { background: #1A2A35; }
+html[data-mirai-theme="godot"] .trend-bar { background: linear-gradient(90deg, #328FA4, #58D1C7); box-shadow: 0 0 9px rgba(82, 200, 213, .28); }
+
+/* Existing charts, reports and profit blocks retain their structure. */
+html[data-mirai-theme="godot"] .actual-box-map,
+html[data-mirai-theme="godot"] .box-map,
+html[data-mirai-theme="godot"] .house-map,
+html[data-mirai-theme="godot"] .report-block-map { border: 1px solid #2D4655; background: #09131D !important; box-shadow: 0 14px 35px rgba(0, 0, 0, .25); }
+html[data-mirai-theme="godot"] .report-link-card,
+html[data-mirai-theme="godot"] .report-metric,
+html[data-mirai-theme="godot"] .ratio-card,
+html[data-mirai-theme="godot"] .summary,
+html[data-mirai-theme="godot"] .cash-line.final,
+html[data-mirai-theme="godot"] .dual-plan-field,
+html[data-mirai-theme="godot"] .target-settings {
+  color: var(--cockpit-text) !important;
+  border-color: #263B48 !important;
+  background: var(--cockpit-panel-soft) !important;
+}
+html[data-mirai-theme="godot"] .report-title,
+html[data-mirai-theme="godot"] .report-section-title,
+html[data-mirai-theme="godot"] .ratio-value,
+html[data-mirai-theme="godot"] .summary b,
+html[data-mirai-theme="godot"] .cash-line strong { color: var(--cockpit-text) !important; }
+html[data-mirai-theme="godot"] .print-report { color: var(--cockpit-text); border-color: var(--cockpit-line); background: #0A131D; }
+html[data-mirai-theme="godot"] .report-table th { color: #B8CACF; background: #142532; }
+html[data-mirai-theme="godot"] .report-table td { color: #DCE8EA; border-color: #29404D; background: #0D1923; }
+html[data-mirai-theme="godot"] .report-table .total-row td { color: #EFFFFB; background: #17352F !important; }
+html[data-mirai-theme="godot"] svg text { fill: #DCEAEC; }
+html[data-mirai-theme="godot"] canvas { filter: saturate(.92) brightness(.94); }
+
+@keyframes mirai-panel-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 520px) {
+  .mirai-theme-console { padding: 14px; }
+  .mirai-theme-console-card { padding: 22px 18px; border-radius: 19px; }
+  html[data-mirai-theme="godot"] .app-shell { padding: 22px 14px 48px; }
+  html[data-mirai-theme="godot"] .app-shell > .text-4xl { font-size: 29px !important; }
+  html[data-mirai-theme="godot"] .surface-card { border-radius: 18px !important; }
+  html[data-mirai-theme="godot"] .snapshot-ratio-grid { gap: 5px; }
+  html[data-mirai-theme="godot"] .snapshot-ratio-card { padding-inline: 3px; }
+  html[data-mirai-theme="godot"] .trend-row { grid-template-columns: 38px minmax(34px, 1fr) auto; gap: 6px; }
+  html[data-mirai-theme="godot"] .trend-sales { font-size: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-mirai-theme="godot"] *,
+  html[data-mirai-theme="godot"] *::before,
+  html[data-mirai-theme="godot"] *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+@media print {
+  html[data-mirai-theme="godot"] { color-scheme: light; }
+  html[data-mirai-theme="godot"] body,
+  html[data-mirai-theme="godot"] .print-report { color: #17261F !important; background: #fff !important; }
+  html[data-mirai-theme="godot"] .report-title,
+  html[data-mirai-theme="godot"] .report-section-title,
+  html[data-mirai-theme="godot"] .ratio-value { color: #173B2E !important; }
+  html[data-mirai-theme="godot"] .report-table th { color: #43554C !important; background: #EDF2EF !important; }
+  html[data-mirai-theme="godot"] .report-table td { color: #17261F !important; border-color: #DDE2DE !important; background: #fff !important; }
+}
