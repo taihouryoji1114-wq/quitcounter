@@ -59,6 +59,8 @@ def store_settings_page():
 
     with content:
         announcement_settings()
+        live_categories = store_ops.live_board_categories()
+        live_areas = [value["name"] for value in live_categories] or AREAS
         with ui.card().classes("settings-hero w-full q-pa-lg q-mb-md"):
             ui.icon("tune").classes("text-3xl text-primary")
             ui.label("店舗で使う項目だけを管理").classes("text-lg font-black q-mt-sm")
@@ -92,25 +94,97 @@ def store_settings_page():
 
             ui.button("登録する", icon="add", on_click=add_item).classes("w-full q-mt-md")
 
-        with ui.expansion("仕込み項目を登録", icon="soup_kitchen", value=False).classes(
+        with ui.expansion("LIVE BOARD カテゴリー管理", icon="view_agenda", value=False).classes(
+                "settings-section w-full q-mb-sm"):
+            category_name = ui.input("新しいカテゴリー名").props("outlined dense maxlength=30").classes(
+                "w-full")
+
+            def add_live_category():
+                try:
+                    store_ops.add_live_board_category(category_name.value)
+                except ValueError as error:
+                    notify_error(error)
+                    return
+                reload("カテゴリーを追加しました")
+
+            ui.button("カテゴリーを追加", icon="add", on_click=add_live_category).props(
+                "unelevated no-caps").classes("w-full q-mb-sm")
+            for category_item in live_categories:
+                with ui.row().classes("settings-row w-full items-center no-wrap"):
+                    ui.label(category_item["name"]).classes("text-xs font-black grow")
+                    ui.button(icon="arrow_upward", on_click=lambda _, selected=category_item: (
+                        store_ops.move_live_board_category(selected["id"], -1), reload()
+                    )).props("flat round dense aria-label='上へ'")
+                    ui.button(icon="arrow_downward", on_click=lambda _, selected=category_item: (
+                        store_ops.move_live_board_category(selected["id"], 1), reload()
+                    )).props("flat round dense aria-label='下へ'")
+
+                    def edit_category(_, selected=category_item):
+                        with ui.dialog() as dialog, ui.card().classes("settings-dialog q-pa-lg"):
+                            ui.label("カテゴリー設定").classes("text-lg font-black")
+                            field = ui.input("カテゴリー名", value=selected["name"]).props(
+                                "outlined dense maxlength=30").classes("w-full")
+                            visible = ui.switch("LIVE BOARDに表示", value=selected.get("visible", True))
+
+                            def save_category():
+                                try:
+                                    store_ops.update_live_board_category(
+                                        selected["id"], field.value, visible.value)
+                                except ValueError as error:
+                                    notify_error(error)
+                                    return
+                                dialog.close()
+                                reload("カテゴリーを更新しました")
+                            ui.button("保存", on_click=save_category).classes("w-full")
+                        dialog.open()
+                    ui.button(icon="edit", on_click=edit_category).props("flat round dense")
+                    ui.button(icon="delete_outline", on_click=lambda _, selected=category_item:
+                              confirm_delete("このカテゴリーを削除しますか？", selected["name"],
+                                             lambda: store_ops.delete_live_board_category(
+                                                 selected["id"]))).props(
+                                                     "flat round dense color=negative")
+
+        with ui.expansion("LIVE BOARD 項目を登録", icon="soup_kitchen", value=False).classes(
                 "settings-section w-full q-mb-sm"):
             prep_name = ui.input("仕込み項目").props("outlined dense").classes("w-full")
-            prep_area = ui.select(AREAS, value="厨房", label="場所").props(
+            prep_area = ui.select(live_areas, value=live_areas[0], label="カテゴリー").props(
                 "outlined dense").classes("w-full q-mt-xs")
-            prep_checks = ui.textarea(
-                "カード内の個別チェック（必要な場合だけ・1行に1つ）"
-            ).props("outlined autogrow").classes("w-full q-mt-xs")
             prep_note = ui.switch("この仕込みで補足メモを使う", value=False).classes(
                 "w-full q-mt-xs")
-            prep_status_mode = ui.select(
-                ["完了・未完了", "○・△・×"], value="完了・未完了", label="判定方法",
+            prep_type = ui.select(
+                ["完了型", "状態型（○△×）", "数量型"], value="完了型", label="項目タイプ",
             ).props("outlined dense options-dense").classes("w-full q-mt-xs")
+            prep_visible = ui.switch("LIVE BOARDに表示", value=True)
+            with ui.expansion("状態型・数量型の詳細設定", icon="tune", value=False).classes(
+                    "w-full q-mt-xs"):
+                good_label = ui.input("○の意味", value="良好").props("outlined dense maxlength=20").classes("w-full")
+                warning_label = ui.input("△の意味", value="注意").props("outlined dense maxlength=20").classes("w-full")
+                bad_label = ui.input("×の意味", value="未完了").props("outlined dense maxlength=20").classes("w-full")
+                show_labels = ui.switch("LIVE BOARDに意味も表示", value=False)
+                quantity_unit = ui.input("数量の単位", value="個").props("outlined dense maxlength=12").classes("w-full")
+                quantity_step = ui.number("＋−1回の増減量", value=1, step=.5).props("outlined dense").classes("w-full")
+                quantity_initial = ui.number("初期値", value=0, step=.5).props("outlined dense").classes("w-full")
+                quantity_min = ui.number("最低値", value=0, step=.5).props("outlined dense").classes("w-full")
+                quantity_max = ui.number("最大値（空欄なら上限なし）", step=.5).props("outlined dense").classes("w-full")
+                progress_enabled = ui.switch("数量を進捗数に含める", value=False)
+                reset_mode = ui.select(["前回状態を引き継ぐ", "毎日初期値へ戻す"],
+                                       value="前回状態を引き継ぐ", label="日次リセット").props(
+                                           "outlined dense").classes("w-full")
 
             def add_prep():
                 try:
                     store_ops.add_prep_template(
-                        prep_name.value, prep_area.value, prep_checks.value, prep_note.value,
-                        "three" if prep_status_mode.value == "○・△・×" else "binary")
+                        prep_name.value, prep_area.value, None, prep_note.value,
+                        item_type={"完了型": "completion", "状態型（○△×）": "status",
+                                   "数量型": "quantity"}[prep_type.value],
+                        status_labels={"done": good_label.value, "attention": warning_label.value,
+                                       "incomplete": bad_label.value},
+                        show_status_labels=show_labels.value, unit=quantity_unit.value,
+                        step=quantity_step.value, initial_value=quantity_initial.value,
+                        minimum_value=quantity_min.value, maximum_value=quantity_max.value,
+                        visible=prep_visible.value,
+                        reset_mode="daily" if reset_mode.value == "毎日初期値へ戻す" else "carry",
+                        progress_enabled=progress_enabled.value)
                 except ValueError as error:
                     notify_error(error)
                     return
@@ -312,41 +386,69 @@ def store_settings_page():
                             "flat round dense color=negative aria-label='削除'")
 
         prep_items = store_ops.prep_templates()
-        with ui.expansion(f"仕込み項目の編集　{len(prep_items)}件", icon="edit_note",
+        with ui.expansion(f"LIVE BOARD 項目管理　{len(prep_items)}件", icon="edit_note",
                           value=False).classes("settings-section w-full q-mb-sm"):
             for item in prep_items:
                 with ui.row().classes("settings-row w-full items-center no-wrap"):
                     with ui.column().classes("gap-0 grow min-w-0"):
                         ui.label(item["name"]).classes("text-xs font-black")
-                        ui.label(item.get("area", "厨房")).classes("text-[9px] text-grey-6")
+                        type_label = {"completion": "完了型", "status": "状態型",
+                                      "quantity": "数量型"}.get(
+                                          item.get("item_type"),
+                                          "状態型" if item.get("status_mode") == "three" else "完了型")
+                        ui.label(f"{item.get('area', '厨房')}・{type_label}").classes(
+                            "text-[9px] text-grey-6")
 
                     def edit_prep(_, selected=item):
                         with ui.dialog() as dialog, ui.card().classes("settings-dialog q-pa-lg"):
                             ui.label("仕込み項目を編集").classes("text-lg font-black q-mb-sm")
                             edit_name = ui.input("項目名", value=selected["name"]).props("outlined dense").classes("w-full")
-                            edit_area = ui.select(AREAS, value=selected.get("area", "厨房"), label="場所").props(
+                            edit_area = ui.select(live_areas, value=selected.get("area", live_areas[0]), label="カテゴリー").props(
                                 "outlined dense").classes("w-full")
-                            edit_checks = ui.textarea(
-                                "カード内の個別チェック（1行に1つ）",
-                                value="\n".join(selected.get("check_items", [])),
-                            ).props("outlined autogrow").classes("w-full")
                             edit_note = ui.switch(
-                                "この仕込みで補足メモを使う",
+                                "短文メモを使う",
                                 value=bool(selected.get("note_enabled", False)),
                             ).classes("w-full")
-                            edit_status_mode = ui.select(
-                                ["完了・未完了", "○・△・×"],
-                                value=("○・△・×" if selected.get("status_mode") == "three"
-                                       else "完了・未完了"), label="判定方法",
-                            ).props("outlined dense options-dense").classes("w-full")
+                            current_type = selected.get("item_type") or (
+                                "status" if selected.get("status_mode") == "three" else "completion")
+                            type_names = {"completion": "完了型", "status": "状態型（○△×）",
+                                          "quantity": "数量型"}
+                            edit_type = ui.select(list(type_names.values()), value=type_names[current_type],
+                                                  label="項目タイプ").props("outlined dense").classes("w-full")
+                            edit_visible = ui.switch("LIVE BOARDに表示", value=selected.get("visible", True))
+                            labels = selected.get("status_labels", {})
+                            with ui.expansion("タイプ別の詳細設定", icon="tune", value=False).classes("w-full"):
+                                edit_good = ui.input("○の意味", value=labels.get("done", "良好")).props("outlined dense maxlength=20").classes("w-full")
+                                edit_warning = ui.input("△の意味", value=labels.get("attention", "注意")).props("outlined dense maxlength=20").classes("w-full")
+                                edit_bad = ui.input("×の意味", value=labels.get("incomplete", "未完了")).props("outlined dense maxlength=20").classes("w-full")
+                                edit_show_labels = ui.switch("意味も表示", value=selected.get("show_status_labels", False))
+                                edit_unit = ui.input("単位", value=selected.get("unit", "個")).props("outlined dense maxlength=12").classes("w-full")
+                                edit_step = ui.number("増減量", value=selected.get("step", 1), step=.5).props("outlined dense").classes("w-full")
+                                edit_initial = ui.number("初期値", value=selected.get("initial_value", 0), step=.5).props("outlined dense").classes("w-full")
+                                edit_minimum = ui.number("最低値", value=selected.get("minimum_value", 0), step=.5).props("outlined dense").classes("w-full")
+                                edit_maximum = ui.number("最大値（空欄なら上限なし）", value=selected.get("maximum_value"), step=.5).props("outlined dense").classes("w-full")
+                                edit_progress = ui.switch("数量を進捗数に含める", value=selected.get("progress_enabled", False))
+                                edit_reset = ui.select(["前回状態を引き継ぐ", "毎日初期値へ戻す"],
+                                    value=("毎日初期値へ戻す" if selected.get("reset_mode") == "daily"
+                                           else "前回状態を引き継ぐ"), label="日次リセット").props("outlined dense").classes("w-full")
 
                             def save():
                                 try:
                                     store_ops.update_prep_template(
                                         selected["id"], edit_name.value, edit_area.value,
-                                        edit_checks.value, edit_note.value,
-                                        "three" if edit_status_mode.value == "○・△・×"
-                                        else "binary")
+                                        selected.get("check_items", []), edit_note.value,
+                                        item_type={value: key for key, value in type_names.items()}[edit_type.value],
+                                        status_labels={"done": edit_good.value,
+                                                       "attention": edit_warning.value,
+                                                       "incomplete": edit_bad.value},
+                                        show_status_labels=edit_show_labels.value,
+                                        unit=edit_unit.value, step=edit_step.value,
+                                        initial_value=edit_initial.value,
+                                        minimum_value=edit_minimum.value,
+                                        maximum_value=edit_maximum.value,
+                                        visible=edit_visible.value,
+                                        reset_mode="daily" if edit_reset.value == "毎日初期値へ戻す" else "carry",
+                                        progress_enabled=edit_progress.value)
                                 except ValueError as error:
                                     notify_error(error)
                                     return
@@ -357,6 +459,12 @@ def store_settings_page():
                         dialog.open()
 
                     ui.button(icon="edit", on_click=edit_prep).props("flat round dense aria-label='編集'")
+                    ui.button(icon="arrow_upward", on_click=lambda _, selected=item: (
+                        store_ops.move_prep_template(selected["id"], -1), reload()
+                    )).props("flat round dense aria-label='上へ'")
+                    ui.button(icon="arrow_downward", on_click=lambda _, selected=item: (
+                        store_ops.move_prep_template(selected["id"], 1), reload()
+                    )).props("flat round dense aria-label='下へ'")
                     ui.button(icon="delete_outline", on_click=lambda _, selected=item: confirm_delete(
                         "この仕込み項目を削除しますか？", selected["name"],
                         lambda: store_ops.delete_prep_template(selected["id"]))).props(

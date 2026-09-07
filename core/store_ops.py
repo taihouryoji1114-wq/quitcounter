@@ -688,8 +688,92 @@ class StoreOperationsManager:
                 cleaned.append(text[:80])
         return cleaned[:12], bool(note_enabled)
 
+    @staticmethod
+    def _live_board_type(value):
+        return value if value in {"completion", "status", "quantity"} else "completion"
+
+    @staticmethod
+    def _live_board_number(value, fallback=0, minimum=None):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = float(fallback)
+        if minimum is not None:
+            number = max(float(minimum), number)
+        return int(number) if number.is_integer() else number
+
+    def live_board_categories(self):
+        configured = self._data_manager.data.setdefault("store_live_board_categories", [])
+        result = [dict(value) for value in configured
+                  if isinstance(value, dict) and value.get("active", True)]
+        known = {value.get("name") for value in result}
+        changed = False
+        for item in self.prep_templates():
+            name = str(item.get("area") or "厨房").strip()
+            if name and name not in known:
+                category = {"id": uuid4().hex, "name": name, "active": True,
+                            "visible": True}
+                configured.append(category)
+                result.append(dict(category))
+                known.add(name)
+                changed = True
+        if changed:
+            self._data_manager.save()
+        return result
+
+    def add_live_board_category(self, name):
+        name = str(name or "").strip()[:30]
+        if not name:
+            raise ValueError("カテゴリー名を入力してください。")
+        if any(value.get("name") == name for value in self.live_board_categories()):
+            raise ValueError("同じカテゴリーがあります。")
+        item = {"id": uuid4().hex, "name": name, "active": True, "visible": True}
+        self._data_manager.data.setdefault("store_live_board_categories", []).append(item)
+        self._data_manager.save()
+        return dict(item)
+
+    def update_live_board_category(self, category_id, name, visible=True):
+        values = self._data_manager.data.setdefault("store_live_board_categories", [])
+        item = next((value for value in values if value.get("id") == category_id), None)
+        if not item:
+            raise ValueError("カテゴリーが見つかりません。")
+        old_name = item.get("name")
+        name = str(name or "").strip()[:30]
+        if not name:
+            raise ValueError("カテゴリー名を入力してください。")
+        item.update(name=name, visible=bool(visible))
+        for template in self._data_manager.data.get("store_prep_templates", []):
+            if template.get("area") == old_name:
+                template["area"] = name
+        self._data_manager.save()
+        return dict(item)
+
+    def move_live_board_category(self, category_id, direction):
+        values = self._data_manager.data.setdefault("store_live_board_categories", [])
+        index = next((i for i, value in enumerate(values)
+                      if value.get("id") == category_id), None)
+        target = index + direction if index is not None else -1
+        if index is None or target < 0 or target >= len(values):
+            return False
+        values[index], values[target] = values[target], values[index]
+        self._data_manager.save()
+        return True
+
+    def delete_live_board_category(self, category_id):
+        values = self._data_manager.data.setdefault("store_live_board_categories", [])
+        item = next((value for value in values if value.get("id") == category_id), None)
+        if not item:
+            raise ValueError("カテゴリーが見つかりません。")
+        if any(value.get("area") == item.get("name") for value in self.prep_templates()):
+            raise ValueError("項目が入っているカテゴリーは削除できません。")
+        item["active"] = False
+        self._data_manager.save()
+
     def add_prep_template(self, name, area="厨房", check_items=None, note_enabled=False,
-                          status_mode="binary"):
+                          status_mode="binary", item_type=None, status_labels=None,
+                          show_status_labels=False, unit="個", step=1, initial_value=0,
+                          minimum_value=0, maximum_value=None, visible=True,
+                          reset_mode="carry", progress_enabled=False):
         name = str(name or "").strip()
         if not name:
             raise ValueError("仕込み名を入力してください。")
@@ -697,9 +781,25 @@ class StoreOperationsManager:
             raise ValueError("同じ仕込み項目が登録されています。")
         checks, note_enabled = self._prep_options(check_items, note_enabled)
         status_mode = "three" if status_mode == "three" else "binary"
+        item_type = self._live_board_type(
+            item_type or ("status" if status_mode == "three" else "completion"))
+        labels = status_labels if isinstance(status_labels, dict) else {}
         item = {"id": uuid4().hex, "name": name, "area": str(area or "厨房").strip(),
                 "check_items": checks, "note_enabled": note_enabled,
-                "status_mode": status_mode, "active": True}
+                "status_mode": "three" if item_type == "status" else "binary",
+                "item_type": item_type, "status_labels": {
+                    "done": str(labels.get("done", "良好"))[:20],
+                    "attention": str(labels.get("attention", "注意"))[:20],
+                    "incomplete": str(labels.get("incomplete", "未完了"))[:20]},
+                "show_status_labels": bool(show_status_labels),
+                "unit": str(unit or "個").strip()[:12],
+                "step": self._live_board_number(step, 1, .01),
+                "initial_value": self._live_board_number(initial_value, 0),
+                "minimum_value": self._live_board_number(minimum_value, 0),
+                "maximum_value": (None if maximum_value in (None, "") else
+                                  self._live_board_number(maximum_value, 0)),
+                "visible": bool(visible), "reset_mode": ("daily" if reset_mode == "daily" else "carry"),
+                "progress_enabled": bool(progress_enabled), "active": True}
         self._data_manager.data.setdefault("store_prep_templates", []).append(item)
         self._data_manager.save()
         return dict(item)
@@ -713,7 +813,10 @@ class StoreOperationsManager:
         raise ValueError("仕込み項目が見つかりません。")
 
     def update_prep_template(self, item_id, name, area="厨房", check_items=None,
-                             note_enabled=False, status_mode="binary"):
+                             note_enabled=False, status_mode="binary", item_type=None,
+                             status_labels=None, show_status_labels=False, unit="個", step=1,
+                             initial_value=0, minimum_value=0, maximum_value=None, visible=True,
+                             reset_mode="carry", progress_enabled=False):
         values = self._data_manager.data.setdefault("store_prep_templates", [])
         item = next((value for value in values if isinstance(value, dict)
                      and value.get("id") == item_id and value.get("active", True)), None)
@@ -726,9 +829,25 @@ class StoreOperationsManager:
                and value.get("active", True) for value in values if isinstance(value, dict)):
             raise ValueError("同じ仕込み項目が登録されています。")
         checks, note_enabled = self._prep_options(check_items, note_enabled)
+        item_type = self._live_board_type(
+            item_type or ("status" if status_mode == "three" else "completion"))
+        labels = status_labels if isinstance(status_labels, dict) else item.get("status_labels", {})
         item.update(name=name, area=str(area or "厨房").strip(),
                     check_items=checks, note_enabled=note_enabled,
-                    status_mode="three" if status_mode == "three" else "binary")
+                    status_mode="three" if item_type == "status" else "binary",
+                    item_type=item_type, status_labels={
+                        "done": str(labels.get("done", "良好"))[:20],
+                        "attention": str(labels.get("attention", "注意"))[:20],
+                        "incomplete": str(labels.get("incomplete", "未完了"))[:20]},
+                    show_status_labels=bool(show_status_labels),
+                    unit=str(unit or "個").strip()[:12],
+                    step=self._live_board_number(step, 1, .01),
+                    initial_value=self._live_board_number(initial_value, 0),
+                    minimum_value=self._live_board_number(minimum_value, 0),
+                    maximum_value=(None if maximum_value in (None, "") else
+                                   self._live_board_number(maximum_value, 0)),
+                    visible=bool(visible), reset_mode=("daily" if reset_mode == "daily" else "carry"),
+                    progress_enabled=bool(progress_enabled))
         self._data_manager.save()
         return dict(item)
 
@@ -843,6 +962,8 @@ class StoreOperationsManager:
         board = self.service_handover_board(record_date, period)
         for item in self.service_prep_items(
                 board["source_date"], board["source_period"]):
+            if item.get("reset_mode") == "daily" and period == "dinner":
+                continue
             if item.get("quantity_mode"):
                 self.set_service_prep_quantity(
                     record_date, period, item["id"], item.get("quantity", 0))
@@ -877,16 +998,26 @@ class StoreOperationsManager:
             record_date, {}).get(period, {})
         notes = self._data_manager.data.get("store_service_prep_notes", {}).get(
             record_date, {}).get(period, {})
+        updates = self._data_manager.data.get("store_service_prep_updates", {}).get(
+            record_date, {}).get(period, {})
         result = []
         for item in self.prep_templates():
-            quantity_mode = self._is_quantity_prep(item)
-            choice_mode = self._is_leftover_rice(item)
-            status_mode = item.get("status_mode", "binary")
-            quantity = int(quantities.get(item["id"], 0) or 0) if quantity_mode else None
+            item_type = self._live_board_type(item.get("item_type") or
+                                              ("status" if item.get("status_mode") == "three"
+                                               else ("quantity" if self._is_quantity_prep(item)
+                                                     else "completion")))
+            quantity_mode = item_type == "quantity"
+            # Preserve the legacy leftover-rice control until an administrator edits it.
+            choice_mode = "item_type" not in item and self._is_leftover_rice(item)
+            status_mode = "three" if item_type == "status" else "binary"
+            initial = item.get("initial_value", 0)
+            quantity = self._live_board_number(
+                quantities.get(item["id"], initial), initial) if quantity_mode else None
             choice = choices.get(item["id"], "") if choice_mode else ""
             status = states.get(item["id"], "incomplete")
             if quantity_mode:
-                status = "done" if quantity >= 2 else "incomplete"
+                status = "done" if (item.get("progress_enabled") and
+                                     quantity > item.get("minimum_value", 0)) else "incomplete"
             elif choice_mode:
                 status = "done" if choice in {"あり", "なし"} else "incomplete"
             elif status not in self.PREP_STATUSES:
@@ -897,9 +1028,11 @@ class StoreOperationsManager:
             if check_items and status_mode != "three":
                 status = "done" if len(checked) == len(check_items) else "incomplete"
             result.append({**item, "status": status, "quantity_mode": quantity_mode,
+                           "item_type": item_type, "status_mode": status_mode,
                            "quantity": quantity, "choice_mode": choice_mode,
                            "choice": choice, "checked_items": checked,
-                           "note": str(notes.get(item["id"], ""))})
+                           "note": str(notes.get(item["id"], "")),
+                           "last_update": dict(updates.get(item["id"], {}))})
         return result
 
     def set_service_prep_subchecks(self, record_date, period, item_id, checked_items):
@@ -924,13 +1057,20 @@ class StoreOperationsManager:
             raise ValueError("メモを使う仕込み項目が見つかりません。")
         values = self._data_manager.data.setdefault(
             "store_service_prep_notes", {}).setdefault(record_date, {}).setdefault(period, {})
-        text = str(note or "").strip()[:500]
+        text = str(note or "").strip()[:40]
         if text:
             values[item_id] = text
         else:
             values.pop(item_id, None)
+        self._record_live_board_update(record_date, period, item_id, "memo")
         self._data_manager.save()
         return text
+
+    def _record_live_board_update(self, record_date, period, item_id, action):
+        values = self._data_manager.data.setdefault(
+            "store_service_prep_updates", {}).setdefault(record_date, {}).setdefault(period, {})
+        values[item_id] = {"updated_at": datetime.now().isoformat(timespec="seconds"),
+                           "updated_by": "staff", "action": action}
 
     def set_service_prep_status(self, record_date, period, item_id, status):
         self._date(record_date)
@@ -940,24 +1080,40 @@ class StoreOperationsManager:
         item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
         if not item:
             raise ValueError("仕込み項目が見つかりません。")
-        if self._is_quantity_prep(item) or self._is_leftover_rice(item):
+        item_type = self._live_board_type(item.get("item_type") or
+                                          ("quantity" if self._is_quantity_prep(item) else
+                                           "completion"))
+        if item_type == "quantity" or ("item_type" not in item and self._is_leftover_rice(item)):
             raise ValueError("この項目は専用の入力方法で記録してください。")
         self._data_manager.data.setdefault("store_service_prep_records", {}).setdefault(
             record_date, {}).setdefault(period, {})[item_id] = status
+        self._record_live_board_update(record_date, period, item_id, "status")
         self._data_manager.save()
 
     def set_service_prep_quantity(self, record_date, period, item_id, quantity):
         self._date(record_date)
         period = self._service_period(period)
         item = next((value for value in self.prep_templates() if value["id"] == item_id), None)
-        if not item or not self._is_quantity_prep(item):
+        if not item:
+            raise ValueError("個数で管理する項目が見つかりません。")
+        item_type = self._live_board_type(item.get("item_type") or
+                                          ("quantity" if self._is_quantity_prep(item) else
+                                           "completion"))
+        if item_type != "quantity":
             raise ValueError("個数で管理する項目が見つかりません。")
         try:
-            quantity = max(0, int(quantity or 0))
+            quantity = float(quantity or 0)
         except (TypeError, ValueError) as error:
             raise ValueError("個数は数字で入力してください。") from error
+        minimum = self._live_board_number(item.get("minimum_value"), 0)
+        maximum = item.get("maximum_value")
+        quantity = max(minimum, quantity)
+        if maximum not in (None, ""):
+            quantity = min(float(maximum), quantity)
+        quantity = int(quantity) if quantity.is_integer() else round(quantity, 3)
         self._data_manager.data.setdefault("store_service_prep_quantities", {}).setdefault(
             record_date, {}).setdefault(period, {})[item_id] = quantity
+        self._record_live_board_update(record_date, period, item_id, "quantity")
         self._data_manager.save()
 
     def set_service_prep_choice(self, record_date, period, item_id, choice):
@@ -985,10 +1141,14 @@ class StoreOperationsManager:
         for item in self.prep_templates():
             if item["id"] not in selected:
                 continue
-            if self._is_quantity_prep(item):
+            item_type = self._live_board_type(item.get("item_type") or
+                                              ("quantity" if self._is_quantity_prep(item) else
+                                               "completion"))
+            if item_type == "quantity":
                 self._data_manager.data.setdefault(
                     "store_service_prep_quantities", {}).setdefault(
-                        record_date, {}).setdefault(period, {})[item["id"]] = 0
+                        record_date, {}).setdefault(period, {})[item["id"]] = item.get(
+                            "initial_value", 0)
             elif self._is_leftover_rice(item):
                 self._data_manager.data.setdefault(
                     "store_service_prep_choices", {}).setdefault(
@@ -999,6 +1159,9 @@ class StoreOperationsManager:
                         record_date, {}).setdefault(period, {})[item["id"]] = "incomplete"
             self._data_manager.data.setdefault(
                 "store_service_prep_subchecks", {}).setdefault(
+                    record_date, {}).setdefault(period, {}).pop(item["id"], None)
+            self._data_manager.data.setdefault(
+                "store_service_prep_notes", {}).setdefault(
                     record_date, {}).setdefault(period, {}).pop(item["id"], None)
             changed += 1
         if changed:
@@ -1023,6 +1186,8 @@ class StoreOperationsManager:
             record_date, period)
         if source_started or self.prep_templates():
             for prep in self.service_prep_items(prep_date, prep_period):
+                if not prep.get("visible", True):
+                    continue
                 if prep.get("choice_mode") and prep.get("choice"):
                     items.append({"id": prep["id"], "kind": "check_result",
                                   "name": f"{prep['name']}：{prep['choice']}",
@@ -1041,6 +1206,13 @@ class StoreOperationsManager:
                               "choice_mode": prep.get("choice_mode", False),
                               "status": prep.get("status", "incomplete"),
                               "status_mode": prep.get("status_mode", "binary"),
+                              "item_type": prep.get("item_type", "completion"),
+                              "status_labels": dict(prep.get("status_labels", {})),
+                              "show_status_labels": bool(prep.get("show_status_labels", False)),
+                              "unit": prep.get("unit", "個"), "step": prep.get("step", 1),
+                              "minimum_value": prep.get("minimum_value", 0),
+                              "maximum_value": prep.get("maximum_value"),
+                              "progress_enabled": bool(prep.get("progress_enabled", False)),
                               "check_items": list(prep.get("check_items", [])),
                               "checked_items": list(prep.get("checked_items", [])),
                               "note_enabled": bool(prep.get("note_enabled", False)),

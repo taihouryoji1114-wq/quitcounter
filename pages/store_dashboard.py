@@ -7,6 +7,46 @@ from core.store_quiz import store_quiz
 from core.staffing import staffing
 from core.theme import Theme
 from pages.store_common import app_card, store_header_actions
+from pages.store_live_board import render_live_board
+
+
+def render_store_navigation():
+    with ui.element("div").classes("store-app-grid w-full q-mt-md"):
+        app_card("在庫確認", "現在数をまとめて入力", "inventory_2",
+                 "/store-ops/inventory", "text-emerald-7")
+        open_handovers = sum(1 for item in store_ops.all_handovers()
+                             if not item.get("confirmed", False))
+        open_requests = len(store_ops.order_requests(open_only=True))
+        app_card("自由引き継ぎ", "申し送りを記録・確認", "edit_note",
+                 "/store-ops/handover", "text-amber-8", open_handovers)
+        app_card("発注依頼", "必要な物をその場で共有", "add_shopping_cart",
+                 "/store-ops/order-requests", "text-red-7", open_requests)
+        app_card("シフト提出", "半月ごとの勤務希望", "calendar_month",
+                 "/store-ops/shift-submission", "text-blue-7")
+    with ui.row().classes("w-full items-center justify-between q-mt-lg q-mb-xs"):
+        ui.label("その他の機能").classes("store-more-title")
+        ui.label("横へスワイプ").classes("store-more-hint")
+    with ui.element("div").classes("store-app-rail w-full"):
+        app_card("アナウンス", "定時のお知らせ・お試し再生", "campaign",
+                 "/store-ops/announcements", "text-amber-8")
+        app_card("温度・衛生", "冷蔵庫温度と衛生記録", "health_and_safety",
+                 "/store-ops/hygiene", "text-cyan-8")
+        app_card("清掃", "清掃状況と担当確認", "cleaning_services",
+                 "/store-ops/cleaning", "text-teal-7")
+        app_card("マニュアル", "手順・考え方・行動指針", "menu_book",
+                 "/store-ops/manual", "text-orange-8")
+        app_card("イベントスケジュール", "店舗行事と予定を共有", "event",
+                 "/store-ops/events", "text-purple-7")
+        app_card("ちゃんはや", "ちゃんこで早押しクイズ", "quiz",
+                 "/store-ops/chanhaya", "text-red-7")
+        if current_role() == "owner":
+            app_card("仕入れリスト", "購入する物と個数を確認", "shopping_basket",
+                     "/store-ops/purchase-list", "text-deep-orange-7")
+            app_card("登録・設定", "商品・仕込み項目を管理", "settings",
+                     "/store-ops/settings", "text-grey-8")
+    ui.add_css("""
+    body{background:linear-gradient(180deg,rgba(244,247,244,.76),rgba(239,238,232,.88)),url('/static/store_ops_home_bg_v3.png') center top/cover no-repeat scroll!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;background:rgba(255,255,255,.96)!important}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;color:rgba(31,54,44,.26)}.store-more-title{font-size:13px;font-weight:950;color:#27493a}.store-more-hint{font-size:8px;font-weight:850;color:#718078}.store-app-rail{display:flex;gap:11px;overflow-x:auto;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:3px 2px 14px}.store-app-rail::-webkit-scrollbar{display:none}.store-app-rail>.store-app-card{flex:0 0 57%;min-height:138px!important;scroll-snap-align:start;padding:17px!important}.store-app-badge{position:absolute;z-index:3;right:13px;top:12px;display:grid;place-items:center;min-width:25px;height:25px;padding:0 7px;border-radius:999px;background:#E43F3F;color:#fff;font-size:11px;font-weight:950}@media(min-width:700px){.store-app-rail>.store-app-card{flex-basis:31%}}
+    """)
 
 
 @ui.page("/store-ops")
@@ -86,6 +126,9 @@ def store_dashboard_page():
         year, month, day = (int(value) for value in business_date.split("-"))
         ui.label(f"{month}月{day}日　TODAY'S OPERATION").classes(
             "today-ribbon w-full")
+        render_live_board(business_date, period, period_label)
+        render_store_navigation()
+        return
         with ui.card().classes("store-board w-full q-pa-lg text-white"):
             with ui.row().classes("w-full items-start justify-between no-wrap"):
                 with ui.column().classes("gap-0"):
@@ -590,7 +633,7 @@ def store_dashboard_page():
                          "/store-ops/settings", "text-grey-8")
 
         ui.add_css("""
-        body{background:linear-gradient(180deg,rgba(244,247,244,.76),rgba(239,238,232,.88)),url('/static/store_ops_home_bg_v3.png') center top/cover no-repeat scroll!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{position:relative;overflow:hidden;border:0!important;border-radius:29px!important;background:radial-gradient(circle at 95% 0%,rgba(234,190,102,.48),transparent 34%),linear-gradient(145deg,rgba(16,47,38,.96),rgba(40,96,71,.95) 62%,rgba(85,122,74,.95) 120%)!important;box-shadow:0 20px 46px rgba(20,66,49,.28)!important}.store-board:after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(255,255,255,.09);border-radius:50%;right:-70px;top:-90px;pointer-events:none}.board-title{font-size:23px;line-height:1.12;white-space:nowrap}.board-refresh{min-height:37px!important;color:#245B43!important;background:#fff!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:999px!important;padding:3px 13px!important;font-size:10px!important;font-weight:900!important;box-shadow:0 6px 16px rgba(5,30,21,.2)!important}.board-summary{font-size:9px;font-weight:900;padding:5px 9px;border-radius:999px}.board-summary.pending{background:rgba(255,255,255,.18)}.board-summary.done{background:rgba(147,219,177,.22)}.prep-reset-all{color:#fff!important;font-size:9px!important;font-weight:900!important;opacity:.9}.board-expansion{border-radius:17px!important;background:rgba(7,31,24,.16)!important;border:1px solid rgba(255,255,255,.1)!important}.board-expansion .q-item{min-height:42px;color:#fff;font-size:11px;font-weight:900}.board-expansion .q-expansion-item__content{padding:4px 9px 10px}.board-lanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}.board-lane{min-width:0;padding:7px;border-radius:13px;background:rgba(4,28,20,.16)}.board-lane-done{background:rgba(205,235,216,.10)}.board-lane-title{font-size:9px;font-weight:900;opacity:.84;padding:2px}.board-section-title{width:100%;margin-top:5px;padding:5px 4px 2px;border-top:1px solid rgba(255,255,255,.16);font-size:7px;font-weight:900;letter-spacing:.06em;opacity:.76}.board-row{position:relative!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:3px!important;min-width:0;border-radius:11px!important;background:rgba(255,255,255,.95)!important;color:#20362D!important;box-shadow:0 4px 12px rgba(8,31,23,.10)!important}.board-row-done{flex-direction:row!important;align-items:center!important;background:rgba(232,244,236,.94)!important}.board-area{color:#6E8077;font-size:7px;font-weight:900}.board-name{max-width:100%;font-size:10px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}.board-check{position:absolute!important;right:4px;bottom:4px;min-height:27px!important;min-width:27px!important;background:#246A4E!important;color:white!important}.board-manager-only{font-size:7px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:3px 5px;border-radius:999px}.board-lane-empty{font-size:9px;opacity:.65;padding:10px 2px}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;background:linear-gradient(145deg,rgba(246,249,247,.98),rgba(255,255,255,.96))!important}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-grid>.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.98),rgba(255,255,255,.96))!important}.store-app-grid>.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.98),rgba(255,255,255,.96))!important}.store-app-grid>.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.98),rgba(255,255,255,.96))!important}.store-app-grid>.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.98),rgba(255,255,255,.96))!important}.store-app-card:hover{transform:translateY(-2px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}.store-more-title{font-size:13px;font-weight:950;color:#27493a}.store-more-hint{font-size:8px;font-weight:850;color:#718078}.store-app-rail{display:flex;gap:11px;overflow-x:auto;scroll-snap-type:x proximity;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:3px 2px 14px;touch-action:pan-x pan-y}.store-app-rail::-webkit-scrollbar{display:none}.store-app-rail>.store-app-card{flex:0 0 57%;min-height:138px!important;scroll-snap-align:start;padding:17px!important}.store-app-rail>.store-app-card .text-4xl{font-size:28px!important}.store-app-rail>.store-app-card .text-lg{font-size:14px!important}@media(min-width:700px){.store-app-rail>.store-app-card{flex-basis:31%}}@media(max-width:390px){.store-board{padding:17px!important}.board-title{font-size:20px}.board-refresh{padding:2px 10px!important}}
+        body{background:linear-gradient(180deg,rgba(244,247,244,.76),rgba(239,238,232,.88)),url('/static/store_ops_home_bg_v3.png') center top/cover no-repeat scroll!important}.today-ribbon{color:#527060;font-size:9px;font-weight:900;letter-spacing:.14em;margin-bottom:9px;padding-left:4px}.store-board{display:none!important}.store-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.store-app-card{position:relative;overflow:hidden;min-height:164px;border-radius:24px!important;border:1px solid rgba(255,255,255,.8)!important;box-shadow:0 13px 30px rgba(39,55,45,.10)!important;transition:transform .18s,box-shadow .18s!important;background:linear-gradient(145deg,rgba(246,249,247,.98),rgba(255,255,255,.96))!important}.store-app-card:after{content:'›';position:absolute;right:14px;bottom:9px;font-size:29px;font-weight:300;color:rgba(31,54,44,.26)}.store-app-grid>.store-app-card:nth-child(1){background:linear-gradient(145deg,rgba(237,245,255,.98),rgba(255,255,255,.96))!important}.store-app-grid>.store-app-card:nth-child(2){background:linear-gradient(145deg,rgba(234,248,243,.98),rgba(255,255,255,.96))!important}.store-app-grid>.store-app-card:nth-child(3){background:linear-gradient(145deg,rgba(255,244,229,.98),rgba(255,255,255,.96))!important}.store-app-grid>.store-app-card:nth-child(4){background:linear-gradient(145deg,rgba(243,238,255,.98),rgba(255,255,255,.96))!important}.store-app-card:hover{transform:translateY(-2px);box-shadow:0 18px 36px rgba(39,55,45,.15)!important}.store-more-title{font-size:13px;font-weight:950;color:#27493a}.store-more-hint{font-size:8px;font-weight:850;color:#718078}.store-app-rail{display:flex;gap:11px;overflow-x:auto;scroll-snap-type:x proximity;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:3px 2px 14px;touch-action:pan-x pan-y}.store-app-rail::-webkit-scrollbar{display:none}.store-app-rail>.store-app-card{flex:0 0 57%;min-height:138px!important;scroll-snap-align:start;padding:17px!important}.store-app-rail>.store-app-card .text-4xl{font-size:28px!important}.store-app-rail>.store-app-card .text-lg{font-size:14px!important}@media(min-width:700px){.store-app-rail>.store-app-card{flex-basis:31%}}
         """)
         ui.add_css("""
         .board-action-dialog{width:min(90vw,390px)!important;border-radius:23px!important}.service-switch{min-height:40px!important;border-radius:14px!important;background:rgba(255,255,255,.96)!important;color:#245B43!important;font-size:10px!important;font-weight:950!important}.board-quantity .q-field__control{min-height:34px!important;height:34px!important;background:#fff;border-radius:9px!important}.board-quantity-save{min-height:29px!important;margin-top:3px!important;border-radius:9px!important;background:#246A4E!important;font-size:8px!important}

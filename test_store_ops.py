@@ -210,7 +210,7 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.prep_items("2026-08-15")[0]["status"], "incomplete")
 
     def test_first_service_uses_current_prep_items_on_live_board(self):
-        item = self.manager.add_prep_template("サバ", "厨房")
+        item = self.manager.add_prep_template("サバ", "厨房", item_type="quantity")
         self.manager.set_service_prep_quantity("2026-08-20", "lunch", item["id"], 1)
 
         board = self.manager.service_handover_board("2026-08-20", "lunch")
@@ -269,6 +269,28 @@ class StoreOperationsManagerTest(unittest.TestCase):
         board_item = next(value for value in board["items"] if value["id"] == item["id"])
         self.assertEqual(board_item["status"], "attention")
         self.assertFalse(board_item["completed"])
+
+    def test_live_board_item_defaults_to_completion_and_supports_quantity_settings(self):
+        default = self.manager.add_prep_template("白菜", "ちゃんこ場")
+        quantity = self.manager.add_prep_template(
+            "黒豚", "ちゃんこ場", item_type="quantity", unit="人前", step=.5,
+            initial_value=4, minimum_value=0, maximum_value=5)
+        self.assertEqual(default["item_type"], "completion")
+        shown = {item["id"]: item for item in self.manager.service_prep_items(
+            "2026-08-29", "lunch")}
+        self.assertEqual(shown[quantity["id"]]["quantity"], 4)
+        self.manager.set_service_prep_quantity(
+            "2026-08-29", "lunch", quantity["id"], 9)
+        self.assertEqual(self.manager.service_prep_items(
+            "2026-08-29", "lunch")[1]["quantity"], 5)
+
+    def test_live_board_categories_can_be_configured_without_losing_items(self):
+        self.manager.add_prep_template("白菜", "ちゃんこ場")
+        category = next(value for value in self.manager.live_board_categories()
+                        if value["name"] == "ちゃんこ場")
+        self.manager.update_live_board_category(category["id"], "鍋場", False)
+        self.assertEqual(self.manager.prep_templates()[0]["area"], "鍋場")
+        self.assertFalse(self.manager.live_board_categories()[0]["visible"])
 
     def test_existing_prep_templates_keep_normal_completion_by_default(self):
         item = self.manager.add_prep_template("鶏団子", "厨房")
@@ -361,6 +383,7 @@ class StoreOperationsManagerTest(unittest.TestCase):
 
     def test_leftover_rice_choice_is_always_shown_on_next_handover_board(self):
         rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager._data_manager.data["store_prep_templates"][0].pop("item_type")
         self.manager.ensure_service_checklist("2026-08-20", "lunch")
         self.manager.set_service_prep_choice("2026-08-20", "lunch", rice["id"], "なし")
         board = self.manager.service_handover_board("2026-08-20", "dinner")
@@ -411,6 +434,7 @@ class StoreOperationsManagerTest(unittest.TestCase):
 
     def test_unselected_leftover_rice_keeps_choice_controls_on_board(self):
         rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager._data_manager.data["store_prep_templates"][0].pop("item_type")
         self.manager.ensure_service_checklist("2026-08-20", "lunch")
         board = self.manager.service_handover_board("2026-08-20", "dinner")
         item = next(value for value in board["items"] if value["id"] == rice["id"])
@@ -419,8 +443,9 @@ class StoreOperationsManagerTest(unittest.TestCase):
 
     def test_completed_service_items_can_be_bulk_reset(self):
         normal = self.manager.add_prep_template("唐揚げ", "厨房")
-        fish = self.manager.add_prep_template("サバ", "厨房")
+        fish = self.manager.add_prep_template("サバ", "厨房", item_type="quantity")
         rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager._data_manager.data["store_prep_templates"][2].pop("item_type")
         self.manager.set_service_prep_status("2026-08-20", "dinner", normal["id"], "done")
         self.manager.set_service_prep_quantity("2026-08-20", "dinner", fish["id"], 2)
         self.manager.set_service_prep_choice("2026-08-20", "dinner", rice["id"], "あり")
