@@ -19,6 +19,14 @@ class StoreOperationsManager:
         "デシャップ冷凍庫", "厨房冷凍庫", "外冷凍庫",
     )
     DAILY_ORDER_DESTINATIONS = ("鶏肉", "ミクリード", "豊洲", "酒屋")
+    ORDER_REQUEST_CATEGORIES = ("野菜", "ドリンク", "その他")
+    ORDER_CATEGORY_KEYWORDS = {
+        "野菜": ("野菜", "玉ねぎ", "しいたけ", "きゅうり", "ごぼう", "にんにく",
+               "しょうが", "万能", "大葉", "三つ葉", "水菜", "ニラ", "トマト",
+               "レモン", "こんにゃく", "大根", "油揚げ", "とうふ", "豆腐"),
+        "ドリンク": ("ドリンク", "ビール", "サワー", "ハイボール", "焼酎", "日本酒",
+                   "ワイン", "ジュース", "コーラ", "ウーロン", "炭酸", "酒", "瓶", "缶"),
+    }
     DEFAULT_INVENTORY_CATEGORIES = (
         ("野菜仕入れ", "#E8F5E9"), ("冷食", "#E3F2FD"),
         ("冷凍庫", "#E8EAF6"), ("飲料", "#E0F7FA"),
@@ -565,16 +573,33 @@ class StoreOperationsManager:
         result = [dict(value) for value in values if isinstance(value, dict)]
         if open_only:
             result = [value for value in result if not value.get("completed", False)]
+        for value in result:
+            value["category"] = self.order_request_category(
+                value.get("message", ""), value.get("category"))
+        category_order = {name: index for index, name in enumerate(self.ORDER_REQUEST_CATEGORIES)}
         return sorted(result, key=lambda value: (
-            bool(value.get("completed", False)), value.get("created_at", "")))
+            bool(value.get("completed", False)), category_order.get(value["category"], 99),
+            value.get("created_at", "")))
 
-    def add_order_request(self, message):
+    def order_request_category(self, message, preferred=None):
+        if preferred in self.ORDER_REQUEST_CATEGORIES:
+            return preferred
+        normalized = unicodedata.normalize("NFKC", str(message or "")).lower()
+        # Beverage words take precedence for names such as レモンサワー.
+        for category in ("ドリンク", "野菜"):
+            words = self.ORDER_CATEGORY_KEYWORDS[category]
+            if any(word.lower() in normalized for word in words):
+                return category
+        return "その他"
+
+    def add_order_request(self, message, category=None):
         message = str(message or "").strip()
         if not message:
             raise ValueError("発注してほしいものを入力してください。")
         item = {
             "id": uuid4().hex, "message": message[:200], "completed": False,
             "created_at": datetime.now().isoformat(timespec="minutes"),
+            "category": self.order_request_category(message, category),
         }
         self._data_manager.data.setdefault("store_order_requests", []).append(item)
         self._data_manager.save()
@@ -655,15 +680,18 @@ class StoreOperationsManager:
                 cleaned.append(text[:80])
         return cleaned[:12], bool(note_enabled)
 
-    def add_prep_template(self, name, area="厨房", check_items=None, note_enabled=False):
+    def add_prep_template(self, name, area="厨房", check_items=None, note_enabled=False,
+                          status_mode="binary"):
         name = str(name or "").strip()
         if not name:
             raise ValueError("仕込み名を入力してください。")
         if any(value.get("name") == name for value in self.prep_templates()):
             raise ValueError("同じ仕込み項目が登録されています。")
         checks, note_enabled = self._prep_options(check_items, note_enabled)
+        status_mode = "three" if status_mode == "three" else "binary"
         item = {"id": uuid4().hex, "name": name, "area": str(area or "厨房").strip(),
-                "check_items": checks, "note_enabled": note_enabled, "active": True}
+                "check_items": checks, "note_enabled": note_enabled,
+                "status_mode": status_mode, "active": True}
         self._data_manager.data.setdefault("store_prep_templates", []).append(item)
         self._data_manager.save()
         return dict(item)
@@ -677,7 +705,7 @@ class StoreOperationsManager:
         raise ValueError("仕込み項目が見つかりません。")
 
     def update_prep_template(self, item_id, name, area="厨房", check_items=None,
-                             note_enabled=False):
+                             note_enabled=False, status_mode="binary"):
         values = self._data_manager.data.setdefault("store_prep_templates", [])
         item = next((value for value in values if isinstance(value, dict)
                      and value.get("id") == item_id and value.get("active", True)), None)
@@ -691,7 +719,8 @@ class StoreOperationsManager:
             raise ValueError("同じ仕込み項目が登録されています。")
         checks, note_enabled = self._prep_options(check_items, note_enabled)
         item.update(name=name, area=str(area or "厨房").strip(),
-                    check_items=checks, note_enabled=note_enabled)
+                    check_items=checks, note_enabled=note_enabled,
+                    status_mode="three" if status_mode == "three" else "binary")
         self._data_manager.save()
         return dict(item)
 
@@ -844,6 +873,7 @@ class StoreOperationsManager:
         for item in self.prep_templates():
             quantity_mode = self._is_quantity_prep(item)
             choice_mode = self._is_leftover_rice(item)
+            status_mode = item.get("status_mode", "binary")
             quantity = int(quantities.get(item["id"], 0) or 0) if quantity_mode else None
             choice = choices.get(item["id"], "") if choice_mode else ""
             status = states.get(item["id"], "incomplete")
@@ -856,7 +886,7 @@ class StoreOperationsManager:
             check_items = list(item.get("check_items", []))
             checked = [value for value in subchecks.get(item["id"], [])
                        if value in check_items]
-            if check_items:
+            if check_items and status_mode != "three":
                 status = "done" if len(checked) == len(check_items) else "incomplete"
             result.append({**item, "status": status, "quantity_mode": quantity_mode,
                            "quantity": quantity, "choice_mode": choice_mode,
@@ -1001,6 +1031,8 @@ class StoreOperationsManager:
                               "quantity_mode": prep.get("quantity_mode", False),
                               "quantity": prep.get("quantity", 0),
                               "choice_mode": prep.get("choice_mode", False),
+                              "status": prep.get("status", "incomplete"),
+                              "status_mode": prep.get("status_mode", "binary"),
                               "check_items": list(prep.get("check_items", [])),
                               "checked_items": list(prep.get("checked_items", [])),
                               "note_enabled": bool(prep.get("note_enabled", False)),

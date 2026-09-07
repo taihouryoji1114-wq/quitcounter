@@ -285,7 +285,8 @@ def store_dashboard_page():
             def render_board_lane(items):
                 def is_feature_item(value):
                     return bool(value.get("check_items") or value.get("note_enabled")
-                                or value.get("quantity_mode") or value.get("choice_mode"))
+                                or value.get("quantity_mode") or value.get("choice_mode")
+                                or value.get("status_mode") == "three")
 
                 pages, current_page, used = [], [], 0
                 for value in items:
@@ -319,7 +320,7 @@ def store_dashboard_page():
                                     tile_classes = "prep-icon prep-icon-feature" if feature else "prep-icon"
                                     if item.get("completed"):
                                         tile_classes += " prep-icon-completed"
-                                    elif item.get("checked_items"):
+                                    elif item.get("checked_items") or item.get("status") == "attention":
                                         tile_classes += " prep-icon-progress"
                                     tile = ui.card().classes(tile_classes)
                                     tile.move(slot)
@@ -340,6 +341,10 @@ def store_dashboard_page():
                                             status_text = f"現在 {item.get('quantity', 0)}個"
                                         elif item.get("choice_mode"):
                                             status_text = item.get("choice") or "あり・なし"
+                                        elif item.get("status_mode") == "three":
+                                            status_text = {"done": "○", "attention": "△",
+                                                           "incomplete": "×"}.get(
+                                                               item.get("status"), "×")
                                         else:
                                             status_text = "完了" if item.get("completed") else "未完了"
                                         status_label = ui.label(status_text).classes("prep-icon-status")
@@ -412,13 +417,75 @@ def store_dashboard_page():
                                                         f"完了済み {summary_state['done']}件")
                                             for _, field in check_fields:
                                                 field.on_value_change(save_subchecks)
-                                        if item.get("choice_mode"):
-                                            with ui.row().classes("board-choice-row w-full gap-2 q-mt-sm"):
-                                                ui.button("あり", on_click=lambda _, value=item:
-                                                          save_rice_choice(value, "あり")).props(
+                                        if item.get("status_mode") == "three":
+                                            def save_three_state(new_status, value=item, card=tile,
+                                                                 label=status_label,
+                                                                 dialog=detail_dialog):
+                                                old_complete = bool(value.get("completed"))
+                                                store_ops.set_service_prep_status(
+                                                    value["from_date"], value["from_period"],
+                                                    value["id"], new_status)
+                                                complete = new_status == "done"
+                                                value["status"] = new_status
+                                                value["completed"] = complete
+                                                label.set_text({"done": "○", "attention": "△",
+                                                                "incomplete": "×"}[new_status])
+                                                card.classes(
+                                                    add="prep-icon-completed" if complete else (
+                                                        "prep-icon-progress" if new_status == "attention" else ""),
+                                                    remove="prep-icon-progress" if complete else (
+                                                        "prep-icon-completed" if new_status == "attention"
+                                                        else "prep-icon-completed prep-icon-progress"),
+                                                )
+                                                if complete != old_complete:
+                                                    summary_state["pending"] += -1 if complete else 1
+                                                    summary_state["done"] += 1 if complete else -1
+                                                    pending_summary.set_text(str(summary_state["pending"]))
+                                                    done_summary.set_text(
+                                                        f"完了済み {summary_state['done']}件")
+                                                dialog.close()
+
+                                            ui.label("現在の状態を選択").classes(
+                                                "text-[9px] font-bold text-grey-6 q-mt-sm")
+                                            with ui.row().classes("board-three-state w-full gap-2"):
+                                                ui.button("○", on_click=lambda _, fn=save_three_state:
+                                                          fn("done")).props(
                                                               "unelevated no-caps color=positive").classes("grow")
-                                                ui.button("なし", on_click=lambda _, value=item:
-                                                          save_rice_choice(value, "なし")).props(
+                                                ui.button("△", on_click=lambda _, fn=save_three_state:
+                                                          fn("attention")).props(
+                                                              "unelevated no-caps color=warning").classes("grow")
+                                                ui.button("×", on_click=lambda _, fn=save_three_state:
+                                                          fn("incomplete")).props(
+                                                              "outline no-caps color=negative").classes("grow")
+                                        if item.get("choice_mode"):
+                                            def choose_rice(choice, value=item, card=tile,
+                                                            label=status_label,
+                                                            dialog=detail_dialog):
+                                                was_complete = bool(value.get("completed"))
+                                                store_ops.set_service_prep_choice(
+                                                    value["from_date"], value["from_period"],
+                                                    value["id"], choice)
+                                                value["choice"] = choice
+                                                value["completed"] = True
+                                                label.set_text(choice)
+                                                card.classes(add="prep-icon-completed",
+                                                             remove="prep-icon-progress")
+                                                if not was_complete:
+                                                    summary_state["pending"] = max(
+                                                        0, summary_state["pending"] - 1)
+                                                    summary_state["done"] += 1
+                                                    pending_summary.set_text(
+                                                        str(summary_state["pending"]))
+                                                    done_summary.set_text(
+                                                        f"完了済み {summary_state['done']}件")
+                                                dialog.close()
+
+                                            with ui.row().classes("board-choice-row w-full gap-2 q-mt-sm"):
+                                                ui.button("あり", on_click=lambda _, fn=choose_rice:
+                                                          fn("あり")).props(
+                                                              "unelevated no-caps color=positive").classes("grow")
+                                                ui.button("なし", on_click=lambda _, fn=choose_rice:
+                                                          fn("なし")).props(
                                                               "outline no-caps color=primary").classes("grow")
                                         elif item.get("quantity_mode"):
                                             quantity = ui.number(

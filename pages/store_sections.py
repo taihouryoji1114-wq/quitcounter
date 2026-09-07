@@ -70,11 +70,16 @@ def order_requests_page():
     content = section_shell("発注依頼", "気づいたその場で、発注してほしい物を共有")
     with content:
         message = ui.textarea("発注してほしい物").props(
-            "outlined autogrow placeholder='例：キッチンペーパー 2箱'").classes("w-full")
+            "outlined autogrow placeholder='例：玉ねぎ2ケース、ビール3ケース'").classes("w-full")
+        category = ui.select(
+            ["自動判定", *store_ops.ORDER_REQUEST_CATEGORIES], value="自動判定",
+            label="分類（通常は自動判定のままでOK）",
+        ).props("outlined dense options-dense").classes("w-full q-mt-xs")
 
         def add_request():
             try:
-                store_ops.add_order_request(message.value)
+                store_ops.add_order_request(
+                    message.value, None if category.value == "自動判定" else category.value)
             except ValueError as error:
                 ui.notify(str(error), type="negative")
                 return
@@ -84,20 +89,26 @@ def order_requests_page():
         ui.label(f"未対応　{len(open_requests)}件").classes("text-base font-black q-mt-xl q-mb-sm")
         if not open_requests:
             ui.label("未対応の発注依頼はありません").classes("request-empty w-full")
-        for request in open_requests:
-            with ui.card().classes("request-card w-full q-pa-md q-mb-sm"):
-                with ui.row().classes("w-full items-center no-wrap"):
-                    with ui.column().classes("gap-0 grow min-w-0"):
-                        ui.label(request["message"]).classes("text-sm font-black")
-                        ui.label(str(request.get("created_at", ""))[:16].replace("T", " ")).classes(
-                            "text-[9px] text-grey-6 q-mt-xs")
-                    if can_manage:
-                        ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
-                            store_ops.set_order_request_completed(item_id, True),
-                            ui.navigate.to("/store-ops/order-requests")
-                        )).props("unelevated dense no-caps color=positive")
-                    else:
-                        ui.label("管理者対応").classes("request-manager-badge")
+        for group_name in store_ops.ORDER_REQUEST_CATEGORIES:
+            grouped = [item for item in open_requests if item.get("category") == group_name]
+            if not grouped:
+                continue
+            ui.label(f"{group_name}　{len(grouped)}件").classes(
+                f"request-category request-category-{group_name} w-full")
+            for request in grouped:
+                with ui.card().classes("request-card w-full q-pa-md q-mb-sm"):
+                    with ui.row().classes("w-full items-center no-wrap"):
+                        with ui.column().classes("gap-0 grow min-w-0"):
+                            ui.label(request["message"]).classes("text-sm font-black")
+                            ui.label(str(request.get("created_at", ""))[:16].replace("T", " ")).classes(
+                                "text-[9px] text-grey-6 q-mt-xs")
+                        if can_manage:
+                            ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
+                                store_ops.set_order_request_completed(item_id, True),
+                                ui.navigate.to("/store-ops/order-requests")
+                            )).props("unelevated dense no-caps color=positive")
+                        else:
+                            ui.label("管理者対応").classes("request-manager-badge")
         if completed_requests:
             with ui.expansion(f"対応済み　{len(completed_requests)}件", icon="task_alt",
                               value=False).classes("request-completed w-full q-mt-lg"):
@@ -119,6 +130,8 @@ def order_requests_page():
         .request-empty{padding:22px;border:1px dashed #C9D4CD;border-radius:18px;text-align:center;color:#7C8982;font-size:11px}
         .request-completed{border:1px solid #E1E9E4;border-radius:18px;background:#fff}
         .request-manager-badge{font-size:8px;font-weight:900;color:#9B6C21;background:#FFF1D5;padding:6px 8px;border-radius:999px;white-space:nowrap}
+        .request-category{margin-top:14px;padding:8px 11px;border-radius:12px;font-size:11px;font-weight:950}
+        .request-category-野菜{background:#E5F4E8;color:#32704A}.request-category-ドリンク{background:#E5F2FA;color:#286A8E}.request-category-その他{background:#F0EDE8;color:#625B51}
         """)
 
 

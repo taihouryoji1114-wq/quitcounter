@@ -102,11 +102,16 @@ def store_settings_page():
             ).props("outlined autogrow").classes("w-full q-mt-xs")
             prep_note = ui.switch("この仕込みで補足メモを使う", value=False).classes(
                 "w-full q-mt-xs")
+            prep_status_mode = ui.select(
+                {"binary": "完了・未完了", "three": "○・△・×"}, value="binary",
+                label="判定方法",
+            ).props("outlined dense emit-value map-options").classes("w-full q-mt-xs")
 
             def add_prep():
                 try:
                     store_ops.add_prep_template(
-                        prep_name.value, prep_area.value, prep_checks.value, prep_note.value)
+                        prep_name.value, prep_area.value, prep_checks.value, prep_note.value,
+                        prep_status_mode.value)
                 except ValueError as error:
                     notify_error(error)
                     return
@@ -330,12 +335,17 @@ def store_settings_page():
                                 "この仕込みで補足メモを使う",
                                 value=bool(selected.get("note_enabled", False)),
                             ).classes("w-full")
+                            edit_status_mode = ui.select(
+                                {"binary": "完了・未完了", "three": "○・△・×"},
+                                value=selected.get("status_mode", "binary"), label="判定方法",
+                            ).props("outlined dense emit-value map-options").classes("w-full")
 
                             def save():
                                 try:
                                     store_ops.update_prep_template(
                                         selected["id"], edit_name.value, edit_area.value,
-                                        edit_checks.value, edit_note.value)
+                                        edit_checks.value, edit_note.value,
+                                        edit_status_mode.value)
                                 except ValueError as error:
                                     notify_error(error)
                                     return

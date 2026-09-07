@@ -54,6 +54,19 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.delete_order_request(item["id"])
         self.assertEqual(self.manager.order_requests(), [])
 
+    def test_order_requests_are_automatically_classified(self):
+        vegetable = self.manager.add_order_request("玉ねぎを2ケースお願いします")
+        drink = self.manager.add_order_request("ビールとレモンサワーを発注")
+        other = self.manager.add_order_request("キッチンペーパー 2箱")
+        by_id = {item["id"]: item for item in self.manager.order_requests()}
+        self.assertEqual(by_id[vegetable["id"]]["category"], "野菜")
+        self.assertEqual(by_id[drink["id"]]["category"], "ドリンク")
+        self.assertEqual(by_id[other["id"]]["category"], "その他")
+
+    def test_order_request_category_can_be_overridden(self):
+        item = self.manager.add_order_request("レモンをお願いします", "ドリンク")
+        self.assertEqual(self.manager.order_requests()[0]["category"], "ドリンク")
+
     def test_counted_stock_enters_order_list_at_reorder_point(self):
         item = self.manager.add_item("ガスボンベ", "消耗品", "本", "", 6, "count", 2, 5)
         self.assertEqual(item["status"], "enough")
@@ -235,6 +248,19 @@ class StoreOperationsManagerTest(unittest.TestCase):
             "2026-08-29", "lunch", item["id"], ["血抜き", "味付け", "粉付け"])
         complete = self.manager.service_prep_items("2026-08-29", "lunch")[0]
         self.assertEqual(complete["status"], "done")
+
+    def test_prep_template_can_use_three_state_judgement(self):
+        item = self.manager.add_prep_template(
+            "出汁の状態", "厨房", status_mode="three")
+        self.manager.set_service_prep_status(
+            "2026-08-29", "lunch", item["id"], "attention")
+        prep = self.manager.service_prep_items("2026-08-29", "lunch")[0]
+        self.assertEqual(prep["status_mode"], "three")
+        self.assertEqual(prep["status"], "attention")
+        board = self.manager.service_handover_board("2026-08-29", "lunch")
+        board_item = next(value for value in board["items"] if value["id"] == item["id"])
+        self.assertEqual(board_item["status"], "attention")
+        self.assertFalse(board_item["completed"])
 
     def test_existing_prep_templates_keep_normal_completion_by_default(self):
         item = self.manager.add_prep_template("鶏団子", "厨房")
