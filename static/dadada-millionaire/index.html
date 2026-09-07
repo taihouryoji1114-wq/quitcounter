@@ -11,6 +11,7 @@
   <link rel="icon" href="assets/icon.svg">
   <link rel="apple-touch-icon" href="assets/icon.svg">
   <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="office.css?v=2">
 </head>
 <body>
   <div id="splash">
@@ -35,22 +36,26 @@
       <div><small>毎秒収益</small><b id="income">+¥0</b></div>
     </section>
 
-    <section class="city-stage">
-      <img src="assets/city-progression.jpg" alt="発展する街">
+    <section class="city-stage" id="officeStage">
+      <img src="assets/executive-office.jpg" alt="働く社長とオフィス">
       <div class="city-shade"></div>
       <div class="city-copy"><small id="district">下町商店街</small><b id="nextGoal">最初の店を大きくしよう</b></div>
       <div id="floaters"></div>
-      <button id="tap">
-        <span class="tap-glow"></span><span class="tap-coin">¥</span>
-        <b>ダダダッ！</b><small>タップして稼ぐ</small><em id="tapValue">+¥10</em>
-      </button>
+      <button id="computer" aria-label="社長のパソコンを開く"><span>💻</span><b>経営PC</b><small>株・FX・不動産・店舗</small></button>
+      <button class="hire-spot spot-1" data-hire="営業"><span>＋</span><small>営業席</small></button>
+      <button class="hire-spot spot-2" data-hire="経理"><span>＋</span><small>経理席</small></button>
+      <button class="hire-spot spot-3" data-hire="投資"><span>＋</span><small>投資席</small></button>
+      <button class="hire-spot spot-4" data-hire="秘書"><span>＋</span><small>秘書席</small></button>
+      <div class="tap-hint"><b>画面をタップして仕事！</b><span id="tapValue">+¥10</span></div>
       <div class="combo" id="combo">COMBO <b>×1.0</b></div>
     </section>
 
+    <section id="pcScreen" class="pc-screen" hidden>
+      <header class="pc-header"><div><small>DADADA BUSINESS OS</small><b>社長専用 経営端末</b></div><button id="pcClose">×</button></header>
     <nav class="tabs" aria-label="ゲームメニュー">
       <button class="active" data-tab="business"><i>🏪</i><span>事業</span></button>
       <button data-tab="property"><i>🏢</i><span>不動産</span></button>
-      <button data-tab="market"><i>📈</i><span>投資</span></button>
+      <button data-tab="market"><i>📈</i><span>株・FX</span></button>
       <button data-tab="life"><i>✨</i><span>暮らし</span></button>
       <button data-tab="record"><i>🏆</i><span>記録</span></button>
     </nav>
@@ -62,10 +67,11 @@
       <div class="panel" id="life"><div class="section-head"><div><small>LIFESTYLE</small><h2>人生を豪華に</h2></div><p>購入品はタップ収益も強化します</p></div><div class="life-room" id="lifeRoom"><div id="roomItems"></div><div><small>MY LIFE</small><h3 id="homeName">六畳一間の部屋</h3><p id="lifeBonus">タップ収益ボーナス +0%</p></div></div><div class="shop-filter" id="lifeFilter"></div><div class="cards" id="lifeList"></div></div>
       <div class="panel" id="record"><div class="section-head"><div><small>HISTORY</small><h2>大富豪への道</h2></div><p>あなたの街と人生の記録</p></div><div class="stats" id="stats"></div><h3 class="subhead">ミッション</h3><div class="missions" id="missions"></div><button class="danger-link" id="reset">最初からやり直す</button></div>
     </section>
+    </section>
   </main>
 
   <div class="modal" id="offline" hidden><div class="modal-card"><span>WELCOME BACK</span><h2>留守中も街は働きました</h2><strong id="offlineCash">+¥0</strong><p id="offlineTime"></p><button id="offlineOk">受け取る</button></div></div>
   <div class="toast" id="toast"></div>
-  <script src="game.js?v=1"></script>
+  <script src="game.js?v=2"></script>
 </body>
 </html>

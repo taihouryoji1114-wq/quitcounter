@@ -8,10 +8,12 @@ def test_dadada_game_assets_are_complete():
     required = (
         "index.html",
         "style.css",
+        "office.css",
         "game.js",
         "manifest.json",
         "assets/icon.svg",
         "assets/city-progression.jpg",
+        "assets/executive-office.jpg",
     )
     for relative_path in required:
         assert (ROOT / relative_path).is_file(), relative_path
@@ -27,6 +29,8 @@ def test_dadada_game_has_complete_core_loop_and_storage():
     assert "offlineCash" in script
     assert "function tap(" in script
     assert "function invest(" in script
+    assert "renderEmployees" in script
+    assert 'id="computer"' in html
     assert "setInterval(save" in script
 
 
@@ -36,3 +40,4 @@ def test_dadada_game_is_responsive_and_lightweight():
     assert "@media(max-width:420px)" in css
     assert not list(ROOT.rglob("*.mp4"))
     assert (ROOT / "assets" / "city-progression.jpg").stat().st_size < 1_000_000
+    assert (ROOT / "assets" / "executive-office.jpg").stat().st_size < 1_000_000
