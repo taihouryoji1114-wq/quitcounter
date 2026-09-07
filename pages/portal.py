@@ -30,7 +30,7 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/static/dadada-millionaire/index.html?v=1")):
+        ).on("click", lambda _: ui.navigate.to("/static/dadada-millionaire/index.html?v=6")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/dadada-millionaire/assets/icon.svg").classes(
                     "w-14 h-14 rounded-xl q-mr-md"
