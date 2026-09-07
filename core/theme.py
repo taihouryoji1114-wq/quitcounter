@@ -1,5 +1,7 @@
 from nicegui import ui
 
+from core.future_theme import theme_controls_html, theme_head_html
+
 
 class Theme:
     @staticmethod
@@ -40,6 +42,8 @@ class Theme:
         <link rel="icon" href="{icon}">
         <meta name="theme-color" content="{theme_color}">
         """
+        if app_name == "mirai-kessan":
+            app_head += theme_head_html()
         shared_styles = """
         <style>
           body { background: #F7F7F5; color: #1D2822; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
@@ -59,6 +63,8 @@ class Theme:
         </style>
         """
         ui.add_head_html(app_head + shared_styles)
+        if app_name == "mirai-kessan":
+            ui.add_body_html(theme_controls_html())
 
     @staticmethod
     def shell(title, subtitle, back_to=None, action=None, brand="Habitory"):
