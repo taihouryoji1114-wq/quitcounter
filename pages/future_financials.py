@@ -7,6 +7,7 @@ from nicegui import ui
 from core.auth import current_role, log_out, require_app_access, require_permission
 from core.clock import today_jst
 from core.financials import financials
+from core.monthly_evaluation import MonthlyEvaluationService
 from core.purchases import purchases
 from core.staffing import staffing
 from core.theme import Theme
@@ -67,6 +68,7 @@ def _render_future_financials_home(selected_month=None):
     )
     actual_current_month = today_jst().strftime("%Y-%m")
     current_month = _valid_month(selected_month) or actual_current_month
+    evaluator = MonthlyEvaluationService(financials, purchases, staffing)
     dashboard_path = (
         "/mirai-kessan/dashboard" if current_month == actual_current_month
         else f"/mirai-kessan/month/{current_month}"
@@ -114,6 +116,20 @@ def _render_future_financials_home(selected_month=None):
     cost_rate = purchase_total / sales_total if sales_total else 0
     personnel_rate = operations["personnel"] / sales_total if sales_total else None
     labor_rate = operations["personnel"] / gross_profit if gross_profit > 0 else None
+    management_preview = evaluator.preview(current_month, today)
+    landing_forecast = evaluator.forecast(current_month, today)
+    saved_evaluation = financials.get_monthly_evaluation(current_month)
+    material_warnings = evaluator.anomalies(management_preview)
+    recent_trends = evaluator.history(current_month, 6, today) + [
+        {"month": current_month, **management_preview["metrics"]}
+    ]
+    targets = management_preview["targets"]
+    provisional_health = (
+        "safe" if operating_profit >= 0
+        and (cost_rate <= targets["cost_rate"] if sales_total else False)
+        and (personnel_rate <= targets["personnel_rate"] if personnel_rate is not None else False)
+        else "warning" if operating_profit >= 0 else "danger"
+    )
     monthly_entry_items = (
         ("人件費", operations["personnel"]),
         ("家賃", operations["rent"]),
@@ -168,6 +184,12 @@ def _render_future_financials_home(selected_month=None):
                     ui.label(month_label).classes("text-xs opacity-70")
                     ui.label("今月の経営スナップショット").classes("text-lg font-bold")
                 ui.icon("insights").classes("text-3xl opacity-80")
+            health_label = {"safe": "安全", "warning": "注意", "danger": "危険"}[
+                saved_evaluation.get("health", provisional_health)
+            ]
+            ui.label(f"店舗の健康状態　{health_label}").classes(
+                f"health-chip {saved_evaluation.get('health', provisional_health)}"
+            )
             ui.label("売上実績").classes("text-xs opacity-70 q-mt-lg")
             ui.label(f"¥{sales_total:,}").classes("text-4xl font-black metric-value")
             with ui.element("div").classes("grid grid-cols-2 gap-2 w-full q-mt-lg"):
@@ -182,14 +204,44 @@ def _render_future_financials_home(selected_month=None):
                     ui.label("粗利").classes("text-[10px] opacity-70")
                     ui.label(f"¥{gross_profit:,}").classes("font-bold")
             with ui.element("div").classes("snapshot-ratio-grid w-full q-mt-sm"):
-                for title, value in (
-                    ("原価率", f"{cost_rate * 100:.1f}%" if sales_total else "—"),
-                    ("人件費率", f"{personnel_rate * 100:.1f}%" if personnel_rate is not None else "—"),
-                    ("労働分配率", f"{labor_rate * 100:.1f}%" if labor_rate is not None else "—"),
+                for title, raw_value, target, previous_value in (
+                    ("原価率", cost_rate if sales_total else None, targets["cost_rate"], management_preview["comparisons"]["cost_rate"]["previous"]),
+                    ("人件費率", personnel_rate, targets["personnel_rate"], management_preview["comparisons"]["personnel_rate"]["previous"]),
+                    ("労働分配率", labor_rate, .50, None),
                 ):
-                    with ui.element("div").classes("snapshot-ratio-card"):
+                    tone = (
+                        "unknown" if raw_value is None else
+                        "safe" if raw_value <= target else
+                        "warning" if raw_value <= target + .03 else "danger"
+                    )
+                    with ui.element("div").classes(f"snapshot-ratio-card {tone}"):
                         ui.label(title).classes("snapshot-ratio-label")
-                        ui.label(value).classes("snapshot-ratio-value")
+                        ui.label(
+                            f"{raw_value * 100:.1f}%" if raw_value is not None else "—"
+                        ).classes("snapshot-ratio-value")
+                        if raw_value is not None:
+                            comparison = (
+                                f"前月 {(raw_value-previous_value)*100:+.1f}pt"
+                                if previous_value is not None else f"目標 {target*100:.1f}%"
+                            )
+                            ui.label(comparison).classes("snapshot-ratio-delta")
+            with ui.element("div").classes("snapshot-profit-grid w-full q-mt-sm"):
+                for title, value in (
+                    ("営業利益", operating_profit),
+                    ("返済後に残る利益", cash_after_tax_and_loan),
+                ):
+                    with ui.element("div").classes(
+                        "snapshot-profit-card " + ("negative" if value < 0 else "")
+                    ):
+                        ui.label(title).classes("text-[9px] opacity-70")
+                        ui.label(f"¥{value:,}").classes("text-base font-black")
+            if landing_forecast:
+                ui.label(
+                    f"月末予想　売上 ¥{landing_forecast['sales']:,} ／ "
+                    f"営業利益 ¥{landing_forecast['operating_profit']:,}"
+                ).classes("landing-line")
+            if material_warnings:
+                ui.label("⚠ " + material_warnings[0]).classes("snapshot-warning")
             with ui.row().classes("items-center gap-1 q-mt-sm opacity-70"):
                 ui.label("タップして費用・税金・返済を確認").classes("text-[9px]")
                 ui.icon("expand_more").classes("text-sm")
@@ -332,12 +384,153 @@ def _render_future_financials_home(selected_month=None):
                 ui.label("売上を入力すると表示されます").classes(
                     "text-xs text-grey-6 text-center q-pa-md"
                 )
+
+        with ui.card().classes("surface-card monthly-evaluation w-full q-pa-md q-mb-md"):
+            with ui.row().classes("w-full items-start justify-between no-wrap"):
+                with ui.column().classes("gap-0 min-w-0"):
+                    ui.label("月次経営評価").classes("text-base font-black")
+                    ui.label("売上だけでなく、利益率・費用・返済まで総合判定").classes(
+                        "text-[9px] text-grey-6"
+                    )
+                if saved_evaluation:
+                    ui.label(saved_evaluation.get("rank", "—")).classes(
+                        "evaluation-rank " + saved_evaluation.get("health", "warning")
+                    )
+
+            evaluation_changed = bool(
+                saved_evaluation
+                and saved_evaluation.get("metrics") != management_preview["metrics"]
+            )
+            if saved_evaluation:
+                ui.label(
+                    f"総合スコア {saved_evaluation.get('score', 0)} / 100"
+                ).classes("evaluation-score")
+                ui.label(saved_evaluation.get("summary", "")).classes("evaluation-summary")
+                if evaluation_changed:
+                    ui.label("評価後に数字が変更されています。再評価してください").classes(
+                        "evaluation-stale"
+                    )
+                with ui.element("div").classes("evaluation-columns"):
+                    for title, icon, values, kind in (
+                        ("良かった点", "trending_up", saved_evaluation.get("good", []), "good"),
+                        ("改善ポイント", "priority_high", saved_evaluation.get("issues", []), "warning"),
+                        ("来月やるべきこと", "flag", saved_evaluation.get("actions", []), "action"),
+                    ):
+                        with ui.element("div").classes(f"evaluation-list {kind}"):
+                            with ui.row().classes("items-center gap-1 no-wrap"):
+                                ui.icon(icon).classes("text-sm")
+                                ui.label(title).classes("text-[10px] font-black")
+                            for value in values:
+                                ui.label("・" + value).classes("evaluation-item")
+            else:
+                missing = management_preview["completion"]["missing"]
+                if missing:
+                    ui.label("正式評価まで：" + "・".join(missing)).classes(
+                        "evaluation-waiting"
+                    )
+                ui.label(
+                    "月途中は暫定表示のままです。月末後、入力を確認してから評価を保存します。"
+                ).classes("evaluation-summary")
+
+            def save_evaluation():
+                try:
+                    result = evaluator.evaluate(current_month, today)
+                    financials.save_monthly_evaluation(current_month, result)
+                except ValueError as error:
+                    ui.notify(str(error), type="warning")
+                    return
+                ui.notify("月次経営評価を保存しました", type="positive")
+                ui.navigate.to(dashboard_path)
+
+            evaluation_button = ui.button(
+                "再評価して保存" if saved_evaluation else "今月の入力を完了して評価する",
+                icon="verified", on_click=save_evaluation,
+            ).props("unelevated no-caps").classes("evaluation-button w-full q-mt-md")
+            if not management_preview["completion"]["ready"]:
+                evaluation_button.props("disable")
+
+            with ui.expansion("数字の意味と比較を見る", icon="compare_arrows").classes(
+                "evaluation-detail w-full q-mt-sm"
+            ):
+                previous = management_preview["comparisons"]
+                for label, key, value, is_rate in (
+                    ("売上", "sales", sales_total, False),
+                    ("原価率", "cost_rate", management_preview["metrics"]["cost_rate"], True),
+                    ("人件費率", "personnel_rate", management_preview["metrics"]["personnel_rate"], True),
+                    ("営業利益率", "operating_margin", management_preview["metrics"]["operating_margin"], True),
+                ):
+                    prior = previous[key]["previous"]
+                    if is_rate:
+                        shown = f"{value*100:.1f}%" if value is not None else "—"
+                        delta = f"前月比 {(value-prior)*100:+.1f}pt" if value is not None and prior is not None else "前月比較なし"
+                        average = previous[key]["average3"]
+                        year_ago = previous[key]["previous_year"]
+                        extra = " ／ ".join(
+                            part for part in (
+                                f"3ヶ月平均 {average*100:.1f}%" if average is not None else "",
+                                f"前年同月 {year_ago*100:.1f}%" if year_ago is not None else "",
+                            ) if part
+                        )
+                    else:
+                        shown = f"¥{value:,}"
+                        delta = f"前月比 {((value-prior)/prior)*100:+.1f}%" if prior else "前月比較なし"
+                        average = previous[key]["average3"]
+                        year_ago = previous[key]["previous_year"]
+                        extra = " ／ ".join(
+                            part for part in (
+                                f"3ヶ月平均 ¥{round(average):,}" if average is not None else "",
+                                f"前年同月 ¥{round(year_ago):,}" if year_ago is not None else "",
+                            ) if part
+                        )
+                    with ui.element("div").classes("meaning-row"):
+                        ui.label(label).classes("meaning-label")
+                        ui.label(shown).classes("meaning-value")
+                        ui.label(delta).classes("meaning-delta")
+                        if extra:
+                            ui.label(extra).classes("meaning-extra")
+                ui.label("利益と負担の内訳").classes("detail-subtitle")
+                for label, value in (
+                    ("粗利益", gross_profit),
+                    ("固定費", management_preview["metrics"]["fixed_costs"]),
+                    ("営業利益", operating_profit),
+                    ("経常利益（登録済み範囲）", management_preview["metrics"]["ordinary_profit"]),
+                    ("当期純利益（概算）", management_preview["metrics"]["net_profit"]),
+                    ("消費税納付見込", management_preview["metrics"]["consumption_tax_estimate"]),
+                    ("借入元金返済", management_preview["metrics"]["loan_payment"]),
+                    ("返済後に残る利益", management_preview["metrics"]["post_repayment_profit"]),
+                ):
+                    with ui.element("div").classes("meaning-row compact"):
+                        ui.label(label).classes("meaning-label")
+                        ui.label(f"¥{value:,}").classes(
+                            "meaning-value " + ("negative-text" if value < 0 else "")
+                        )
+
+            with ui.expansion("直近の月次推移", icon="show_chart").classes(
+                "evaluation-detail w-full q-mt-sm"
+            ):
+                max_sales = max((row["sales"] for row in recent_trends), default=1) or 1
+                for row in recent_trends:
+                    with ui.element("div").classes("trend-row"):
+                        ui.label(row["month"].replace("-", "/")).classes("trend-month")
+                        with ui.element("div").classes("trend-track"):
+                            ui.element("div").classes("trend-bar").style(
+                                f"width:{max(3, row['sales']/max_sales*100):.1f}%"
+                            )
+                        with ui.column().classes("gap-0 items-end"):
+                            ui.label(f"売上 ¥{row['sales']:,}").classes("trend-sales")
+                            ui.label(
+                                f"営業利益 ¥{row['operating_profit']:,}"
+                            ).classes(
+                                "trend-profit " + ("negative-text" if row["operating_profit"] < 0 else "")
+                            )
         ui.add_css("""
         .audit-shortcut{background:linear-gradient(135deg,#1E5A45,#33785F)!important;color:#fff!important;min-height:48px!important;border-radius:16px!important;font-weight:900!important}
         .future-menu{width:min(92vw,420px)!important;border-radius:26px!important}.future-menu-item{min-height:52px!important;justify-content:flex-start!important;font-size:14px!important}
         .metric-value,.rounded-xl .font-bold{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .actual-box-map{width:calc(100% + 12px)!important;margin-left:-6px;margin-right:-6px;height:330px;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;background:#E8ECE9}.actual-money-box{min-height:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden;padding:3px;box-sizing:border-box}.actual-box-map>.actual-money-box{grid-column:1;grid-row:1/3}.actual-cost-block{grid-column:2/4;grid-row:1;min-height:0;display:flex}.actual-cost-block>.actual-money-box,.actual-gross-block>.actual-money-box{width:100%}.actual-gross-block{grid-column:2;grid-row:2;min-height:0;display:flex}.actual-breakdown{grid-column:3;grid-row:2;min-height:0;display:flex;flex-direction:column;overflow:hidden}.actual-block-title{font-size:9px;font-weight:800;line-height:1.1}.actual-block-value{font-size:10px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap}.actual-block-note{font-size:7px;line-height:1.1;margin-top:2px;opacity:.9;white-space:nowrap}
-        .snapshot-ratio-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.snapshot-ratio-card{min-width:0;padding:8px 5px;border-radius:12px;background:rgba(255,255,255,.14);text-align:center}.snapshot-ratio-label{font-size:8px;opacity:.72;white-space:nowrap}.snapshot-ratio-value{font-size:15px;font-weight:900;white-space:nowrap;margin-top:2px}
+        .snapshot-ratio-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.snapshot-ratio-card{min-width:0;padding:8px 5px;border-radius:12px;background:rgba(255,255,255,.14);text-align:center}.snapshot-ratio-card.safe{box-shadow:inset 0 -3px #77D09A}.snapshot-ratio-card.warning{box-shadow:inset 0 -3px #F0C45F}.snapshot-ratio-card.danger{box-shadow:inset 0 -3px #EF8178}.snapshot-ratio-label{font-size:8px;opacity:.72;white-space:nowrap}.snapshot-ratio-value{font-size:15px;font-weight:900;white-space:nowrap;margin-top:2px}.snapshot-ratio-delta{margin-top:2px;font-size:7px;opacity:.78;white-space:nowrap}
+        .health-chip{align-self:flex-start;margin-top:10px;padding:5px 10px;border-radius:999px;font-size:10px;font-weight:950;background:rgba(255,255,255,.15)}.health-chip.safe{color:#BDF1D0}.health-chip.warning{color:#FFE39C}.health-chip.danger{color:#FFC4BC}.snapshot-profit-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.snapshot-profit-card{min-width:0;padding:9px;border-radius:12px;background:rgba(177,239,199,.15)}.snapshot-profit-card.negative{background:rgba(255,149,137,.18);color:#FFD5CF}.snapshot-profit-card .font-black{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}.landing-line{margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.12);font-size:9px;font-weight:850}.snapshot-warning{margin-top:7px;padding:7px 9px;border-radius:9px;background:rgba(255,215,130,.18);color:#FFE7AF;font-size:9px;font-weight:850}
+        .monthly-evaluation{border:1px solid #E1E8E3!important;background:linear-gradient(155deg,#fff 0%,#F6FAF7 100%)!important}.evaluation-rank{display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:52px;height:52px;border-radius:16px;font-family:Georgia,serif;font-size:29px;font-weight:950}.evaluation-rank.safe{background:#DDF2E5;color:#1D704A}.evaluation-rank.warning{background:#FFF0C9;color:#946510}.evaluation-rank.danger{background:#FCE0DD;color:#A83E37}.evaluation-score{margin-top:13px;color:#173D2E;font-size:22px;font-weight:950;font-variant-numeric:tabular-nums}.evaluation-summary{margin-top:7px;color:#53625A;font-size:11px;line-height:1.65}.evaluation-stale,.evaluation-waiting{margin-top:10px;padding:9px 11px;border-radius:11px;background:#FFF1D6;color:#8A5C13;font-size:10px;font-weight:850}.evaluation-columns{display:grid;gap:8px;margin-top:12px}.evaluation-list{padding:11px;border-radius:13px}.evaluation-list.good{background:#E9F5ED;color:#276347}.evaluation-list.warning{background:#FFF3DA;color:#7C571A}.evaluation-list.action{background:#EAF1FA;color:#315A88}.evaluation-item{margin-top:4px;font-size:10px;line-height:1.45}.evaluation-button{min-height:48px!important;border-radius:14px!important;background:#1E654A!important;font-weight:950!important}.evaluation-detail{border-radius:13px!important;background:#F3F6F4!important}.meaning-row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 2px;border-bottom:1px solid #E4E9E6}.meaning-row.compact{padding:7px 2px}.meaning-label{font-size:10px;font-weight:850;color:#5F6D65}.meaning-value{font-size:13px;font-weight:950;color:#173D2E}.meaning-delta,.meaning-extra{grid-column:1/-1;text-align:right;font-size:9px;color:#7B8780}.meaning-extra{font-size:8px;color:#8E9892}.detail-subtitle{margin-top:14px;font-size:11px;font-weight:950;color:#315A45}.negative-text{color:#BA433D!important}.trend-row{display:grid;grid-template-columns:42px minmax(40px,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #E4E9E6}.trend-month{font-size:9px;font-weight:850;color:#68756E}.trend-track{height:8px;border-radius:999px;background:#E2E8E4;overflow:hidden}.trend-bar{height:100%;border-radius:999px;background:linear-gradient(90deg,#4D8B6E,#87B99E)}.trend-sales{font-size:9px;font-weight:900;color:#284F3E}.trend-profit{font-size:8px;color:#567064}
         """)
         ui.add_css("""
         .surface-card,.surface-card *,.rounded-xl,.rounded-xl *{min-width:0;box-sizing:border-box}.metric-value{max-width:100%;font-size:clamp(20px,9vw,36px)!important;letter-spacing:-.045em;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:clip}.actual-block-value{max-width:100%;font-size:clamp(7px,2.5vw,10px);letter-spacing:-.04em;text-overflow:clip}.snapshot-ratio-value{max-width:100%;font-size:clamp(11px,4vw,15px);overflow:hidden;text-overflow:clip}

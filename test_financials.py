@@ -139,6 +139,18 @@ class FinancialManagerTest(unittest.TestCase):
         reloaded = FinancialManager(DataManager(self.manager.file_path))
         self.assertEqual(reloaded.get_monthly_operations("2026-08"), saved)
 
+    def test_monthly_evaluations_are_additive_and_do_not_change_legacy_records(self):
+        self.financials.set_daily_sales("2026-08-10", 120000)
+        before_sales = list(self.manager.data["business_sales"])
+        self.assertEqual(self.financials.get_monthly_evaluation("2026-08"), {})
+        saved = self.financials.save_monthly_evaluation(
+            "2026-08", {"rank": "A", "score": 82}
+        )
+        self.assertEqual(saved["schema_version"], 1)
+        self.assertEqual(self.manager.data["business_sales"], before_sales)
+        reloaded = FinancialManager(DataManager(self.manager.file_path))
+        self.assertEqual(reloaded.get_monthly_evaluation("2026-08")["rank"], "A")
+
     def test_sales_completion_requires_three_sections_not_every_payment_method(self):
         self.financials.set_daily_sales(
             "2026-08-04",

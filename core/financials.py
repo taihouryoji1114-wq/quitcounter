@@ -266,6 +266,27 @@ class FinancialManager:
         self._data_manager.save()
         return dict(cleaned)
 
+    def get_monthly_evaluation(self, month):
+        """Return a saved management evaluation without changing legacy data."""
+        self._validate_month(month)
+        stored = self._data_manager.data.get("business_monthly_evaluations", {})
+        value = stored.get(month, {}) if isinstance(stored, dict) else {}
+        return dict(value) if isinstance(value, dict) else {}
+
+    def save_monthly_evaluation(self, month, evaluation):
+        """Persist an additive, versioned evaluation snapshot for one month."""
+        self._validate_month(month)
+        if not isinstance(evaluation, dict):
+            raise ValueError("経営評価の形式が正しくありません。")
+        saved = dict(evaluation)
+        saved["month"] = month
+        saved["schema_version"] = 1
+        self._data_manager.data.setdefault("business_monthly_evaluations", {})[
+            month
+        ] = saved
+        self._data_manager.save()
+        return dict(saved)
+
     def delete_sales(self, record_id):
         records = self._data_manager.data.get("business_sales", [])
         record = next((item for item in records if item.get("id") == record_id), None)

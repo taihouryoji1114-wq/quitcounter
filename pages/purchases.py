@@ -173,16 +173,34 @@ def purchase_page(request: Request):
                     ).classes("text-xs text-grey-6 q-mb-sm")
                     calc_8 = ui.input(
                         "8％の税抜金額", placeholder="例：1,200+350+980"
-                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    ).props("outlined autocorrect=off id=calc-8").classes("w-full q-mb-sm")
                     calc_10 = ui.input(
                         "10％の税抜金額", placeholder="例：500+300"
-                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    ).props("outlined autocorrect=off id=calc-10").classes("w-full q-mb-sm")
                     calc_1 = ui.input(
                         "1％の税抜金額（制度開始後）", placeholder="例：1000+500"
-                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    ).props("outlined autocorrect=off id=calc-1").classes("w-full q-mb-sm")
                     calc_exempt = ui.input(
                         "非課税・対象外", placeholder="例：200+100"
-                    ).props("outlined autocorrect=off").classes("w-full q-mb-sm")
+                    ).props("outlined autocorrect=off id=calc-exempt").classes("w-full q-mb-sm")
+
+                    expression_status = ui.label(
+                        "何件でも続けて入力できます"
+                    ).props("id=calc-expression-status").classes("calc-expression-status")
+
+                    for field in (calc_8, calc_10, calc_1, calc_exempt):
+                        field.on("input", js_handler=r"""() => {
+                            const values = ['calc-8','calc-10','calc-1','calc-exempt']
+                                .map(id => document.getElementById(id)?.querySelector('input')?.value || '');
+                            const parts = values.flatMap(value => value.normalize('NFKC').split('+').filter(part => part.trim()));
+                            const valid = parts.every(part => /^\s*[0-9,]+\s*$/.test(part));
+                            const status = document.getElementById('calc-expression-status');
+                            if (!status) return;
+                            const total = valid ? parts.reduce((sum, part) => sum + Number(part.replaceAll(',', '').trim()), 0) : 0;
+                            status.textContent = !parts.length ? '何件でも続けて入力できます'
+                                : valid ? `入力 ${parts.length}件・途中合計 ¥${total.toLocaleString('ja-JP')}`
+                                : `入力 ${parts.length}件・式を確認してください`;
+                        }""")
 
                     def apply_item_sums():
                         try:
@@ -353,6 +371,7 @@ def purchase_page(request: Request):
 
         totals()
         ui.add_css("""
+        .calc-expression-status{margin:-2px 2px 8px;color:#39745A;font-size:11px;font-weight:900;font-variant-numeric:tabular-nums}
         .purchase-total-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
         .purchase-total-card{min-width:0!important;overflow:hidden}
         .purchase-total-card .text-xs{max-width:100%;overflow-wrap:anywhere;line-height:1.35}
