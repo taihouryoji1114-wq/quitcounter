@@ -70,7 +70,9 @@ def order_requests_page():
     content = section_shell("発注依頼", "気づいたその場で、発注してほしい物を共有")
     with content:
         message = ui.textarea("発注してほしい物").props(
-            "outlined autogrow placeholder='1行に1つ入力すると自動で分類します\n例：玉ねぎ 2ケース\nビール 3ケース'").classes("w-full")
+            "outlined autogrow placeholder='例：玉ねぎ 2ケース（1行に1つ）'").classes("w-full")
+        ui.label("複数ある場合は1行に1つ入力すると、自動で分割・分類します").classes(
+            "text-[9px] text-grey-6 q-mt-xs")
         category = ui.select(
             ["自動判定", *store_ops.ORDER_REQUEST_CATEGORIES], value="自動判定",
             label="分類（通常は自動判定のままでOK）",
