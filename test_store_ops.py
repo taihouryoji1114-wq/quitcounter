@@ -67,6 +67,14 @@ class StoreOperationsManagerTest(unittest.TestCase):
         item = self.manager.add_order_request("レモンをお願いします", "ドリンク")
         self.assertEqual(self.manager.order_requests()[0]["category"], "ドリンク")
 
+    def test_multiline_order_request_is_split_and_classified(self):
+        created = self.manager.add_order_requests("玉ねぎ 2ケース\nビール 3ケース")
+        self.assertEqual(len(created), 2)
+        self.assertEqual(
+            {item["category"] for item in self.manager.order_requests()},
+            {"野菜", "ドリンク"},
+        )
+
     def test_counted_stock_enters_order_list_at_reorder_point(self):
         item = self.manager.add_item("ガスボンベ", "消耗品", "本", "", 6, "count", 2, 5)
         self.assertEqual(item["status"], "enough")

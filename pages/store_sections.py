@@ -70,7 +70,7 @@ def order_requests_page():
     content = section_shell("発注依頼", "気づいたその場で、発注してほしい物を共有")
     with content:
         message = ui.textarea("発注してほしい物").props(
-            "outlined autogrow placeholder='例：玉ねぎ2ケース、ビール3ケース'").classes("w-full")
+            "outlined autogrow placeholder='1行に1つ入力すると自動で分類します\n例：玉ねぎ 2ケース\nビール 3ケース'").classes("w-full")
         category = ui.select(
             ["自動判定", *store_ops.ORDER_REQUEST_CATEGORIES], value="自動判定",
             label="分類（通常は自動判定のままでOK）",
@@ -78,7 +78,7 @@ def order_requests_page():
 
         def add_request():
             try:
-                store_ops.add_order_request(
+                store_ops.add_order_requests(
                     message.value, None if category.value == "自動判定" else category.value)
             except ValueError as error:
                 ui.notify(str(error), type="negative")

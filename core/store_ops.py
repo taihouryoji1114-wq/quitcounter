@@ -605,6 +605,14 @@ class StoreOperationsManager:
         self._data_manager.save()
         return dict(item)
 
+    def add_order_requests(self, message, category=None):
+        """Add one request per non-empty line for quick staff entry."""
+        lines = [line.strip(" ・\t") for line in str(message or "").splitlines()
+                 if line.strip(" ・\t")]
+        if not lines:
+            raise ValueError("発注してほしいものを入力してください。")
+        return [self.add_order_request(line, category) for line in lines[:30]]
+
     def set_order_request_completed(self, request_id, completed):
         for item in self._data_manager.data.setdefault("store_order_requests", []):
             if isinstance(item, dict) and item.get("id") == request_id:
