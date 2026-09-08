@@ -30,6 +30,8 @@ import pages.announcement_controls
 import pages.store_operations
 import pages.store_settings
 import pages.store_dashboard
+import pages.store_manual
+import pages.store_manual_admin
 import pages.store_checklist
 import pages.store_sections
 import pages.store_events

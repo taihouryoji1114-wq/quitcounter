@@ -716,8 +716,3 @@ def placeholder_page(title, subtitle, icon):
 @ui.page("/store-ops/cleaning")
 def cleaning_page():
     placeholder_page("清掃", "毎日の清掃を漏れなく", "cleaning_services")
-
-
-@ui.page("/store-ops/manual")
-def manual_page():
-    placeholder_page("マニュアル", "手順と考え方をひとつに", "menu_book")

@@ -66,6 +66,16 @@ def store_settings_page():
             ui.label("店舗で使う項目だけを管理").classes("text-lg font-black q-mt-sm")
             ui.label("普段の入力画面とは分けてあります").classes("text-[10px] text-grey-6")
 
+        with ui.card().classes("manual-settings-link w-full q-pa-md q-mb-sm"):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.icon("menu_book").classes("text-2xl text-orange-8")
+                with ui.column().classes("grow gap-0"):
+                    ui.label("マニュアル設定").classes("text-sm font-black")
+                    ui.label("カテゴリー・手順・写真・注意点を追加編集").classes(
+                        "text-[9px] text-grey-6")
+                ui.button(icon="chevron_right", on_click=lambda: ui.navigate.to(
+                    "/store-ops/settings/manuals")).props("flat round aria-label='開く'")
+
         with ui.expansion("商品・備品を登録", icon="inventory_2", value=False).classes(
                 "settings-section w-full q-mb-sm"):
             name = ui.input("商品・備品名").props("outlined dense").classes("w-full")
@@ -521,6 +531,6 @@ def store_settings_page():
                 "outline no-caps").classes("w-full")
 
         ui.add_css("""
-        .settings-hero{border-radius:24px!important;border:1px solid #E0E8E2!important;background:linear-gradient(145deg,#EEF6F1,#FFF9EE)!important;box-shadow:none!important}
+        .settings-hero{border-radius:24px!important;border:1px solid #E0E8E2!important;background:linear-gradient(145deg,#EEF6F1,#FFF9EE)!important;box-shadow:none!important}.manual-settings-link{cursor:pointer;border:1px solid #eadfc9!important;border-radius:18px!important;background:linear-gradient(145deg,#fffdf8,#fff4dd)!important;box-shadow:0 5px 0 #dfcfad!important}
         .settings-section{border:1px solid #E0E7E2!important;border-radius:19px!important;background:#fff!important;overflow:hidden}.settings-section>.q-item{min-height:56px;font-size:13px;font-weight:900}.settings-section .q-expansion-item__content{padding:7px 13px 15px}.settings-row{padding:9px 2px;border-bottom:1px solid #EDF1EE}.settings-dialog{width:min(92vw,440px)!important;border-radius:23px!important}.settings-qr{width:210px;height:210px;border-radius:17px;background:#fff;padding:10px;border:1px solid #E1E9E4}.minimum-stock-configured{display:inline-flex;width:max-content;margin-top:3px;padding:2px 7px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900}.pin-admin-row{min-height:31px;padding:4px 9px;border-radius:9px;background:#F4F7F5}.pin-admin-value{font-size:11px;font-weight:950;letter-spacing:.08em;color:#246A4E}
         """)
