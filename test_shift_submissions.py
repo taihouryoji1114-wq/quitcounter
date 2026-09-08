@@ -288,6 +288,20 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertGreater(employee["preference_summary"]["スタッフA"]["cut_days"], -1)
         self.assertEqual(hourly["preference_summary"]["スタッフA"]["cut_days"], 0)
 
+    def test_preserve_hourly_requests_never_replaces_hourly_with_leader(self):
+        for name in ("スタッフA", "スタッフB"):
+            self.manager.save(name, 2099, 9, "first", {"1": {"type": "通し"}})
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=1,
+            staffing_priority="employees", preserve_hourly_requests=True,
+            require_manager_or_deputy=True)
+        for name in ("スタッフA", "スタッフB"):
+            self.assertTrue(result["days"]["1"]["staff"][name]["lunch"])
+            self.assertTrue(result["days"]["1"]["staff"][name]["dinner"])
+            self.assertEqual(result["days"]["1"]["staff"][name]["cut_meals"], [])
+        self.assertEqual(result["preference_summary"]["スタッフA"]["cut_days"], 0)
+        self.assertTrue(result["settings"]["preserve_hourly_requests"])
+
 
 if __name__ == "__main__":
     unittest.main()

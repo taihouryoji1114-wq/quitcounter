@@ -211,7 +211,8 @@ class ShiftSubmissionManager:
                       employee_rest_priority=False,
                       require_manager_or_deputy=True,
                       align_deputy_employee=True, manual_overrides=None,
-                      staffing_priority="employees", avoid_long_streaks=True):
+                      staffing_priority="employees", avoid_long_streaks=True,
+                      preserve_hourly_requests=False):
         """Create a fair, editable draft from submitted availability.
 
         This never writes attendance records. It is deliberately a proposal so
@@ -318,7 +319,7 @@ class ShiftSubmissionManager:
                     candidates.append((name, value))
                 candidates.sort(key=lambda pair: priority(pair[0], day))
                 salaried_candidates.sort(key=lambda pair: priority(pair[0], day))
-                if staffing_priority == "hourly":
+                if staffing_priority == "hourly" or preserve_hourly_requests:
                     # In hourly-priority mode submitted requests are accepted
                     # first, even when that makes a deliberately thick shift.
                     selected += candidates
@@ -340,7 +341,7 @@ class ShiftSubmissionManager:
                     if leader:
                         replace_index = next((index for index in range(len(selected) - 1, -1, -1)
                                               if selected[index][0] not in forced_on), None)
-                        if replace_index is None:
+                        if replace_index is None or preserve_hourly_requests:
                             selected.append(leader)
                         else:
                             selected[replace_index] = leader
@@ -356,8 +357,10 @@ class ShiftSubmissionManager:
                                               if selected[index][0] not in pair_names
                                               and selected[index][0] != "店長"
                                               and selected[index][0] not in forced_on), None)
-                        if replace_index is not None:
+                        if replace_index is not None and not preserve_hourly_requests:
                             selected[replace_index] = missing
+                        elif preserve_hourly_requests:
+                            selected.append(missing)
                 for name, value in selected:
                     day_plan[name][meal] = True
                     day_plan[name]["time"] = (
@@ -412,6 +415,7 @@ class ShiftSubmissionManager:
                                "align_deputy_employee": bool(align_deputy_employee),
                                "staffing_priority": staffing_priority,
                                "avoid_long_streaks": bool(avoid_long_streaks),
+                               "preserve_hourly_requests": bool(preserve_hourly_requests),
                                "manual_overrides": manual,
                                "salaried_rest_days": {name: sorted(value)
                                                        for name, value in rest_days.items()}}}

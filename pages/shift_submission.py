@@ -207,27 +207,35 @@ def shift_submission_page():
                 auto_thick_days = ui.input(
                     "厚めにする日（例：5, 12, 20）",
                 ).props("outlined dense").classes("w-full q-mt-sm")
-                auto_deputy_rest = ui.switch(
-                    "副社長はできるだけ休みを多くする", value=True,
-                ).classes("text-[10px] font-bold")
-                auto_employee_rest = ui.switch(
-                    "社員Aの休みを1日多めにする", value=False,
-                ).classes("text-[10px] font-bold")
-                auto_leader_required = ui.switch(
-                    "店長か副社長のどちらかは出勤にする", value=True,
-                ).classes("text-[10px] font-bold")
-                auto_pair_together = ui.switch(
-                    "副社長と社員Aは出勤・休みを極力そろえる", value=True,
-                ).classes("text-[10px] font-bold")
-                auto_avoid_streaks = ui.switch(
-                    "5連勤以上をなるべく作らない", value=True,
-                ).classes("text-[10px] font-bold")
+                ui.label("作成方針").classes("text-[10px] font-black q-mt-sm")
                 auto_priority = ui.toggle(
                     {"employees": "社員優先", "hourly": "バイト優先"},
                     value="employees",
                 ).props("unelevated spread no-caps").classes("w-full q-mt-xs")
                 ui.label("社員優先＝人件費を抑える／バイト優先＝提出希望をほぼ通す").classes(
                     "text-[9px] text-grey-6")
+                auto_preserve_hourly = ui.switch(
+                    "バイトの提出希望を一切削らない", value=False,
+                ).classes("no-cut-switch w-full q-mt-sm")
+                ui.label("ONの場合は必要人数を超えても希望を採用します。手動で休みにした場合だけ外れます").classes(
+                    "text-[9px] text-grey-6")
+                with ui.expansion("細かい条件", icon="tune", value=False).classes(
+                        "shift-advanced-options w-full q-mt-sm"):
+                    auto_deputy_rest = ui.switch(
+                        "副社長はできるだけ休みを多くする", value=True,
+                    ).classes("text-[10px] font-bold")
+                    auto_employee_rest = ui.switch(
+                        "社員Aの休みを1日多めにする", value=False,
+                    ).classes("text-[10px] font-bold")
+                    auto_leader_required = ui.switch(
+                        "店長か副社長のどちらかは出勤にする", value=True,
+                    ).classes("text-[10px] font-bold")
+                    auto_pair_together = ui.switch(
+                        "副社長と社員Aは出勤・休みを極力そろえる", value=True,
+                    ).classes("text-[10px] font-bold")
+                    auto_avoid_streaks = ui.switch(
+                        "5連勤以上をなるべく作らない", value=True,
+                    ).classes("text-[10px] font-bold")
                 ui.separator().classes("q-my-sm")
                 ui.label("作成後の表を直接タップして変更").classes("text-xs font-black")
                 ui.label("変更したマスは固定され、もう一度自動作成しても維持されます").classes(
@@ -243,6 +251,10 @@ def shift_submission_page():
                     manual_list.set_text("／".join(summary) if summary else "固定した変更はありません")
 
                 def set_manual_override(day, staff_name, shift_type):
+                    ui.run_javascript("""
+                    const el = document.getElementById('auto-shift-editor');
+                    if (el) window.__autoShiftScroll = {left: el.scrollLeft, top: el.scrollTop};
+                    """)
                     day_key = str(int(day))
                     if shift_type == "自動":
                         manual_overrides.get(day_key, {}).pop(staff_name, None)
@@ -252,6 +264,15 @@ def shift_submission_page():
                         manual_overrides.setdefault(day_key, {})[staff_name] = shift_type
                     update_manual_summary()
                     build_auto_schedule(notify=False)
+
+                    def restore_shift_scroll():
+                        ui.run_javascript("""
+                        const el = document.getElementById('auto-shift-editor');
+                        const pos = window.__autoShiftScroll;
+                        if (el && pos) el.scrollTo(pos.left, pos.top);
+                        """)
+
+                    ui.timer(.12, restore_shift_scroll, once=True)
 
                 auto_result = ui.column().classes("auto-result-print w-full gap-1 q-mt-sm")
 
@@ -271,6 +292,7 @@ def shift_submission_page():
                             manual_overrides=manual_overrides,
                             staffing_priority=auto_priority.value,
                             avoid_long_streaks=auto_avoid_streaks.value,
+                            preserve_hourly_requests=auto_preserve_hourly.value,
                         )
                     except ValueError as error:
                         ui.notify(str(error), type="negative")
@@ -286,9 +308,20 @@ def shift_submission_page():
                         else:
                             ui.label("必要人数を満たす案ができました").classes(
                                 "auto-shift-success w-full")
+                        cut_total = sum(value["cut_days"] for value in
+                                        result["preference_summary"].values())
+                        fixed_total = sum(len(value) for value in manual_overrides.values())
+                        with ui.row().classes("auto-result-summary w-full no-wrap gap-2"):
+                            ui.label(f"不足 {shortage_days}日").classes(
+                                "auto-result-chip shortage-chip")
+                            ui.label(f"希望削減 {cut_total}日").classes(
+                                "auto-result-chip cut-chip")
+                            ui.label(f"固定変更 {fixed_total}件").classes(
+                                "auto-result-chip fixed-chip")
                         period = result["period"]
                         columns = f"58px repeat({len(shift_submissions.STAFF)},80px) 80px 80px"
-                        with ui.element("div").classes("direct-shift-scroll w-full"):
+                        with ui.element("div").props("id=auto-shift-editor").classes(
+                                "direct-shift-scroll w-full"):
                             with ui.element("div").classes("direct-shift-grid").style(
                                     f"grid-template-columns:{columns}"):
                                 ui.label("日付").classes("direct-head direct-date")
@@ -502,6 +535,7 @@ def shift_submission_page():
         .shift-day-row{padding:9px 0;border-bottom:1px solid #EDF1EE}.shift-day-label{font-size:11px;font-weight:900}.shift-input-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:start}.shift-kind{width:100%}.shift-time-pair{width:100%}.shift-time{width:50%;min-width:0;flex:1}.shift-time .q-field__label{font-size:9px}.pending-notice{padding:9px 11px;border-radius:10px;background:#FFF2D9;color:#966317;font-size:10px;font-weight:900}.shift-submit{background:#2F7457!important;color:#fff!important;border-radius:14px!important;font-weight:900!important}.change-request-card{border:1px solid #E6B65E!important;border-radius:17px!important;box-shadow:none!important;background:#FFFBF2!important}.request-summary{padding:8px 10px;border-radius:9px;background:#fff;font-size:9px;line-height:1.6}.admin-day-card{border:1px solid #E1E9E4!important;border-radius:17px!important;box-shadow:none!important}.admin-shift-row{padding:5px 0;border-top:1px solid #F0F2F1}.admin-staff-name{width:64px;flex:0 0 64px;font-size:10px;font-weight:900}.admin-shift-value{min-width:0;padding:5px 8px;border-radius:8px;font-size:9px;font-weight:800}.admin-shift-value.available{background:#DFF2E7;color:#276D49}.admin-shift-value.absolute-off{background:#FFE2E2;color:#A43E3E}.admin-shift-value.day-off{background:#F1F3F2;color:#7C8781}.admin-shift-value.not-submitted{background:#FFF0D7;color:#9A671D}
         .shift-sheet-scroll{width:100%;max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.shift-sheet{border-collapse:separate;border-spacing:0;min-width:max-content;font-size:9px}.shift-sheet th,.shift-sheet td{border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;text-align:center}.shift-sheet thead th{position:sticky;z-index:4;background:#243E34;color:#fff}.shift-sheet thead tr:first-child th{top:0;height:36px}.shift-sheet thead tr:nth-child(2) th{top:36px;height:28px}.date-head{left:0;z-index:7!important;min-width:58px}.staff-head{min-width:156px;font-size:10px}.lunch-head,.dinner-head{width:78px;min-width:78px}.lunch-head{background:#315F72!important}.dinner-head{background:#795B35!important}.date-cell{position:sticky;left:0;z-index:3;width:58px;height:48px;background:#F5F7F5;color:#34443C}.date-cell b,.date-cell span{display:block}.date-cell b{font-size:13px}.date-cell.saturday{color:#2E6FA2;background:#EFF7FC}.date-cell.sunday{color:#B24B4B;background:#FFF2F1}.shift-cell{width:78px;max-width:78px;height:48px;padding:4px;white-space:normal;font-weight:800;line-height:1.25}.shift-cell.lunch-on{background:#D9F0FA;color:#245D75}.shift-cell.dinner-on{background:#F8E8C9;color:#79551F}.shift-cell.absolute-off{background:#F8DADA;color:#9A3C3C}.shift-cell.not-submitted{color:#A08760;background:#FFF9ED;font-size:8px}.shift-cell.day-off{background:#FAFBFA}
         .auto-shift-warning,.auto-shift-success{padding:9px 11px;border-radius:10px;font-size:10px;font-weight:900}.auto-shift-warning{background:#FFF0D7;color:#946018}.auto-shift-success{background:#DFF2E7;color:#276D49}.auto-shift-sheet .staff-head{min-width:80px}.auto-shift-sheet .shift-cell{width:80px;max-width:80px}.auto-shift-sheet .both-on{background:#E6E0F7;color:#5B438D}.auto-shift-sheet .shortage{background:#FFF1EE;color:#B2463E}.auto-shift-sheet small{display:block;font-size:7px;line-height:1.2;margin-top:2px}
+        .no-cut-switch{padding:9px 12px;border:1px solid #D6E7DD;border-radius:13px;background:#F2F9F5;color:#194D38;font-size:11px;font-weight:950}.shift-advanced-options{border:1px solid #E2E8E4!important;border-radius:13px!important;background:#FAFBFA!important}.shift-advanced-options>.q-expansion-item__container>.q-item{min-height:45px!important;font-size:11px;font-weight:900}.auto-result-summary{margin:4px 0 2px}.auto-result-chip{flex:1;padding:8px 4px;border-radius:11px;text-align:center;font-size:9px;font-weight:950}.shortage-chip{background:#FFF0E7;color:#A14D27}.cut-chip{background:#FFEAEA;color:#A33D42}.fixed-chip{background:#FFF6D9;color:#87631A}
         .direct-shift-scroll{max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.direct-shift-grid{display:grid;min-width:max-content;align-items:stretch}.direct-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;min-height:38px;padding:4px;border-right:1px solid #496057;background:#243E34;color:#fff;font-size:9px;font-weight:900}.direct-date{left:0;z-index:7}.direct-day{position:sticky;left:0;z-index:3;display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;background:#F5F7F5;color:#34443C;text-align:center;font-size:11px;font-weight:900}.direct-day.saturday{color:#2E6FA2;background:#EFF7FC}.direct-day.sunday{color:#B24B4B;background:#FFF2F1}.direct-shift-cell{width:80px!important;min-height:48px!important;white-space:pre-line!important;line-height:1.2!important;border-radius:0!important;border-right:1px solid #E1E7E3!important;border-bottom:1px solid #E1E7E3!important;font-size:10px!important;font-weight:900!important}.direct-shift-cell.lunch-on{background:#D9F0FA!important;color:#245D75!important}.direct-shift-cell.dinner-on{background:#F8E8C9!important;color:#79551F!important}.direct-shift-cell.both-on{background:#E6E0F7!important;color:#5B438D!important}.direct-shift-cell.day-off{background:#FAFBFA!important;color:#8B9690!important}.direct-shift-cell.preference-cut{background:#FFE2E2!important;color:#A43E3E!important;box-shadow:inset 0 0 0 2px #E7A0A0!important;font-size:8px!important}.direct-shift-cell.manual-fixed{box-shadow:inset 0 0 0 2px #E6A91A!important}.direct-shortage,.direct-current,.direct-staff-total,.direct-total-label{display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;font-size:9px;font-weight:900;text-align:center}.direct-shortage{background:#FFF1EE;color:#B2463E}.direct-current{background:#E8F2EC;color:#245D45}.direct-staff-total,.direct-total-label{background:#E2ECE7;color:#173D30}.direct-total-label{position:sticky;left:0;z-index:3}
         @media print{@page{size:A4 landscape;margin:7mm}body *{visibility:hidden!important}.auto-result-print,.auto-result-print *{visibility:visible!important}.auto-result-print{position:absolute!important;inset:0!important;width:100%!important;margin:0!important}.direct-shift-scroll{max-height:none!important;overflow:visible!important;border:0!important}.direct-shift-grid{transform-origin:top left;transform:scale(.72)}.no-print{display:none!important}}
         """)
