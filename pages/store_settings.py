@@ -76,6 +76,16 @@ def store_settings_page():
                 ui.button(icon="chevron_right", on_click=lambda: ui.navigate.to(
                     "/store-ops/settings/manuals")).props("flat round aria-label='開く'")
 
+        with ui.card().classes("manual-settings-link w-full q-pa-md q-mb-sm"):
+            with ui.row().classes("w-full items-center no-wrap"):
+                ui.icon("cleaning_services").classes("text-2xl text-teal-7")
+                with ui.column().classes("grow gap-0"):
+                    ui.label("清掃設定").classes("text-sm font-black")
+                    ui.label("場所・清掃項目・表示順を管理").classes(
+                        "text-[9px] text-grey-6")
+                ui.button(icon="chevron_right", on_click=lambda: ui.navigate.to(
+                    "/store-ops/settings/cleaning")).props("flat round aria-label='開く'")
+
         with ui.expansion("商品・備品を登録", icon="inventory_2", value=False).classes(
                 "settings-section w-full q-mb-sm"):
             name = ui.input("商品・備品名").props("outlined dense").classes("w-full")

@@ -712,7 +712,3 @@ def placeholder_page(title, subtitle, icon):
             ui.icon(icon).classes("text-6xl text-primary")
             ui.label("このページを次に作り込みます").classes("text-base font-black q-mt-md")
 
-
-@ui.page("/store-ops/cleaning")
-def cleaning_page():
-    placeholder_page("清掃", "毎日の清掃を漏れなく", "cleaning_services")
