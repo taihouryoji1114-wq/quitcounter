@@ -152,7 +152,7 @@ def store_settings_page():
             prep_note = ui.switch("この仕込みで補足メモを使う", value=False).classes(
                 "w-full q-mt-xs")
             prep_type = ui.select(
-                ["完了型", "状態型（○△×）", "数量型"], value="完了型", label="項目タイプ",
+                ["完了型", "状態型（○△×）", "数量型", "メモ専用型"], value="完了型", label="項目タイプ",
             ).props("outlined dense options-dense").classes("w-full q-mt-xs")
             prep_visible = ui.switch("LIVE BOARDに表示", value=True)
             with ui.expansion("状態型・数量型の詳細設定", icon="tune", value=False).classes(
@@ -176,7 +176,7 @@ def store_settings_page():
                     store_ops.add_prep_template(
                         prep_name.value, prep_area.value, None, prep_note.value,
                         item_type={"完了型": "completion", "状態型（○△×）": "status",
-                                   "数量型": "quantity"}[prep_type.value],
+                                   "数量型": "quantity", "メモ専用型": "memo"}[prep_type.value],
                         status_labels={"done": good_label.value, "attention": warning_label.value,
                                        "incomplete": bad_label.value},
                         show_status_labels=show_labels.value, unit=quantity_unit.value,
@@ -393,7 +393,7 @@ def store_settings_page():
                     with ui.column().classes("gap-0 grow min-w-0"):
                         ui.label(item["name"]).classes("text-xs font-black")
                         type_label = {"completion": "完了型", "status": "状態型",
-                                      "quantity": "数量型"}.get(
+                                      "quantity": "数量型", "memo": "メモ専用型"}.get(
                                           item.get("item_type"),
                                           "状態型" if item.get("status_mode") == "three" else "完了型")
                         ui.label(f"{item.get('area', '厨房')}・{type_label}").classes(
@@ -412,7 +412,7 @@ def store_settings_page():
                             current_type = selected.get("item_type") or (
                                 "status" if selected.get("status_mode") == "three" else "completion")
                             type_names = {"completion": "完了型", "status": "状態型（○△×）",
-                                          "quantity": "数量型"}
+                                          "quantity": "数量型", "memo": "メモ専用型"}
                             edit_type = ui.select(list(type_names.values()), value=type_names[current_type],
                                                   label="項目タイプ").props("outlined dense").classes("w-full")
                             edit_visible = ui.switch("LIVE BOARDに表示", value=selected.get("visible", True))

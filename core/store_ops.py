@@ -690,7 +690,7 @@ class StoreOperationsManager:
 
     @staticmethod
     def _live_board_type(value):
-        return value if value in {"completion", "status", "quantity"} else "completion"
+        return value if value in {"completion", "status", "quantity", "memo"} else "completion"
 
     @staticmethod
     def _live_board_number(value, fallback=0, minimum=None):
@@ -784,6 +784,7 @@ class StoreOperationsManager:
         item_type = self._live_board_type(
             item_type or ("status" if status_mode == "three" else "completion"))
         labels = status_labels if isinstance(status_labels, dict) else {}
+        note_enabled = bool(note_enabled or item_type == "memo")
         item = {"id": uuid4().hex, "name": name, "area": str(area or "厨房").strip(),
                 "check_items": checks, "note_enabled": note_enabled,
                 "status_mode": "three" if item_type == "status" else "binary",
@@ -832,6 +833,7 @@ class StoreOperationsManager:
         item_type = self._live_board_type(
             item_type or ("status" if status_mode == "three" else "completion"))
         labels = status_labels if isinstance(status_labels, dict) else item.get("status_labels", {})
+        note_enabled = bool(note_enabled or item_type == "memo")
         item.update(name=name, area=str(area or "厨房").strip(),
                     check_items=checks, note_enabled=note_enabled,
                     status_mode="three" if item_type == "status" else "binary",

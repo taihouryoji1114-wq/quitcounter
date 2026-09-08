@@ -292,6 +292,24 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.prep_templates()[0]["area"], "鍋場")
         self.assertFalse(self.manager.live_board_categories()[0]["visible"])
 
+    def test_memo_only_live_board_item_enables_short_memo_without_progress_status(self):
+        item = self.manager.add_prep_template("本日の注意", "ホール", item_type="memo")
+        self.assertTrue(item["note_enabled"])
+        self.manager.set_service_prep_note(
+            "2026-08-29", "lunch", item["id"], "予約席は奥から案内")
+        saved = self.manager.service_prep_items("2026-08-29", "lunch")[0]
+        self.assertEqual(saved["item_type"], "memo")
+        self.assertEqual(saved["note"], "予約席は奥から案内")
+
+    def test_live_board_memo_only_item_has_no_completion_state(self):
+        item = self.manager.add_prep_template("今日の注意", "厨房", item_type="memo")
+        self.assertTrue(item["note_enabled"])
+        self.manager.set_service_prep_note(
+            "2026-08-29", "lunch", item["id"], "夜分は少なめ")
+        saved = self.manager.service_prep_items("2026-08-29", "lunch")[0]
+        self.assertEqual(saved["item_type"], "memo")
+        self.assertEqual(saved["note"], "夜分は少なめ")
+
     def test_existing_prep_templates_keep_normal_completion_by_default(self):
         item = self.manager.add_prep_template("鶏団子", "厨房")
         saved = self.manager.prep_templates()[0]
