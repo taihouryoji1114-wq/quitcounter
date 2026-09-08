@@ -170,6 +170,33 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
         self.assertFalse(any(value["staff"]["スタッフA"]["lunch"]
                              for value in result["days"].values()))
 
+    def test_salaried_staff_work_ten_full_days_in_sixteen_day_half(self):
+        result = self.manager.auto_schedule(
+            2099, 8, "second", lunch_required=3, dinner_required=3,
+            deputy_rest_priority=False)
+        for name in ("副社長", "店長", "社員A"):
+            lunch_days = sum(value["staff"][name]["lunch"]
+                             for value in result["days"].values())
+            dinner_days = sum(value["staff"][name]["dinner"]
+                              for value in result["days"].values())
+            self.assertEqual((lunch_days, dinner_days), (10, 10))
+
+    def test_salaried_assignment_is_full_day_unless_manually_overridden(self):
+        self.manager.save("スタッフA", 2099, 9, "first", {
+            "1": {"type": "通し"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=2,
+            staffing_priority="hourly", deputy_rest_priority=False)
+        for name in ("副社長", "店長", "社員A"):
+            plan = result["days"]["1"]["staff"][name]
+            self.assertEqual(plan["lunch"], plan["dinner"])
+        overridden = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=1, dinner_required=2,
+            manual_overrides={"1": {"店長": "ランチ"}})
+        self.assertTrue(overridden["days"]["1"]["staff"]["店長"]["lunch"])
+        self.assertFalse(overridden["days"]["1"]["staff"]["店長"]["dinner"])
+
     def test_salaried_absolute_days_are_included_in_five_days_off(self):
         self.manager.save("社員A", 2099, 9, "first", {
             "3": {"type": "絶対休み"}, "7": {"type": "絶対休み"},
@@ -301,6 +328,28 @@ class ShiftSubmissionManagerTest(unittest.TestCase):
             self.assertEqual(result["days"]["1"]["staff"][name]["cut_meals"], [])
         self.assertEqual(result["preference_summary"]["スタッフA"]["cut_days"], 0)
         self.assertTrue(result["settings"]["preserve_hourly_requests"])
+
+    def test_direct_draft_edit_changes_only_selected_cell(self):
+        baseline = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3)
+        before = {name: dict(plan) for name, plan in
+                  baseline["days"]["1"]["staff"].items()}
+        edited = self.manager.update_auto_schedule_cell(
+            2099, 9, "first", 1, "店長", "休み")
+        self.assertFalse(edited["days"]["1"]["staff"]["店長"]["lunch"])
+        for name, plan in before.items():
+            if name != "店長":
+                self.assertEqual(edited["days"]["1"]["staff"][name], plan)
+
+    def test_salaried_absolute_day_off_is_kept_as_requested_type(self):
+        self.manager.save("店長", 2099, 9, "first", {
+            "3": {"type": "絶対休み"},
+        })
+        result = self.manager.auto_schedule(
+            2099, 9, "first", lunch_required=3, dinner_required=3)
+        plan = result["days"]["3"]["staff"]["店長"]
+        self.assertEqual(plan["requested_type"], "絶対休み")
+        self.assertFalse(plan["lunch"] or plan["dinner"])
 
 
 if __name__ == "__main__":

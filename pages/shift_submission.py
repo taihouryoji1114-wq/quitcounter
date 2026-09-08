@@ -260,10 +260,19 @@ def shift_submission_page():
                         manual_overrides.get(day_key, {}).pop(staff_name, None)
                         if not manual_overrides.get(day_key):
                             manual_overrides.pop(day_key, None)
+                        update_manual_summary()
+                        build_auto_schedule(notify=False)
                     else:
                         manual_overrides.setdefault(day_key, {})[staff_name] = shift_type
-                    update_manual_summary()
-                    build_auto_schedule(notify=False)
+                        update_manual_summary()
+                        try:
+                            edited = shift_submissions.update_auto_schedule_cell(
+                                int(year.value), int(month.value), half.value,
+                                day, staff_name, shift_type)
+                        except ValueError as error:
+                            ui.notify(str(error), type="negative")
+                            return
+                        build_auto_schedule(notify=False, existing_result=edited)
 
                     def restore_shift_scroll():
                         ui.run_javascript("""
@@ -276,11 +285,13 @@ def shift_submission_page():
 
                 auto_result = ui.column().classes("auto-result-print w-full gap-1 q-mt-sm")
 
-                def build_auto_schedule(notify=True):
-                    raw_days = str(auto_thick_days.value or "").replace("、", ",")
-                    thick_days = [value.strip() for value in raw_days.split(",")]
-                    try:
-                        result = shift_submissions.auto_schedule(
+                def build_auto_schedule(notify=True, existing_result=None):
+                    result = existing_result
+                    if result is None:
+                        raw_days = str(auto_thick_days.value or "").replace("、", ",")
+                        thick_days = [value.strip() for value in raw_days.split(",")]
+                        try:
+                            result = shift_submissions.auto_schedule(
                             int(year.value), int(month.value), half.value,
                             lunch_required=auto_lunch.value,
                             dinner_required=auto_dinner.value,
@@ -293,10 +304,10 @@ def shift_submission_page():
                             staffing_priority=auto_priority.value,
                             avoid_long_streaks=auto_avoid_streaks.value,
                             preserve_hourly_requests=auto_preserve_hourly.value,
-                        )
-                    except ValueError as error:
-                        ui.notify(str(error), type="negative")
-                        return
+                            )
+                        except ValueError as error:
+                            ui.notify(str(error), type="negative")
+                            return
                     auto_result.clear()
                     with auto_result:
                         shortage_days = sum(
@@ -351,12 +362,15 @@ def shift_submission_page():
                                             text, css = "D", "dinner-on"
                                         else:
                                             text, css = "休", "day-off"
+                                        fixed = name in manual_overrides.get(str(day), {})
+                                        if (staff_plan.get("requested_type") == "絶対休み"
+                                                and not fixed):
+                                            text, css = "希望休", "absolute-off"
                                         cut_meals = staff_plan.get("cut_meals", [])
                                         if cut_meals:
                                             cut_label = "/".join(cut_meals)
                                             text += f"\n{cut_label}希望削減"
                                             css += " preference-cut"
-                                        fixed = name in manual_overrides.get(str(day), {})
                                         with ui.button(
                                                 ("📌 " if fixed else "") + text,
                                         ).props("flat dense no-caps").classes(
@@ -536,6 +550,6 @@ def shift_submission_page():
         .shift-sheet-scroll{width:100%;max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.shift-sheet{border-collapse:separate;border-spacing:0;min-width:max-content;font-size:9px}.shift-sheet th,.shift-sheet td{border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;text-align:center}.shift-sheet thead th{position:sticky;z-index:4;background:#243E34;color:#fff}.shift-sheet thead tr:first-child th{top:0;height:36px}.shift-sheet thead tr:nth-child(2) th{top:36px;height:28px}.date-head{left:0;z-index:7!important;min-width:58px}.staff-head{min-width:156px;font-size:10px}.lunch-head,.dinner-head{width:78px;min-width:78px}.lunch-head{background:#315F72!important}.dinner-head{background:#795B35!important}.date-cell{position:sticky;left:0;z-index:3;width:58px;height:48px;background:#F5F7F5;color:#34443C}.date-cell b,.date-cell span{display:block}.date-cell b{font-size:13px}.date-cell.saturday{color:#2E6FA2;background:#EFF7FC}.date-cell.sunday{color:#B24B4B;background:#FFF2F1}.shift-cell{width:78px;max-width:78px;height:48px;padding:4px;white-space:normal;font-weight:800;line-height:1.25}.shift-cell.lunch-on{background:#D9F0FA;color:#245D75}.shift-cell.dinner-on{background:#F8E8C9;color:#79551F}.shift-cell.absolute-off{background:#F8DADA;color:#9A3C3C}.shift-cell.not-submitted{color:#A08760;background:#FFF9ED;font-size:8px}.shift-cell.day-off{background:#FAFBFA}
         .auto-shift-warning,.auto-shift-success{padding:9px 11px;border-radius:10px;font-size:10px;font-weight:900}.auto-shift-warning{background:#FFF0D7;color:#946018}.auto-shift-success{background:#DFF2E7;color:#276D49}.auto-shift-sheet .staff-head{min-width:80px}.auto-shift-sheet .shift-cell{width:80px;max-width:80px}.auto-shift-sheet .both-on{background:#E6E0F7;color:#5B438D}.auto-shift-sheet .shortage{background:#FFF1EE;color:#B2463E}.auto-shift-sheet small{display:block;font-size:7px;line-height:1.2;margin-top:2px}
         .no-cut-switch{padding:9px 12px;border:1px solid #D6E7DD;border-radius:13px;background:#F2F9F5;color:#194D38;font-size:11px;font-weight:950}.shift-advanced-options{border:1px solid #E2E8E4!important;border-radius:13px!important;background:#FAFBFA!important}.shift-advanced-options>.q-expansion-item__container>.q-item{min-height:45px!important;font-size:11px;font-weight:900}.auto-result-summary{margin:4px 0 2px}.auto-result-chip{flex:1;padding:8px 4px;border-radius:11px;text-align:center;font-size:9px;font-weight:950}.shortage-chip{background:#FFF0E7;color:#A14D27}.cut-chip{background:#FFEAEA;color:#A33D42}.fixed-chip{background:#FFF6D9;color:#87631A}
-        .direct-shift-scroll{max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.direct-shift-grid{display:grid;min-width:max-content;align-items:stretch}.direct-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;min-height:38px;padding:4px;border-right:1px solid #496057;background:#243E34;color:#fff;font-size:9px;font-weight:900}.direct-date{left:0;z-index:7}.direct-day{position:sticky;left:0;z-index:3;display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;background:#F5F7F5;color:#34443C;text-align:center;font-size:11px;font-weight:900}.direct-day.saturday{color:#2E6FA2;background:#EFF7FC}.direct-day.sunday{color:#B24B4B;background:#FFF2F1}.direct-shift-cell{width:80px!important;min-height:48px!important;white-space:pre-line!important;line-height:1.2!important;border-radius:0!important;border-right:1px solid #E1E7E3!important;border-bottom:1px solid #E1E7E3!important;font-size:10px!important;font-weight:900!important}.direct-shift-cell.lunch-on{background:#D9F0FA!important;color:#245D75!important}.direct-shift-cell.dinner-on{background:#F8E8C9!important;color:#79551F!important}.direct-shift-cell.both-on{background:#E6E0F7!important;color:#5B438D!important}.direct-shift-cell.day-off{background:#FAFBFA!important;color:#8B9690!important}.direct-shift-cell.preference-cut{background:#FFE2E2!important;color:#A43E3E!important;box-shadow:inset 0 0 0 2px #E7A0A0!important;font-size:8px!important}.direct-shift-cell.manual-fixed{box-shadow:inset 0 0 0 2px #E6A91A!important}.direct-shortage,.direct-current,.direct-staff-total,.direct-total-label{display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;font-size:9px;font-weight:900;text-align:center}.direct-shortage{background:#FFF1EE;color:#B2463E}.direct-current{background:#E8F2EC;color:#245D45}.direct-staff-total,.direct-total-label{background:#E2ECE7;color:#173D30}.direct-total-label{position:sticky;left:0;z-index:3}
+        .direct-shift-scroll{max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.direct-shift-grid{display:grid;min-width:max-content;align-items:stretch}.direct-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;min-height:38px;padding:4px;border-right:1px solid #496057;background:#243E34;color:#fff;font-size:9px;font-weight:900}.direct-date{left:0;z-index:7}.direct-day{position:sticky;left:0;z-index:3;display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;background:#F5F7F5;color:#34443C;text-align:center;font-size:11px;font-weight:900}.direct-day.saturday{color:#2E6FA2;background:#EFF7FC}.direct-day.sunday{color:#B24B4B;background:#FFF2F1}.direct-shift-cell{width:80px!important;min-height:48px!important;white-space:pre-line!important;line-height:1.2!important;border-radius:0!important;border-right:1px solid #E1E7E3!important;border-bottom:1px solid #E1E7E3!important;font-size:10px!important;font-weight:900!important}.direct-shift-cell.lunch-on{background:#D9F0FA!important;color:#245D75!important}.direct-shift-cell.dinner-on{background:#F8E8C9!important;color:#79551F!important}.direct-shift-cell.both-on{background:#E6E0F7!important;color:#5B438D!important}.direct-shift-cell.day-off{background:#FAFBFA!important;color:#8B9690!important}.direct-shift-cell.absolute-off{background:#222!important;color:#fff!important}.direct-shift-cell.preference-cut{background:#FFE2E2!important;color:#A43E3E!important;box-shadow:inset 0 0 0 2px #E7A0A0!important;font-size:8px!important}.direct-shift-cell.manual-fixed{box-shadow:inset 0 0 0 2px #E6A91A!important}.direct-shortage,.direct-current,.direct-staff-total,.direct-total-label{display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;font-size:9px;font-weight:900;text-align:center}.direct-shortage{background:#FFF1EE;color:#B2463E}.direct-current{background:#E8F2EC;color:#245D45}.direct-staff-total,.direct-total-label{background:#E2ECE7;color:#173D30}.direct-total-label{position:sticky;left:0;z-index:3}
         @media print{@page{size:A4 landscape;margin:7mm}body *{visibility:hidden!important}.auto-result-print,.auto-result-print *{visibility:visible!important}.auto-result-print{position:absolute!important;inset:0!important;width:100%!important;margin:0!important}.direct-shift-scroll{max-height:none!important;overflow:visible!important;border:0!important}.direct-shift-grid{transform-origin:top left;transform:scale(.72)}.no-print{display:none!important}}
         """)

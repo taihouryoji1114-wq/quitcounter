@@ -28,6 +28,7 @@ def create_shift_schedule_pdf(path, result, staff_names):
              Paragraph("不足", normal), Paragraph("実人数", normal)]]
     cut_cells = []
     fixed_cells = []
+    absolute_off_cells = []
     lunch_totals = {name: 0 for name in staff_names}
     dinner_totals = {name: 0 for name in staff_names}
     manual = result.get("settings", {}).get("manual_overrides", {})
@@ -47,6 +48,10 @@ def create_shift_schedule_pdf(path, result, staff_names):
                 label = "D"
             else:
                 label = "休"
+            if (plan.get("requested_type") == "絶対休み"
+                    and name not in manual.get(str(day), {})):
+                label = "希望休"
+                absolute_off_cells.append((column_index, row_index))
             if plan.get("cut_meals"):
                 label += "<br/>" + "/".join(plan["cut_meals"]) + "希望削減"
                 cut_cells.append((column_index, row_index))
@@ -86,6 +91,9 @@ def create_shift_schedule_pdf(path, result, staff_names):
     for column, row in cut_cells:
         style.add("BACKGROUND", (column, row), (column, row), colors.HexColor("#FFE2E2"))
         style.add("TEXTCOLOR", (column, row), (column, row), colors.HexColor("#9D3535"))
+    for column, row in absolute_off_cells:
+        style.add("BACKGROUND", (column, row), (column, row), colors.HexColor("#222222"))
+        style.add("TEXTCOLOR", (column, row), (column, row), colors.white)
     for column, row in fixed_cells:
         style.add("BOX", (column, row), (column, row), 1.2, colors.HexColor("#D79B16"))
     table.setStyle(style)

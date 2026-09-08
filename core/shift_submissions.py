@@ -241,7 +241,9 @@ class ShiftSubmissionManager:
             record = submissions.get(name, {})
             absolute = {day for day in all_days if self._day_value(
                 record.get("days", {}).get(str(day), {}))["type"] == "絶対休み"}
-            needed = max(0, 5 - len(absolute))
+            # Salaried staff work ten full days per half by default. A long
+            # second half can contain sixteen days, so it needs six days off.
+            needed = max(0, (len(all_days) - 10) - len(absolute))
             available = [day for day in all_days if day not in absolute and day not in thick]
             available += [day for day in all_days if day not in absolute and day in thick]
             if align_deputy_employee and name == "社員A" and "副社長" in rest_days:
@@ -369,10 +371,28 @@ class ShiftSubmissionManager:
                     if name not in forced_additions:
                         assigned[name] += 1
                 shortages[meal] = max(0, required - len(selected))
+
+            # Salaried staff are full-day workers by default. Only an explicit
+            # manual Lunch/Dinner instruction may create a half-day assignment.
+            locked = manual.get(str(day), {})
+            for name in salaried:
+                override = str(locked.get(name, ""))
+                if override in {"ランチ", "ディナー", "休み"}:
+                    continue
+                if day_plan[name]["lunch"] or day_plan[name]["dinner"]:
+                    day_plan[name]["lunch"] = True
+                    day_plan[name]["dinner"] = True
+                    day_plan[name]["time"] = "通し"
+            shortages = {
+                "lunch": max(0, lunch_required + extra - sum(
+                    bool(value["lunch"]) for value in day_plan.values())),
+                "dinner": max(0, dinner_required + extra - sum(
+                    bool(value["dinner"]) for value in day_plan.values())),
+            }
             for name in self.STAFF:
                 requested_type = self._day_value(
                     submissions.get(name, {}).get("days", {}).get(str(day), {})
-                )["type"] if name not in salaried else ""
+                )["type"]
                 requested_meals = set()
                 if requested_type in {"ランチ", "通し"}:
                     requested_meals.add("L")
@@ -387,6 +407,9 @@ class ShiftSubmissionManager:
                 ]
             days[str(day)] = {"staff": day_plan, "shortages": shortages,
                               "thick": day in thick}
+        assigned = {name: sum(
+            int(value["staff"][name]["lunch"]) + int(value["staff"][name]["dinner"])
+            for value in days.values()) for name in self.STAFF}
         preference_summary = {}
         for name in self.STAFF:
             if name in salaried:
@@ -423,6 +446,57 @@ class ShiftSubmissionManager:
             period["key"]] = result
         self._data_manager.save()
         return result
+
+    def update_auto_schedule_cell(self, year, month, half, day, staff, shift_type):
+        """Edit exactly one draft cell without recalculating any coworker."""
+        self._staff(staff)
+        period = self.period(year, month, half)
+        day_key = str(int(day))
+        if not period["start"] <= int(day) <= period["end"]:
+            raise ValueError("日付が作成期間の外です。")
+        if shift_type not in {"通し", "ランチ", "ディナー", "休み"}:
+            raise ValueError("勤務区分が正しくありません。")
+        draft = self._data_manager.data.get("store_auto_shift_drafts", {}).get(period["key"])
+        if not isinstance(draft, dict) or day_key not in draft.get("days", {}):
+            raise ValueError("先にシフト案を作成してください。")
+        plan = draft["days"][day_key]["staff"][staff]
+        plan["lunch"] = shift_type in {"通し", "ランチ"}
+        plan["dinner"] = shift_type in {"通し", "ディナー"}
+        plan["time"] = shift_type
+        requested = plan.get("requested_type", "")
+        requested_meals = (({"L"} if requested in {"通し", "ランチ"} else set()) |
+                           ({"D"} if requested in {"通し", "ディナー"} else set()))
+        assigned_meals = (({"L"} if plan["lunch"] else set()) |
+                          ({"D"} if plan["dinner"] else set()))
+        plan["cut_meals"] = [meal for meal in ("L", "D")
+                             if meal in requested_meals - assigned_meals]
+
+        manual = draft.setdefault("settings", {}).setdefault("manual_overrides", {})
+        manual.setdefault(day_key, {})[staff] = shift_type
+        required_extra = 1 if draft["days"][day_key].get("thick") else 0
+        lunch_required = int(draft["settings"].get("lunch_required", 0)) + required_extra
+        dinner_required = int(draft["settings"].get("dinner_required", 0)) + required_extra
+        staff_plans = list(draft["days"][day_key]["staff"].values())
+        draft["days"][day_key]["shortages"] = {
+            "lunch": max(0, lunch_required - sum(bool(value["lunch"]) for value in staff_plans)),
+            "dinner": max(0, dinner_required - sum(bool(value["dinner"]) for value in staff_plans)),
+        }
+        draft["assigned"] = {name: sum(
+            int(value["staff"][name]["lunch"]) + int(value["staff"][name]["dinner"])
+            for value in draft["days"].values()) for name in self.STAFF}
+        for name, summary in draft.get("preference_summary", {}).items():
+            requested_days = [value["staff"][name] for value in draft["days"].values()
+                              if value["staff"][name].get("requested_type") in
+                              {"通し", "ランチ", "ディナー"}]
+            summary["accepted_days"] = sum(not value.get("cut_meals")
+                                           for value in requested_days)
+            summary["partially_accepted_days"] = sum(
+                bool(value["lunch"] or value["dinner"]) and bool(value.get("cut_meals"))
+                for value in requested_days)
+            summary["cut_days"] = sum(bool(value.get("cut_meals"))
+                                      for value in requested_days)
+        self._data_manager.save()
+        return draft
 
     def review_change(self, staff, year, month, half, approved):
         self._staff(staff)
