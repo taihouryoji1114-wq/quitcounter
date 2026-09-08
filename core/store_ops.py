@@ -959,27 +959,54 @@ class StoreOperationsManager:
         record_date = str(context.get("date", ""))
         period = self._service_period(str(context.get("period", "lunch")))
         day = self._date(record_date)
-        # Keep both lanes exactly as staff left them. The next service starts from
-        # this snapshot instead of rebuilding every template as uncompleted.
-        board = self.service_handover_board(record_date, period)
-        for item in self.service_prep_items(
-                board["source_date"], board["source_period"]):
-            if item.get("reset_mode") == "daily" and period == "dinner":
-                continue
-            if item.get("quantity_mode"):
-                self.set_service_prep_quantity(
-                    record_date, period, item["id"], item.get("quantity", 0))
-            elif item.get("choice_mode"):
-                self.set_service_prep_choice(
-                    record_date, period, item["id"], item.get("choice", ""))
-            else:
-                self.set_service_prep_status(
-                    record_date, period, item["id"], item.get("status", "incomplete"))
         if period == "lunch":
             next_date, next_period = record_date, "dinner"
         else:
             next_date = (day + timedelta(days=1)).strftime("%Y-%m-%d")
             next_period = "lunch"
+
+        # Copy the lane staff can currently see into the destination lane.  The
+        # previous implementation accidentally wrote it back to ``record_date`` /
+        # ``period`` and then moved the context, so the destination looked reset.
+        # Resetting is deliberately manual: switching service must never discard
+        # work prepared for tomorrow.
+        board = self.service_handover_board(record_date, period)
+        inherited = {item["id"]: item for item in self.service_prep_items(
+            board["source_date"], board["source_period"])}
+        current = self.service_prep_items(record_date, period)
+        data_keys = {
+            "status": "store_service_prep_records",
+            "quantity": "store_service_prep_quantities",
+            "choice": "store_service_prep_choices",
+            "checked_items": "store_service_prep_subchecks",
+            "note": "store_service_prep_notes",
+        }
+
+        def carried_value(item, field):
+            records = self._data_manager.data.get(data_keys[field], {}).get(
+                record_date, {}).get(period, {})
+            if item["id"] in records:
+                return item.get(field)
+            return inherited.get(item["id"], item).get(field)
+
+        for item in current:
+            if item.get("quantity_mode"):
+                self.set_service_prep_quantity(
+                    next_date, next_period, item["id"], carried_value(item, "quantity") or 0)
+            elif item.get("choice_mode"):
+                self.set_service_prep_choice(
+                    next_date, next_period, item["id"], carried_value(item, "choice") or "")
+            elif item.get("item_type") != "memo":
+                self.set_service_prep_status(
+                    next_date, next_period, item["id"],
+                    carried_value(item, "status") or "incomplete")
+            if item.get("check_items"):
+                self.set_service_prep_subchecks(
+                    next_date, next_period, item["id"],
+                    carried_value(item, "checked_items") or [])
+            if item.get("note_enabled"):
+                self.set_service_prep_note(
+                    next_date, next_period, item["id"], carried_value(item, "note") or "")
         self._data_manager.data["store_active_service_context"] = {
             "date": next_date, "period": next_period,
         }

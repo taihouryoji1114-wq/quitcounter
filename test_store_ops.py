@@ -510,6 +510,32 @@ class StoreOperationsManagerTest(unittest.TestCase):
         next_board = self.manager.service_handover_board("2026-08-21", "lunch")
         self.assertTrue(next_board["items"][0]["completed"])
 
+    def test_manual_service_advance_copies_visible_state_to_next_lane(self):
+        completed = self.manager.add_prep_template(
+            "唐揚げ", "厨房", note_enabled=True)
+        status = self.manager.add_prep_template(
+            "スープ", "厨房", item_type="status")
+        quantity = self.manager.add_prep_template(
+            "黒豚", "厨房", item_type="quantity", unit="人前")
+        self.manager.active_service_context("2026-08-20", "dinner")
+        self.manager.set_service_prep_status(
+            "2026-08-20", "dinner", completed["id"], "done")
+        self.manager.set_service_prep_note(
+            "2026-08-20", "dinner", completed["id"], "明日分まで準備済み")
+        self.manager.set_service_prep_status(
+            "2026-08-20", "dinner", status["id"], "attention")
+        self.manager.set_service_prep_quantity(
+            "2026-08-20", "dinner", quantity["id"], 12)
+
+        self.assertEqual(self.manager.advance_service_context(),
+                         ("2026-08-21", "lunch"))
+        carried = {item["name"]: item for item in self.manager.service_prep_items(
+            "2026-08-21", "lunch")}
+        self.assertEqual(carried["唐揚げ"]["status"], "done")
+        self.assertEqual(carried["唐揚げ"]["note"], "明日分まで準備済み")
+        self.assertEqual(carried["スープ"]["status"], "attention")
+        self.assertEqual(carried["黒豚"]["quantity"], 12)
+
     def test_completed_board_items_can_be_reopened_together(self):
         prep = self.manager.add_prep_template("唐揚げ", "厨房")
         self.manager.ensure_service_checklist("2026-08-20", "lunch")
