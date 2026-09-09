@@ -1,6 +1,6 @@
 const ASSET='/static/digital-monsters/sprites/starters/';
 const monsters={
-  fire:{walk:'fire-walk-4x4-v3.png',thumb:'fire-starter-four-directions.png',columns:4},
+  fire:{walk:'fire-walk-4x4-v4.png',thumb:'fire-starter-four-directions.png',columns:4},
   water:{walk:'water-walk-3x4.png',thumb:'water-starter-four-directions.png',columns:3},
   nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png',columns:3},
   chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png',columns:3}
