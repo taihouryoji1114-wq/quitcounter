@@ -7,14 +7,20 @@ const monsters={
 };
 const room=document.querySelector('#room'),actor=document.querySelector('#actor'),sprite=document.querySelector('#sprite');
 const autoButton=document.querySelector('#auto'),state=document.querySelector('#state'),thought=document.querySelector('#thought');
-let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null;
+let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire';
 function setMonster(name){
   const choice=monsters[name]||monsters.fire;
+  currentMonster=monsters[name]?name:'fire';
   const url=`url('${ASSET}${choice.walk}')`;sprite.style.setProperty('--sprite',url);
   document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
   localStorage.setItem('walkLabMonster',name);
 }
-function face(dir){direction=dir;actor.className=`actor dir-${dir}`}
+function face(dir){
+  if(dir===direction)return;
+  actor.classList.remove(`dir-${direction}`);
+  direction=dir;
+  actor.classList.add(`dir-${direction}`);
+}
 function chooseTarget(nx,ny){target.x=Math.max(.10,Math.min(.90,nx));target.y=Math.max(.35,Math.min(.86,ny));nextTarget=performance.now()+1800+Math.random()*2600}
 function showThought(){
   if(actor.classList.contains('moving')||thought.classList.contains('show'))return;
@@ -28,8 +34,13 @@ function tick(now){
   let dx=target.x-x,dy=target.y-y,dist=Math.hypot(dx,dy),moving=dist>.006;
   if(moving){
     const speed=(manual?.29:.105)*dt;x+=dx/dist*Math.min(dist,speed);y+=dy/dist*Math.min(dist,speed);
-    const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');face(dir);actor.classList.add('moving');state.textContent=manual?'あなたと歩行中':'部屋を探検中';
-  }else{actor.classList.remove('moving');state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
+    const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');face(dir);actor.classList.add('moving');
+    const horizontalFire=currentMonster==='fire'&&['left','right'].includes(direction);
+    const frames=horizontalFire?[0,50,0,50]:[0,50,100,50];
+    const nextFrame=frames[Math.floor(now/130)%4];
+    if(nextFrame!==walkFrame){walkFrame=nextFrame;sprite.style.setProperty('--frame',`${nextFrame}%`)}
+    state.textContent=manual?'あなたと歩行中':'部屋を探検中';
+  }else{actor.classList.remove('moving');if(walkFrame!==50){walkFrame=50;sprite.style.setProperty('--frame','50%')}state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
   x=Math.max(.09,Math.min(.91,x));y=Math.max(.34,Math.min(.87,y));actor.style.left=`${x*100}%`;actor.style.top=`${y*100}%`;
   requestAnimationFrame(tick);
 }
