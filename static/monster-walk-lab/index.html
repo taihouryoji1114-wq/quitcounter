@@ -3,14 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="theme-color" content="#203a31">
-  <title>モンスター歩行研究所</title>
-  <link rel="stylesheet" href="style.css?v=1">
+  <meta name="theme-color" content="#102c38">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="icon" href="labo-icon.png">
+  <link rel="apple-touch-icon" href="labo-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>LABO</title>
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <main class="app">
     <header>
-      <div><small>MONSTER MOTION LAB</small><h1>歩行テスト</h1></div>
+      <div><small>CREATURE RESEARCH FACILITY</small><h1>LABO</h1></div>
       <button id="auto" class="mode active" type="button">自動さんぽ ON</button>
     </header>
 
@@ -32,6 +36,7 @@
         <button class="monster active fire" data-monster="fire" type="button"><i></i><span>火</span><b>イグニス</b></button>
         <button class="monster water" data-monster="water" type="button"><i></i><span>水</span><b>アクアロ</b></button>
         <button class="monster nature" data-monster="nature" type="button"><i></i><span>緑</span><b>リーフィ</b></button>
+        <button class="monster chankocchi" data-monster="chankocchi" type="button"><i></i><span>生命</span><b>ちゃんこっち</b></button>
       </div>
       <div class="controls" aria-label="方向操作">
         <button data-dir="up" type="button">▲</button>
@@ -41,8 +46,14 @@
         <button data-dir="down" type="button">▼</button>
       </div>
       <div class="status"><b id="state">部屋を探検中</b><span>移動中は足踏み、止まると呼吸に切り替わります</span></div>
+      <nav class="lab-nav" aria-label="LABO研究メニュー">
+        <button data-lab="生成" type="button"><i>⬡</i><b>生成</b><small>新しい生命</small></button>
+        <button data-lab="お世話" type="button"><i>♨</i><b>お世話</b><small>食事と観察</small></button>
+        <button data-lab="部屋" type="button"><i>⌂</i><b>部屋</b><small>模様替え</small></button>
+        <button data-lab="バトル" type="button"><i>⚔</i><b>バトル</b><small>能力実験</small></button>
+      </nav>
     </section>
   </main>
-  <script src="app.js?v=1"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

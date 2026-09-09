@@ -1,10 +1,16 @@
 const ASSET='/static/digital-monsters/sprites/starters/';
-const monsters={fire:'fire-starter-four-directions.png',water:'water-starter-four-directions.png',nature:'nature-starter-four-directions.png'};
+const monsters={
+  fire:{walk:'fire-walk-3x4.png',thumb:'fire-starter-four-directions.png'},
+  water:{walk:'water-walk-3x4.png',thumb:'water-starter-four-directions.png'},
+  nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png'},
+  chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png'}
+};
 const room=document.querySelector('#room'),actor=document.querySelector('#actor'),sprite=document.querySelector('#sprite');
 const autoButton=document.querySelector('#auto'),state=document.querySelector('#state'),thought=document.querySelector('#thought');
 let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null;
 function setMonster(name){
-  const url=`url('${ASSET}${monsters[name]}')`; sprite.style.setProperty('--sprite',url);
+  const choice=monsters[name]||monsters.fire;
+  const url=`url('${ASSET}${choice.walk}')`;sprite.style.setProperty('--sprite',url);
   document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
   localStorage.setItem('walkLabMonster',name);
 }
@@ -29,7 +35,13 @@ function tick(now){
 }
 room.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;const r=room.getBoundingClientRect();auto=false;autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF';chooseTarget((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height)});
 autoButton.addEventListener('click',()=>{auto=!auto;manual=null;autoButton.classList.toggle('active',auto);autoButton.textContent=`自動さんぽ ${auto?'ON':'OFF'}`;if(auto)chooseTarget(Math.random(),.5+Math.random()*.3)});
-document.querySelectorAll('.monster').forEach(b=>{const url=`url('${ASSET}${monsters[b.dataset.monster]}')`;b.style.setProperty('--thumb',url);b.addEventListener('click',()=>setMonster(b.dataset.monster))});
+document.querySelectorAll('.monster').forEach(b=>{const url=`url('${ASSET}${monsters[b.dataset.monster].thumb}')`;b.style.setProperty('--thumb',url);b.addEventListener('click',()=>setMonster(b.dataset.monster))});
+document.querySelectorAll('[data-lab]').forEach(button=>button.addEventListener('click',()=>{
+  state.textContent=`${button.dataset.lab}研究を準備中`;
+  thought.textContent={生成:'✦',お世話:'♡',部屋:'⌂',バトル:'⚔'}[button.dataset.lab];
+  thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
+  thought.classList.remove('show');void thought.offsetWidth;thought.classList.add('show');
+}));
 document.querySelectorAll('[data-dir]').forEach(b=>{const start=e=>{e.preventDefault();auto=false;autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF';manual=b.dataset.dir;face(manual)};const end=()=>{manual=null;target={x,y}};b.addEventListener('pointerdown',start);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);b.addEventListener('pointerleave',end)});
 document.querySelector('#stop').addEventListener('click',()=>{auto=false;manual=null;target={x,y};autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF'});
 setMonster(localStorage.getItem('walkLabMonster')||'fire');chooseTarget(.25,.7);requestAnimationFrame(tick);

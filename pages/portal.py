@@ -57,13 +57,13 @@ def portal():
 
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
-        ).on("click", lambda _: ui.navigate.to("/static/monster-walk-lab/index.html?v=1")):
+        ).on("click", lambda _: ui.navigate.to("/static/monster-walk-lab/index.html?v=3")):
             with ui.row().classes("w-full items-center no-wrap"):
-                ui.image("/static/digital-monsters-v1/assets/app_icon.png").classes(
+                ui.image("/static/monster-walk-lab/labo-icon.png").classes(
                     "w-14 h-14 rounded-xl q-mr-md")
                 with ui.column().classes("gap-0"):
-                    ui.label("モンスター歩行研究所").classes("text-xl font-bold")
-                    ui.label("3体の向きと、生き物らしい歩行を確認する").classes(
+                    ui.label("LABO").classes("text-xl font-bold")
+                    ui.label("生命を生み、育て、観察し、研究する").classes(
                         "text-grey-7 q-mt-xs")
                 ui.space()
                 ui.icon("directions_walk").classes("text-2xl text-green-8")
