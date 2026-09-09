@@ -176,10 +176,10 @@ def store_settings_page():
             prep_note = ui.switch("この仕込みで補足メモを使う", value=False).classes(
                 "w-full q-mt-xs")
             prep_type = ui.select(
-                ["完了型", "状態型（○△×）", "数量型", "メモ専用型", "特殊仕込み"], value="完了型", label="項目タイプ",
+                ["完了型", "状態型（○△×）", "数量型", "メモ専用型"], value="完了型", label="項目タイプ",
             ).props("outlined dense options-dense").classes("w-full q-mt-xs")
             prep_visible = ui.switch("LIVE BOARDに表示", value=True)
-            with ui.expansion("タイプ別の詳細設定", icon="tune", value=False).classes(
+            with ui.expansion("状態型・数量型の詳細設定", icon="tune", value=False).classes(
                     "w-full q-mt-xs"):
                 good_label = ui.input("○の意味", value="良好").props("outlined dense maxlength=20").classes("w-full")
                 warning_label = ui.input("△の意味", value="注意").props("outlined dense maxlength=20").classes("w-full")
@@ -194,32 +194,13 @@ def store_settings_page():
                 reset_mode = ui.select(["前回状態を引き継ぐ", "毎日初期値へ戻す"],
                                        value="前回状態を引き継ぐ", label="日次リセット").props(
                                            "outlined dense").classes("w-full")
-                ui.separator().classes("q-my-sm")
-                ui.label("特殊仕込みの表示日").classes("text-xs font-black")
-                schedule_mode = ui.select(
-                    {"weekly": "毎週", "monthly": "毎月", "date": "指定日"},
-                    value="weekly", label="表示タイミング").props(
-                        "outlined dense emit-value map-options").classes("w-full")
-                schedule_weekday = ui.select(
-                    {0: "月曜日", 1: "火曜日", 2: "水曜日", 3: "木曜日",
-                     4: "金曜日", 5: "土曜日", 6: "日曜日"},
-                    value=0, label="毎週の曜日").props(
-                        "outlined dense emit-value map-options").classes("w-full")
-                schedule_month_day = ui.number(
-                    "毎月の日付", value=1, min=1, max=31, step=1).props(
-                        "outlined dense").classes("w-full")
-                schedule_date = ui.input("指定日（YYYY-MM-DD）").props(
-                    "outlined dense maxlength=10").classes("w-full")
-                special_note = ui.input("表示する補足（任意）").props(
-                    "outlined dense maxlength=40").classes("w-full")
 
             def add_prep():
                 try:
                     store_ops.add_prep_template(
                         prep_name.value, prep_area.value, None, prep_note.value,
                         item_type={"完了型": "completion", "状態型（○△×）": "status",
-                                   "数量型": "quantity", "メモ専用型": "memo",
-                                   "特殊仕込み": "special"}[prep_type.value],
+                                   "数量型": "quantity", "メモ専用型": "memo"}[prep_type.value],
                         status_labels={"done": good_label.value, "attention": warning_label.value,
                                        "incomplete": bad_label.value},
                         show_status_labels=show_labels.value, unit=quantity_unit.value,
@@ -227,12 +208,7 @@ def store_settings_page():
                         minimum_value=quantity_min.value, maximum_value=quantity_max.value,
                         visible=prep_visible.value,
                         reset_mode="daily" if reset_mode.value == "毎日初期値へ戻す" else "carry",
-                        progress_enabled=progress_enabled.value,
-                        schedule_mode=schedule_mode.value,
-                        schedule_weekday=schedule_weekday.value,
-                        schedule_month_day=schedule_month_day.value,
-                        schedule_date=schedule_date.value,
-                        special_note=special_note.value)
+                        progress_enabled=progress_enabled.value)
                 except ValueError as error:
                     notify_error(error)
                     return
@@ -441,8 +417,7 @@ def store_settings_page():
                     with ui.column().classes("gap-0 grow min-w-0"):
                         ui.label(item["name"]).classes("text-xs font-black")
                         type_label = {"completion": "完了型", "status": "状態型",
-                                      "quantity": "数量型", "memo": "メモ専用型",
-                                      "special": "特殊仕込み"}.get(
+                                      "quantity": "数量型", "memo": "メモ専用型"}.get(
                                           item.get("item_type"),
                                           "状態型" if item.get("status_mode") == "three" else "完了型")
                         ui.label(f"{item.get('area', '厨房')}・{type_label}").classes(
@@ -461,8 +436,7 @@ def store_settings_page():
                             current_type = selected.get("item_type") or (
                                 "status" if selected.get("status_mode") == "three" else "completion")
                             type_names = {"completion": "完了型", "status": "状態型（○△×）",
-                                          "quantity": "数量型", "memo": "メモ専用型",
-                                          "special": "特殊仕込み"}
+                                          "quantity": "数量型", "memo": "メモ専用型"}
                             edit_type = ui.select(list(type_names.values()), value=type_names[current_type],
                                                   label="項目タイプ").props("outlined dense").classes("w-full")
                             edit_visible = ui.switch("LIVE BOARDに表示", value=selected.get("visible", True))
@@ -481,28 +455,6 @@ def store_settings_page():
                                 edit_reset = ui.select(["前回状態を引き継ぐ", "毎日初期値へ戻す"],
                                     value=("毎日初期値へ戻す" if selected.get("reset_mode") == "daily"
                                            else "前回状態を引き継ぐ"), label="日次リセット").props("outlined dense").classes("w-full")
-                                ui.separator().classes("q-my-sm")
-                                ui.label("特殊仕込みの表示日").classes("text-xs font-black")
-                                edit_schedule_mode = ui.select(
-                                    {"weekly": "毎週", "monthly": "毎月", "date": "指定日"},
-                                    value=selected.get("schedule_mode", "weekly"),
-                                    label="表示タイミング").props(
-                                        "outlined dense emit-value map-options").classes("w-full")
-                                edit_schedule_weekday = ui.select(
-                                    {0: "月曜日", 1: "火曜日", 2: "水曜日", 3: "木曜日",
-                                     4: "金曜日", 5: "土曜日", 6: "日曜日"},
-                                    value=selected.get("schedule_weekday", 0),
-                                    label="毎週の曜日").props(
-                                        "outlined dense emit-value map-options").classes("w-full")
-                                edit_schedule_month_day = ui.number(
-                                    "毎月の日付", value=selected.get("schedule_month_day", 1),
-                                    min=1, max=31, step=1).props("outlined dense").classes("w-full")
-                                edit_schedule_date = ui.input(
-                                    "指定日（YYYY-MM-DD）", value=selected.get("schedule_date", "")
-                                ).props("outlined dense maxlength=10").classes("w-full")
-                                edit_special_note = ui.input(
-                                    "表示する補足（任意）", value=selected.get("special_note", "")
-                                ).props("outlined dense maxlength=40").classes("w-full")
 
                             def save():
                                 try:
@@ -520,12 +472,7 @@ def store_settings_page():
                                         maximum_value=edit_maximum.value,
                                         visible=edit_visible.value,
                                         reset_mode="daily" if edit_reset.value == "毎日初期値へ戻す" else "carry",
-                                        progress_enabled=edit_progress.value,
-                                        schedule_mode=edit_schedule_mode.value,
-                                        schedule_weekday=edit_schedule_weekday.value,
-                                        schedule_month_day=edit_schedule_month_day.value,
-                                        schedule_date=edit_schedule_date.value,
-                                        special_note=edit_special_note.value)
+                                        progress_enabled=edit_progress.value)
                                 except ValueError as error:
                                     notify_error(error)
                                     return

@@ -690,7 +690,7 @@ class StoreOperationsManager:
 
     @staticmethod
     def _live_board_type(value):
-        return value if value in {"completion", "status", "quantity", "memo", "special"} else "completion"
+        return value if value in {"completion", "status", "quantity", "memo"} else "completion"
 
     @staticmethod
     def _live_board_color(value, fallback="#527A68"):
@@ -784,9 +784,7 @@ class StoreOperationsManager:
                           status_mode="binary", item_type=None, status_labels=None,
                           show_status_labels=False, unit="個", step=1, initial_value=0,
                           minimum_value=0, maximum_value=None, visible=True,
-                          reset_mode="carry", progress_enabled=False,
-                          schedule_mode="always", schedule_weekday=0,
-                          schedule_month_day=1, schedule_date="", special_note=""):
+                          reset_mode="carry", progress_enabled=False):
         name = str(name or "").strip()
         if not name:
             raise ValueError("仕込み名を入力してください。")
@@ -813,13 +811,7 @@ class StoreOperationsManager:
                 "maximum_value": (None if maximum_value in (None, "") else
                                   self._live_board_number(maximum_value, 0)),
                 "visible": bool(visible), "reset_mode": ("daily" if reset_mode == "daily" else "carry"),
-                "progress_enabled": bool(progress_enabled),
-                "schedule_mode": self._prep_schedule_mode(schedule_mode, item_type),
-                "schedule_weekday": max(0, min(6, int(schedule_weekday or 0))),
-                "schedule_month_day": max(1, min(31, int(schedule_month_day or 1))),
-                "schedule_date": str(schedule_date or "")[:10],
-                "special_note": str(special_note or "").strip()[:40],
-                "active": True}
+                "progress_enabled": bool(progress_enabled), "active": True}
         self._data_manager.data.setdefault("store_prep_templates", []).append(item)
         self._data_manager.save()
         return dict(item)
@@ -836,9 +828,7 @@ class StoreOperationsManager:
                              note_enabled=False, status_mode="binary", item_type=None,
                              status_labels=None, show_status_labels=False, unit="個", step=1,
                              initial_value=0, minimum_value=0, maximum_value=None, visible=True,
-                             reset_mode="carry", progress_enabled=False,
-                             schedule_mode="always", schedule_weekday=0,
-                             schedule_month_day=1, schedule_date="", special_note=""):
+                             reset_mode="carry", progress_enabled=False):
         values = self._data_manager.data.setdefault("store_prep_templates", [])
         item = next((value for value in values if isinstance(value, dict)
                      and value.get("id") == item_id and value.get("active", True)), None)
@@ -870,20 +860,9 @@ class StoreOperationsManager:
                     maximum_value=(None if maximum_value in (None, "") else
                                    self._live_board_number(maximum_value, 0)),
                     visible=bool(visible), reset_mode=("daily" if reset_mode == "daily" else "carry"),
-                    progress_enabled=bool(progress_enabled),
-                    schedule_mode=self._prep_schedule_mode(schedule_mode, item_type),
-                    schedule_weekday=max(0, min(6, int(schedule_weekday or 0))),
-                    schedule_month_day=max(1, min(31, int(schedule_month_day or 1))),
-                    schedule_date=str(schedule_date or "")[:10],
-                    special_note=str(special_note or "").strip()[:40])
+                    progress_enabled=bool(progress_enabled))
         self._data_manager.save()
         return dict(item)
-
-    @staticmethod
-    def _prep_schedule_mode(value, item_type):
-        if item_type != "special":
-            return "always"
-        return value if value in {"weekly", "monthly", "date"} else "weekly"
 
     def move_prep_template(self, item_id, direction):
         """登録済みの仕込み項目を1つ上または下へ移動する。"""
@@ -1028,7 +1007,7 @@ class StoreOperationsManager:
             elif item.get("choice_mode"):
                 self.set_service_prep_choice(
                     next_date, next_period, item["id"], carried_value(item, "choice") or "")
-            elif item.get("item_type") not in {"memo", "special"}:
+            elif item.get("item_type") != "memo":
                 self.set_service_prep_status(
                     next_date, next_period, item["id"],
                     carried_value(item, "status") or "incomplete")
@@ -1047,7 +1026,7 @@ class StoreOperationsManager:
         return next_date, next_period
 
     def service_prep_items(self, record_date, period):
-        service_day = self._date(record_date)
+        self._date(record_date)
         period = self._service_period(period)
         states = self._data_manager.data.get("store_service_prep_records", {}).get(
             record_date, {}).get(period, {})
@@ -1067,8 +1046,6 @@ class StoreOperationsManager:
                                               ("status" if item.get("status_mode") == "three"
                                                else ("quantity" if self._is_quantity_prep(item)
                                                      else "completion")))
-            if item_type == "special" and not self._special_prep_due(item, service_day):
-                continue
             quantity_mode = item_type == "quantity"
             # Preserve the legacy leftover-rice control until an administrator edits it.
             choice_mode = "item_type" not in item and self._is_leftover_rice(item)
@@ -1097,17 +1074,6 @@ class StoreOperationsManager:
                            "note": str(notes.get(item["id"], "")),
                            "last_update": dict(updates.get(item["id"], {}))})
         return result
-
-    @staticmethod
-    def _special_prep_due(item, service_day):
-        mode = item.get("schedule_mode", "weekly")
-        if mode == "weekly":
-            return service_day.weekday() == int(item.get("schedule_weekday", 0))
-        if mode == "monthly":
-            return service_day.day == int(item.get("schedule_month_day", 1))
-        if mode == "date":
-            return service_day.date().isoformat() == str(item.get("schedule_date", ""))
-        return False
 
     def set_service_prep_subchecks(self, record_date, period, item_id, checked_items):
         self._date(record_date)

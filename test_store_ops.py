@@ -299,31 +299,6 @@ class StoreOperationsManagerTest(unittest.TestCase):
             category["id"], "刺場", True, "#A14D4D")
         self.assertEqual(updated["color"], "#A14D4D")
 
-    def test_special_prep_only_appears_on_its_scheduled_day(self):
-        weekly = self.manager.add_prep_template(
-            "週一スープ", "ちゃんこ場", item_type="special",
-            schedule_mode="weekly", schedule_weekday=0,
-            special_note="月曜日だけ仕込む")
-        self.assertIn(weekly["id"], {item["id"] for item in
-                      self.manager.service_prep_items("2026-09-07", "lunch")})
-        self.assertNotIn(weekly["id"], {item["id"] for item in
-                         self.manager.service_prep_items("2026-09-08", "lunch")})
-
-    def test_special_prep_supports_monthly_and_specific_dates(self):
-        monthly = self.manager.add_prep_template(
-            "月初仕込み", "厨房", item_type="special",
-            schedule_mode="monthly", schedule_month_day=9)
-        dated = self.manager.add_prep_template(
-            "予約仕込み", "厨房", item_type="special",
-            schedule_mode="date", schedule_date="2026-09-12")
-        ninth = {item["id"] for item in self.manager.service_prep_items(
-            "2026-09-09", "dinner")}
-        twelfth = {item["id"] for item in self.manager.service_prep_items(
-            "2026-09-12", "dinner")}
-        self.assertIn(monthly["id"], ninth)
-        self.assertNotIn(dated["id"], ninth)
-        self.assertIn(dated["id"], twelfth)
-
     def test_memo_only_live_board_item_enables_short_memo_without_progress_status(self):
         item = self.manager.add_prep_template("本日の注意", "ホール", item_type="memo")
         self.assertTrue(item["note_enabled"])
