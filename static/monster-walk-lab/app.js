@@ -1,19 +1,19 @@
 const ASSET='/static/digital-monsters/sprites/starters/';
 const monsters={
-  fire:{walk:'fire-walk-3x4.png',thumb:'fire-starter-four-directions.png'},
-  water:{walk:'water-walk-3x4.png',thumb:'water-starter-four-directions.png'},
-  nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png'},
-  chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png'}
+  fire:{walk:'fire-walk-4x4-v2.png',thumb:'fire-starter-four-directions.png',columns:4},
+  water:{walk:'water-walk-3x4.png',thumb:'water-starter-four-directions.png',columns:3},
+  nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png',columns:3},
+  chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png',columns:3}
 };
 const room=document.querySelector('#room'),actor=document.querySelector('#actor'),sprite=document.querySelector('#sprite');
 const spriteContext=sprite.getContext('2d');spriteContext.imageSmoothingEnabled=false;
 const autoButton=document.querySelector('#auto'),state=document.querySelector('#state'),thought=document.querySelector('#thought');
-let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire',walkImage=null;
+let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire',currentChoice=monsters.fire,walkImage=null;
 const directionRows={down:0,up:1,right:2,left:3};
 function renderSprite(){
   if(!walkImage||!walkImage.complete||!walkImage.naturalWidth)return;
-  const cellWidth=walkImage.naturalWidth/3,cellHeight=walkImage.naturalHeight/4;
-  const frame=Math.max(0,Math.min(2,walkFrame));
+  const cellWidth=walkImage.naturalWidth/currentChoice.columns,cellHeight=walkImage.naturalHeight/4;
+  const frame=Math.max(0,Math.min(currentChoice.columns-1,walkFrame));
   spriteContext.clearRect(0,0,sprite.width,sprite.height);
   spriteContext.drawImage(walkImage,frame*cellWidth,directionRows[direction]*cellHeight,
     cellWidth,cellHeight,0,0,sprite.width,sprite.height);
@@ -21,6 +21,8 @@ function renderSprite(){
 function setMonster(name){
   const choice=monsters[name]||monsters.fire;
   currentMonster=monsters[name]?name:'fire';
+  currentChoice=choice;
+  actor.classList.toggle('fire-cycle',currentMonster==='fire');
   walkImage=new Image();walkImage.decoding='async';walkImage.onload=renderSprite;
   walkImage.src=`${ASSET}${choice.walk}`;
   document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
@@ -47,8 +49,7 @@ function tick(now){
   if(moving){
     const speed=(manual?.29:.105)*dt;x+=dx/dist*Math.min(dist,speed);y+=dy/dist*Math.min(dist,speed);
     const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');face(dir);actor.classList.add('moving');
-    const horizontalFire=currentMonster==='fire'&&['left','right'].includes(direction);
-    const frames=horizontalFire?[0,1,0,1]:[0,1,2,1];
+    const frames=currentMonster==='fire'?[0,1,2,3]:[0,1,2,1];
     const nextFrame=frames[Math.floor(now/130)%4];
     if(nextFrame!==walkFrame){walkFrame=nextFrame;renderSprite()}
     state.textContent=manual?'あなたと歩行中':'部屋を探検中';
