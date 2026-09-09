@@ -6,12 +6,23 @@ const monsters={
   chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png'}
 };
 const room=document.querySelector('#room'),actor=document.querySelector('#actor'),sprite=document.querySelector('#sprite');
+const spriteContext=sprite.getContext('2d');spriteContext.imageSmoothingEnabled=false;
 const autoButton=document.querySelector('#auto'),state=document.querySelector('#state'),thought=document.querySelector('#thought');
-let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire';
+let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire',walkImage=null;
+const directionRows={down:0,up:1,right:2,left:3};
+function renderSprite(){
+  if(!walkImage||!walkImage.complete||!walkImage.naturalWidth)return;
+  const cellWidth=walkImage.naturalWidth/3,cellHeight=walkImage.naturalHeight/4;
+  const frame=Math.max(0,Math.min(2,walkFrame));
+  spriteContext.clearRect(0,0,sprite.width,sprite.height);
+  spriteContext.drawImage(walkImage,frame*cellWidth,directionRows[direction]*cellHeight,
+    cellWidth,cellHeight,0,0,sprite.width,sprite.height);
+}
 function setMonster(name){
   const choice=monsters[name]||monsters.fire;
   currentMonster=monsters[name]?name:'fire';
-  const url=`url('${ASSET}${choice.walk}')`;sprite.style.setProperty('--sprite',url);
+  walkImage=new Image();walkImage.decoding='async';walkImage.onload=renderSprite;
+  walkImage.src=`${ASSET}${choice.walk}`;
   document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
   localStorage.setItem('walkLabMonster',name);
 }
@@ -20,6 +31,7 @@ function face(dir){
   actor.classList.remove(`dir-${direction}`);
   direction=dir;
   actor.classList.add(`dir-${direction}`);
+  renderSprite();
 }
 function chooseTarget(nx,ny){target.x=Math.max(.10,Math.min(.90,nx));target.y=Math.max(.35,Math.min(.86,ny));nextTarget=performance.now()+1800+Math.random()*2600}
 function showThought(){
@@ -36,11 +48,11 @@ function tick(now){
     const speed=(manual?.29:.105)*dt;x+=dx/dist*Math.min(dist,speed);y+=dy/dist*Math.min(dist,speed);
     const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');face(dir);actor.classList.add('moving');
     const horizontalFire=currentMonster==='fire'&&['left','right'].includes(direction);
-    const frames=horizontalFire?[0,50,0,50]:[0,50,100,50];
+    const frames=horizontalFire?[0,1,0,1]:[0,1,2,1];
     const nextFrame=frames[Math.floor(now/130)%4];
-    if(nextFrame!==walkFrame){walkFrame=nextFrame;sprite.style.setProperty('--frame',`${nextFrame}%`)}
+    if(nextFrame!==walkFrame){walkFrame=nextFrame;renderSprite()}
     state.textContent=manual?'あなたと歩行中':'部屋を探検中';
-  }else{actor.classList.remove('moving');if(walkFrame!==50){walkFrame=50;sprite.style.setProperty('--frame','50%')}state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
+  }else{actor.classList.remove('moving');if(walkFrame!==1){walkFrame=1;renderSprite()}state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
   x=Math.max(.09,Math.min(.91,x));y=Math.max(.34,Math.min(.87,y));actor.style.left=`${x*100}%`;actor.style.top=`${y*100}%`;
   requestAnimationFrame(tick);
 }
@@ -55,4 +67,6 @@ document.querySelectorAll('[data-lab]').forEach(button=>button.addEventListener(
 }));
 document.querySelectorAll('[data-dir]').forEach(b=>{const start=e=>{e.preventDefault();auto=false;autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF';manual=b.dataset.dir;face(manual)};const end=()=>{manual=null;target={x,y}};b.addEventListener('pointerdown',start);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);b.addEventListener('pointerleave',end)});
 document.querySelector('#stop').addEventListener('click',()=>{auto=false;manual=null;target={x,y};autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF'});
-setMonster(localStorage.getItem('walkLabMonster')||'fire');chooseTarget(.25,.7);requestAnimationFrame(tick);
+const requestedMonster=new URLSearchParams(location.search).get('monster');
+setMonster(monsters[requestedMonster]?requestedMonster:(localStorage.getItem('walkLabMonster')||'fire'));
+chooseTarget(.25,.7);requestAnimationFrame(tick);
