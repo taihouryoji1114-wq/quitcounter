@@ -10,20 +10,25 @@ const spriteContext=sprite.getContext('2d');spriteContext.imageSmoothingEnabled=
 const autoButton=document.querySelector('#auto'),state=document.querySelector('#state'),thought=document.querySelector('#thought');
 let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire',currentChoice=monsters.fire,walkImage=null;
 const directionRows={down:0,up:1,right:2,left:3};
-function renderSprite(){
+function renderSprite(resting=false){
   if(!walkImage||!walkImage.complete||!walkImage.naturalWidth)return;
   const cellWidth=walkImage.naturalWidth/currentChoice.columns,cellHeight=walkImage.naturalHeight/4;
   const frame=Math.max(0,Math.min(currentChoice.columns-1,walkFrame));
+  const mirrorLeftIdle=currentMonster==='fire'&&direction==='right'&&resting;
+  const sourceRow=mirrorLeftIdle?directionRows.left:directionRows[direction];
   spriteContext.clearRect(0,0,sprite.width,sprite.height);
-  spriteContext.drawImage(walkImage,frame*cellWidth,directionRows[direction]*cellHeight,
+  spriteContext.save();
+  if(mirrorLeftIdle){spriteContext.translate(sprite.width,0);spriteContext.scale(-1,1)}
+  spriteContext.drawImage(walkImage,frame*cellWidth,sourceRow*cellHeight,
     cellWidth,cellHeight,0,0,sprite.width,sprite.height);
+  spriteContext.restore();
 }
 function setMonster(name){
   const choice=monsters[name]||monsters.fire;
   currentMonster=monsters[name]?name:'fire';
   currentChoice=choice;
   actor.classList.toggle('fire-cycle',currentMonster==='fire');
-  walkImage=new Image();walkImage.decoding='async';walkImage.onload=renderSprite;
+  walkImage=new Image();walkImage.decoding='async';walkImage.onload=()=>renderSprite();
   walkImage.src=`${ASSET}${choice.walk}`;
   document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
   localStorage.setItem('walkLabMonster',name);
@@ -41,10 +46,7 @@ function showThought(){
   thought.textContent=['♪','…','!','♡'][Math.floor(Math.random()*4)];thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
   thought.classList.add('show');setTimeout(()=>thought.classList.remove('show'),1800);
 }
-function idleFrame(){
-  if(currentMonster==='fire'&&direction==='right')return 2;
-  return 1;
-}
+function idleFrame(){return 1}
 function tick(now){
   const dt=Math.min(.035,(now-last)/1000);last=now;
   if(manual){target.x=x+(manual==='left'?-.2:manual==='right'?.2:0);target.y=y+(manual==='up'?-.2:manual==='down'?.2:0)}
@@ -57,7 +59,7 @@ function tick(now){
     const nextFrame=frames[Math.floor(now/130)%4];
     if(nextFrame!==walkFrame){walkFrame=nextFrame;renderSprite()}
     state.textContent=manual?'あなたと歩行中':'部屋を探検中';
-  }else{actor.classList.remove('moving');const restingFrame=idleFrame();if(walkFrame!==restingFrame){walkFrame=restingFrame;renderSprite()}state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
+  }else{actor.classList.remove('moving');const restingFrame=idleFrame();if(walkFrame!==restingFrame)walkFrame=restingFrame;renderSprite(true);state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
   x=Math.max(.09,Math.min(.91,x));y=Math.max(.34,Math.min(.87,y));actor.style.left=`${x*100}%`;actor.style.top=`${y*100}%`;
   requestAnimationFrame(tick);
 }
