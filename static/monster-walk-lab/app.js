@@ -41,6 +41,10 @@ function showThought(){
   thought.textContent=['♪','…','!','♡'][Math.floor(Math.random()*4)];thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
   thought.classList.add('show');setTimeout(()=>thought.classList.remove('show'),1800);
 }
+function idleFrame(){
+  if(currentMonster==='fire'&&direction==='right')return 2;
+  return 1;
+}
 function tick(now){
   const dt=Math.min(.035,(now-last)/1000);last=now;
   if(manual){target.x=x+(manual==='left'?-.2:manual==='right'?.2:0);target.y=y+(manual==='up'?-.2:manual==='down'?.2:0)}
@@ -53,7 +57,7 @@ function tick(now){
     const nextFrame=frames[Math.floor(now/130)%4];
     if(nextFrame!==walkFrame){walkFrame=nextFrame;renderSprite()}
     state.textContent=manual?'あなたと歩行中':'部屋を探検中';
-  }else{actor.classList.remove('moving');if(walkFrame!==1){walkFrame=1;renderSprite()}state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
+  }else{actor.classList.remove('moving');const restingFrame=idleFrame();if(walkFrame!==restingFrame){walkFrame=restingFrame;renderSprite()}state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
   x=Math.max(.09,Math.min(.91,x));y=Math.max(.34,Math.min(.87,y));actor.style.left=`${x*100}%`;actor.style.top=`${y*100}%`;
   requestAnimationFrame(tick);
 }
