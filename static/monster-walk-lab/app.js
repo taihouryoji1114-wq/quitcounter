@@ -1,7 +1,7 @@
 const ASSET='/static/digital-monsters/sprites/starters/';
 const monsters={
   fire:{walk:'fire-walk-4x4-v5.png',thumb:'fire-starter-four-directions.png',columns:4},
-  water:{walk:'water-walk-3x4.png',thumb:'water-starter-four-directions.png',columns:3},
+  water:{walk:'water-walk-4x4-v2.png',thumb:'water-starter-four-directions.png',columns:4},
   nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png',columns:3},
   chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png',columns:3}
 };
@@ -14,7 +14,7 @@ function renderSprite(){
   if(!walkImage||!walkImage.complete||!walkImage.naturalWidth)return;
   const cellWidth=walkImage.naturalWidth/currentChoice.columns,cellHeight=walkImage.naturalHeight/4;
   const frame=Math.max(0,Math.min(currentChoice.columns-1,walkFrame));
-  const mirrorLeftWalk=currentMonster==='fire'&&direction==='right';
+  const mirrorLeftWalk=['fire','water'].includes(currentMonster)&&direction==='right';
   const sourceRow=mirrorLeftWalk?directionRows.left:directionRows[direction];
   spriteContext.clearRect(0,0,sprite.width,sprite.height);
   spriteContext.save();
@@ -27,7 +27,7 @@ function setMonster(name){
   const choice=monsters[name]||monsters.fire;
   currentMonster=monsters[name]?name:'fire';
   currentChoice=choice;
-  actor.classList.toggle('fire-cycle',currentMonster==='fire');
+  actor.classList.toggle('precise-cycle',['fire','water'].includes(currentMonster));
   walkImage=new Image();walkImage.decoding='async';walkImage.onload=()=>renderSprite();
   walkImage.src=`${ASSET}${choice.walk}`;
   document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
@@ -55,7 +55,7 @@ function tick(now){
   if(moving){
     const speed=(manual?.29:.105)*dt;x+=dx/dist*Math.min(dist,speed);y+=dy/dist*Math.min(dist,speed);
     const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');face(dir);actor.classList.add('moving');
-    const frames=currentMonster==='fire'?[0,1,2,3]:[0,1,2,1];
+    const frames=currentChoice.columns===4?[0,1,2,3]:[0,1,2,1];
     const nextFrame=frames[Math.floor(now/130)%4];
     if(nextFrame!==walkFrame){walkFrame=nextFrame;renderSprite()}
     state.textContent=manual?'あなたと歩行中':'部屋を探検中';
