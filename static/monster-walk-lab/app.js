@@ -1,7 +1,7 @@
 const ASSET='/static/digital-monsters/sprites/starters/';
 const monsters={
   fire:{walk:'fire-walk-4x4-v5.png',thumb:'fire-starter-four-directions.png',columns:4},
-  water:{walk:'water-walk-4x4-v3.png',thumb:'water-starter-four-directions.png',columns:4},
+  water:{walk:'water-walk-4x4-v4.png',thumb:'water-starter-four-directions.png',columns:4},
   nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png',columns:3},
   chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png',columns:3}
 };
@@ -67,6 +67,7 @@ room.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;con
 autoButton.addEventListener('click',()=>{auto=!auto;manual=null;autoButton.classList.toggle('active',auto);autoButton.textContent=`自動さんぽ ${auto?'ON':'OFF'}`;if(auto)chooseTarget(Math.random(),.5+Math.random()*.3)});
 document.querySelectorAll('.monster').forEach(b=>{const url=`url('${ASSET}${monsters[b.dataset.monster].thumb}')`;b.style.setProperty('--thumb',url);b.addEventListener('click',()=>setMonster(b.dataset.monster))});
 document.querySelectorAll('[data-lab]').forEach(button=>button.addEventListener('click',()=>{
+  if(button.dataset.lab==='バトル'){startBattle();return}
   state.textContent=`${button.dataset.lab}研究を準備中`;
   thought.textContent={生成:'✦',お世話:'♡',部屋:'⌂',バトル:'⚔'}[button.dataset.lab];
   thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
@@ -74,6 +75,69 @@ document.querySelectorAll('[data-lab]').forEach(button=>button.addEventListener(
 }));
 document.querySelectorAll('[data-dir]').forEach(b=>{const start=e=>{e.preventDefault();auto=false;autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF';manual=b.dataset.dir;face(manual)};const end=()=>{manual=null;target={x,y}};b.addEventListener('pointerdown',start);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);b.addEventListener('pointerleave',end)});
 document.querySelector('#stop').addEventListener('click',()=>{auto=false;manual=null;target={x,y};autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF'});
+
+const battle=document.querySelector('#battle'),battleMessage=document.querySelector('#battle-message');
+const battleCommand=document.querySelector('#battle-command'),battleMoves=document.querySelector('#battle-moves');
+const playerHpBar=document.querySelector('#player-hp'),enemyHpBar=document.querySelector('#enemy-hp');
+const playerHpText=document.querySelector('#player-hp-text');
+const playerBattler=document.querySelector('#player-battler'),enemyBattler=document.querySelector('#enemy-battler');
+let battleState={player:24,enemy:24,busy:false,guard:false,over:false};
+
+function drawBattleSprite(canvas,file,column){
+  const image=new Image();image.onload=()=>{
+    const context=canvas.getContext('2d');context.imageSmoothingEnabled=false;
+    context.clearRect(0,0,canvas.width,canvas.height);
+    const width=image.naturalWidth/2,height=image.naturalHeight/2;
+    context.drawImage(image,column*width,0,width,height,0,0,canvas.width,canvas.height);
+  };image.src=`${ASSET}${file}`;
+}
+function updateBattleHp(){
+  playerHpBar.style.width=`${Math.max(0,battleState.player)/24*100}%`;
+  enemyHpBar.style.width=`${Math.max(0,battleState.enemy)/24*100}%`;
+  playerHpText.textContent=Math.max(0,battleState.player);
+  playerHpBar.classList.toggle('low',battleState.player<=7);enemyHpBar.classList.toggle('low',battleState.enemy<=7);
+}
+function showCommands(){battleCommand.hidden=false;battleMoves.hidden=true}
+function showMoves(){if(battleState.busy||battleState.over)return;battleCommand.hidden=true;battleMoves.hidden=false;battleMessage.textContent='どの技を つかう？'}
+function battleText(text,delay=720){battleMessage.textContent=text;return new Promise(resolve=>setTimeout(resolve,delay))}
+function battleHit(target){target.classList.remove('hit');void target.offsetWidth;target.classList.add('hit')}
+function battleAttack(target){target.classList.remove('attack');void target.offsetWidth;target.classList.add('attack')}
+function damage(min,max){return min+Math.floor(Math.random()*(max-min+1))}
+
+async function useMove(name){
+  if(battleState.busy||battleState.over)return;battleState.busy=true;battleMoves.hidden=true;
+  const moves={ember:['ひのこ',4,6],tackle:['たいあたり',3,5],tail:['しっぽアタック',4,5]};
+  if(name==='guard'){
+    battleState.guard=true;battleAttack(playerBattler);await battleText('イグニスは ほのおのまもりを まとった！');
+  }else{
+    const move=moves[name];battleAttack(playerBattler);await battleText(`イグニスの ${move[0]}！`,480);
+    battleHit(enemyBattler);battleState.enemy-=damage(move[1],move[2]);updateBattleHp();await battleText('アクアロに ダメージ！');
+  }
+  if(battleState.enemy<=0){battleState.over=true;await battleText('アクアロは たおれた！');battleMessage.textContent='イグニスの かち！　画面をタップして再戦';battle.classList.add('battle-won');battleState.busy=false;return}
+  const enemyMove=Math.random()<.68?['みずでっぽう',5,7]:['たいあたり',3,5];battleAttack(enemyBattler);await battleText(`アクアロの ${enemyMove[0]}！`,480);
+  battleHit(playerBattler);let hit=damage(enemyMove[1],enemyMove[2]);if(battleState.guard){hit=Math.max(1,Math.floor(hit/2));battleState.guard=false}
+  battleState.player-=hit;updateBattleHp();await battleText('イグニスに ダメージ！');
+  if(battleState.player<=0){battleState.over=true;await battleText('イグニスは たおれた！');battleMessage.textContent='アクアロの かち！　画面をタップして再戦';battle.classList.add('battle-lost')}
+  else{battleMessage.textContent='イグニスは どうする？';showCommands()}
+  battleState.busy=false;
+}
+function startBattle(){
+  auto=false;manual=null;target={x,y};battleState={player:24,enemy:24,busy:false,guard:false,over:false};
+  battle.classList.remove('battle-won','battle-lost');battle.hidden=false;updateBattleHp();showCommands();
+  battleMessage.textContent='アクアロが あらわれた！';
+  drawBattleSprite(playerBattler,monsters.fire.thumb,1);drawBattleSprite(enemyBattler,monsters.water.thumb,0);
+  setTimeout(()=>{if(!battleState.busy&&!battleState.over)battleMessage.textContent='イグニスは どうする？'},800);
+}
+function closeBattle(){battle.hidden=true}
+document.querySelector('#battle-close').addEventListener('click',closeBattle);
+document.querySelector('#move-back').addEventListener('click',()=>{battleMessage.textContent='イグニスは どうする？';showCommands()});
+document.querySelectorAll('[data-move]').forEach(button=>button.addEventListener('click',()=>useMove(button.dataset.move)));
+document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{
+  if(button.dataset.command==='fight'){showMoves();return}
+  if(button.dataset.command==='run'){closeBattle();return}
+  battleMessage.textContent=button.dataset.command==='party'?'交代できる仲間は まだいない！':'どうぐは まだ持っていない！';
+}));
+battleMessage.addEventListener('click',()=>{if(battleState.over)startBattle()});
 const requestedMonster=new URLSearchParams(location.search).get('monster');
 setMonster(monsters[requestedMonster]?requestedMonster:(localStorage.getItem('walkLabMonster')||'fire'));
 chooseTarget(.25,.7);requestAnimationFrame(tick);
