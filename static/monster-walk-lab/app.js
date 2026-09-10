@@ -5,77 +5,25 @@ const monsters={
   nature:{walk:'nature-walk-3x4.png',thumb:'nature-starter-four-directions.png',columns:3},
   chankocchi:{walk:'chankocchi-walk-3x4.png',thumb:'chankocchi-four-directions.png',columns:3}
 };
-const room=document.querySelector('#room'),actor=document.querySelector('#actor'),sprite=document.querySelector('#sprite');
-const spriteContext=sprite.getContext('2d');spriteContext.imageSmoothingEnabled=false;
-const autoButton=document.querySelector('#auto'),state=document.querySelector('#state'),thought=document.querySelector('#thought');
-let x=.50,y=.60,target={x:.5,y:.6},direction='down',auto=true,last=performance.now(),nextTarget=0,manual=null,walkFrame=-1,currentMonster='fire',currentChoice=monsters.fire,walkImage=null;
 const directionRows={down:0,up:1,right:2,left:3};
-function renderSprite(){
-  if(!walkImage||!walkImage.complete||!walkImage.naturalWidth)return;
-  const cellWidth=walkImage.naturalWidth/currentChoice.columns,cellHeight=walkImage.naturalHeight/4;
-  const frame=Math.max(0,Math.min(currentChoice.columns-1,walkFrame));
-  const mirrorLeftWalk=['fire','water'].includes(currentMonster)&&direction==='right';
-  const sourceRow=mirrorLeftWalk?directionRows.left:directionRows[direction];
-  spriteContext.clearRect(0,0,sprite.width,sprite.height);
-  spriteContext.save();
-  if(mirrorLeftWalk){spriteContext.translate(sprite.width,0);spriteContext.scale(-1,1)}
-  spriteContext.drawImage(walkImage,frame*cellWidth,sourceRow*cellHeight,
-    cellWidth,cellHeight,0,0,sprite.width,sprite.height);
-  spriteContext.restore();
-}
-function setMonster(name){
-  const choice=monsters[name]||monsters.fire;
-  currentMonster=monsters[name]?name:'fire';
-  currentChoice=choice;
-  actor.classList.toggle('precise-cycle',['fire','water'].includes(currentMonster));
-  walkImage=new Image();walkImage.decoding='async';walkImage.onload=()=>renderSprite();
-  walkImage.src=`${ASSET}${choice.walk}`;
-  document.querySelectorAll('.monster').forEach(b=>b.classList.toggle('active',b.dataset.monster===name));
-  localStorage.setItem('walkLabMonster',name);
-}
-function face(dir){
-  if(dir===direction)return;
-  actor.classList.remove(`dir-${direction}`);
-  direction=dir;
-  actor.classList.add(`dir-${direction}`);
-  renderSprite();
-}
-function chooseTarget(nx,ny){target.x=Math.max(.10,Math.min(.90,nx));target.y=Math.max(.35,Math.min(.86,ny));nextTarget=performance.now()+1800+Math.random()*2600}
-function showThought(){
-  if(actor.classList.contains('moving')||thought.classList.contains('show'))return;
-  thought.textContent=['♪','…','!','♡'][Math.floor(Math.random()*4)];thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
-  thought.classList.add('show');setTimeout(()=>thought.classList.remove('show'),1800);
-}
-function idleFrame(){return 1}
-function tick(now){
-  const dt=Math.min(.035,(now-last)/1000);last=now;
-  if(manual){target.x=x+(manual==='left'?-.2:manual==='right'?.2:0);target.y=y+(manual==='up'?-.2:manual==='down'?.2:0)}
-  else if(auto&&now>nextTarget)chooseTarget(.13+Math.random()*.74,.38+Math.random()*.44);
-  let dx=target.x-x,dy=target.y-y,dist=Math.hypot(dx,dy),moving=dist>.006;
-  if(moving){
-    const speed=(manual?.29:.105)*dt;x+=dx/dist*Math.min(dist,speed);y+=dy/dist*Math.min(dist,speed);
-    const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');face(dir);actor.classList.add('moving');
-    const frames=currentChoice.columns===4?[0,1,2,3]:[0,1,2,1];
-    const nextFrame=frames[Math.floor(now/130)%4];
-    if(nextFrame!==walkFrame){walkFrame=nextFrame;renderSprite()}
-    state.textContent=manual?'あなたと歩行中':'部屋を探検中';
-  }else{actor.classList.remove('moving');const restingFrame=idleFrame();if(walkFrame!==restingFrame)walkFrame=restingFrame;renderSprite();state.textContent='ひと休み中';if(Math.random()<.003)showThought()}
-  x=Math.max(.09,Math.min(.91,x));y=Math.max(.34,Math.min(.87,y));actor.style.left=`${x*100}%`;actor.style.top=`${y*100}%`;
-  requestAnimationFrame(tick);
-}
-room.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;const r=room.getBoundingClientRect();auto=false;autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF';chooseTarget((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height)});
-autoButton.addEventListener('click',()=>{auto=!auto;manual=null;autoButton.classList.toggle('active',auto);autoButton.textContent=`自動さんぽ ${auto?'ON':'OFF'}`;if(auto)chooseTarget(Math.random(),.5+Math.random()*.3)});
-document.querySelectorAll('.monster').forEach(b=>{const url=`url('${ASSET}${monsters[b.dataset.monster].thumb}')`;b.style.setProperty('--thumb',url);b.addEventListener('click',()=>setMonster(b.dataset.monster))});
+const room=document.querySelector('#room');
+const residents=[
+  {kind:'fire',actor:document.querySelector('#actor-fire'),canvas:document.querySelector('#sprite-fire'),thought:document.querySelector('#thought-fire'),state:document.querySelector('#state-fire'),x:.31,y:.67,target:{x:.55,y:.55},direction:'right',frame:1,nextTarget:0,lastThought:0,image:null},
+  {kind:'water',actor:document.querySelector('#actor-water'),canvas:document.querySelector('#sprite-water'),thought:document.querySelector('#thought-water'),state:document.querySelector('#state-water'),x:.68,y:.61,target:{x:.42,y:.73},direction:'left',frame:1,nextTarget:900,lastThought:0,image:null},
+];
+function renderResident(value){const choice=monsters[value.kind],image=value.image,canvas=value.canvas;if(!image||!image.complete||!image.naturalWidth)return;const context=canvas.getContext('2d'),cellWidth=image.naturalWidth/choice.columns,cellHeight=image.naturalHeight/4,mirror=value.direction==='right',row=mirror?directionRows.left:directionRows[value.direction];context.imageSmoothingEnabled=false;context.clearRect(0,0,canvas.width,canvas.height);context.save();if(mirror){context.translate(canvas.width,0);context.scale(-1,1)}context.drawImage(image,value.frame*cellWidth,row*cellHeight,cellWidth,cellHeight,0,0,canvas.width,canvas.height);context.restore()}
+function parkBlocked(x,y){if(x<.08||x>.92||y<.31||y>.87)return true;const pond=((x-.80)/.17)**2+((y-.46)/.14)**2<1;const bench=x>.40&&x<.66&&y>.39&&y<.50;return pond||bench}
+function chooseResidentTarget(value,nearFriend=false){let nx,ny,tries=0;do{if(nearFriend){const friend=residents.find(other=>other!==value);nx=friend.x+(Math.random()-.5)*.18;ny=friend.y+(Math.random()-.5)*.14}else{nx=.11+Math.random()*.78;ny=.34+Math.random()*.49}tries++}while(parkBlocked(nx,ny)&&tries<20);value.target={x:nx,y:ny};value.nextTarget=performance.now()+1700+Math.random()*3000}
+function residentThought(value){if(value.thought.classList.contains('show'))return;value.thought.textContent=['♪','…','!','♡','?'][Math.floor(Math.random()*5)];value.thought.style.left=`calc(${value.x*100}% + 12px)`;value.thought.style.top=`calc(${value.y*100}% - 42px)`;value.thought.classList.add('show');setTimeout(()=>value.thought.classList.remove('show'),1800)}
+residents.forEach(value=>{value.actor.classList.add('precise-cycle');value.image=new Image();value.image.decoding='async';value.image.onload=()=>renderResident(value);value.image.src=`${ASSET}${monsters[value.kind].walk}`});
+let parkLast=performance.now();
+function tick(now){const dt=Math.min(.035,(now-parkLast)/1000);parkLast=now;residents.forEach((value,index)=>{if(now>value.nextTarget)chooseResidentTarget(value,Math.random()<.28);const dx=value.target.x-value.x,dy=value.target.y-value.y,dist=Math.hypot(dx,dy),moving=dist>.008;if(moving){const speed=(.075+index*.006)*dt,nx=value.x+dx/dist*Math.min(dist,speed),ny=value.y+dy/dist*Math.min(dist,speed);if(!parkBlocked(nx,value.y))value.x=nx;if(!parkBlocked(value.x,ny))value.y=ny;const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');if(dir!==value.direction)value.direction=dir;value.actor.classList.add('moving');const frame=[0,1,2,3][Math.floor((now+index*70)/145)%4];if(frame!==value.frame){value.frame=frame;renderResident(value)}value.state.textContent=index?'公園を散歩中':'公園を探検中'}else{value.actor.classList.remove('moving');if(value.frame!==1){value.frame=1;renderResident(value)}value.state.textContent=Math.hypot(value.x-residents[1-index].x,value.y-residents[1-index].y)<.2?'いっしょに過ごしている':'のんびり休憩中';if(now-value.lastThought>5000&&Math.random()<.006){value.lastThought=now;residentThought(value)}}value.actor.style.left=`${value.x*100}%`;value.actor.style.top=`${value.y*100}%`});requestAnimationFrame(tick)}
+room.addEventListener('pointerdown',()=>residents.forEach(value=>chooseResidentTarget(value,Math.random()<.5)));
 document.querySelectorAll('[data-lab]').forEach(button=>button.addEventListener('click',()=>{
   if(button.dataset.lab==='バトル'){startBattle();return}
   if(button.dataset.lab==='街'){openTown();return}
-  state.textContent=`${button.dataset.lab}研究を準備中`;
-  thought.textContent={生成:'✦',お世話:'♡',部屋:'⌂',バトル:'⚔'}[button.dataset.lab];
-  thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
-  thought.classList.remove('show');void thought.offsetWidth;thought.classList.add('show');
+  residents.forEach(value=>residentThought(value));
 }));
-document.querySelectorAll('[data-dir]').forEach(b=>{const start=e=>{e.preventDefault();auto=false;autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF';manual=b.dataset.dir;face(manual)};const end=()=>{manual=null;target={x,y}};b.addEventListener('pointerdown',start);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);b.addEventListener('pointerleave',end)});
-document.querySelector('#stop').addEventListener('click',()=>{auto=false;manual=null;target={x,y};autoButton.classList.remove('active');autoButton.textContent='自動さんぽ OFF'});
 
 const battle=document.querySelector('#battle'),battleMessage=document.querySelector('#battle-message');
 const battleCommand=document.querySelector('#battle-command'),battleMoves=document.querySelector('#battle-moves');
@@ -171,7 +119,7 @@ async function useMove(name){
   battleState.busy=false;
 }
 function startBattle(){
-  auto=false;manual=null;target={x,y};const maxHp=24+(profile.level-5)*4;battleState={player:maxHp,playerMax:maxHp,enemy:24,busy:false,guard:false,over:false};
+  const maxHp=24+(profile.level-5)*4;battleState={player:maxHp,playerMax:maxHp,enemy:24,busy:false,guard:false,over:false};
   battle.classList.remove('battle-won','battle-lost');clearBattleEffect(playerBattler);clearBattleEffect(enemyBattler);battle.hidden=false;updateBattleHp();showCommands();
   battleMessage.textContent='アクアロが あらわれた！';
   drawBattleSprite(playerBattler,monsters.fire.thumb,1);drawBattleSprite(enemyBattler,monsters.water.thumb,0);
@@ -202,7 +150,7 @@ function drawTownMap(){const c=townCanvas.getContext('2d');c.imageSmoothingEnabl
   c.fillStyle='#a87544';c.fillRect(3*TILE,7*TILE+5,72,22);c.fillStyle='#fff5ce';c.font='bold 10px sans-serif';c.fillText('ミナモ町',3*TILE+36,7*TILE+20);c.fillStyle='#fff';c.font='bold 10px sans-serif';c.fillText('↑ 1ばん道路',10*TILE,28);c.fillStyle='#e95b65';for(const [x,y] of [[7,3],[7,4],[12,13],[7,14]]){c.fillRect(x*TILE+7,y*TILE+9,5,5);c.fillRect(x*TILE+18,y*TILE+18,5,5)}
 }
 function paintTownHero(){townHero.style.left=`${townPosition.x/TOWN_W*100}%`;townHero.style.top=`${townPosition.y/TOWN_H*100}%`;townHero.classList.toggle('walking',!!townDirection);townHero.classList.remove('face-up','face-down','face-left','face-right');townHero.classList.add(`face-${townDirection||'down'}`)}
-function openTown(){auto=false;manual=null;target={x,y};town.hidden=false;drawTownMap();paintTownHero()}
+function openTown(){town.hidden=false;drawTownMap();paintTownHero()}
 function closeTown(){townDirection=null;town.hidden=true;paintTownHero()}
 function moveTown(now){const dt=Math.min(.04,(now-townLast)/1000);townLast=now;if(!town.hidden&&townDirection){const speed=155*dt;let nx=townPosition.x+(townDirection==='left'?-speed:townDirection==='right'?speed:0),ny=townPosition.y+(townDirection==='up'?-speed:townDirection==='down'?speed:0);if(!townBlocked(nx,townPosition.y))townPosition.x=nx;if(!townBlocked(townPosition.x,ny))townPosition.y=ny;paintTownHero()}requestAnimationFrame(moveTown)}
 document.querySelector('#town-close').addEventListener('click',closeTown);
@@ -213,6 +161,4 @@ requestAnimationFrame(moveTown);
 prepareTownCollision();drawTownMap();
 document.addEventListener('contextmenu',event=>{if(event.target.closest('.app,.battle-screen,.town-screen'))event.preventDefault()});
 document.addEventListener('selectstart',event=>{if(event.target.closest('.app,.battle-screen,.town-screen'))event.preventDefault()});
-const requestedMonster=new URLSearchParams(location.search).get('monster');
-setMonster(monsters[requestedMonster]?requestedMonster:(localStorage.getItem('walkLabMonster')||'fire'));
-chooseTarget(.25,.7);requestAnimationFrame(tick);
+residents.forEach(value=>chooseResidentTarget(value));requestAnimationFrame(tick);

@@ -9,43 +9,33 @@
   <link rel="apple-touch-icon" href="labo-icon.png">
   <link rel="manifest" href="manifest.json">
   <title>LABO</title>
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
   <main class="app">
     <header>
       <div><small>CREATURE RESEARCH FACILITY</small><h1>LABO</h1></div>
-      <button id="auto" class="mode active" type="button">自動さんぽ ON</button>
+      <span class="mode active">PARK LIVE</span>
     </header>
 
-    <section id="room" class="room" aria-label="モンスターが歩く部屋">
-      <div class="window"><i></i><i></i></div>
-      <div class="shelf"><i></i><i></i><i></i></div>
-      <div class="plant">♣</div>
-      <div class="rug"></div>
-      <div id="thought" class="thought">♪</div>
-      <div id="actor" class="actor moving dir-down">
+    <section id="room" class="room park" aria-label="モンスターが自由に暮らす研究公園">
+      <div class="park-path"></div><div class="park-pond"><i></i></div>
+      <div class="park-tree tree-a"></div><div class="park-tree tree-b"></div><div class="park-tree tree-c"></div>
+      <div class="park-bench"></div><div class="park-flowers flowers-a"></div><div class="park-flowers flowers-b"></div>
+      <div id="thought-fire" class="thought">♪</div><div id="thought-water" class="thought">…</div>
+      <div id="actor-fire" class="actor resident moving dir-down">
         <div class="shadow"></div>
-        <canvas id="sprite" class="sprite" width="362" height="362" aria-label="選択中のキャラクター"></canvas>
+        <canvas id="sprite-fire" class="sprite" width="362" height="362" aria-label="公園で暮らすイグニス"></canvas>
       </div>
-      <p class="hint">床をタップすると、そこまで歩きます</p>
+      <div id="actor-water" class="actor resident moving dir-left">
+        <div class="shadow"></div>
+        <canvas id="sprite-water" class="sprite" width="362" height="362" aria-label="公園で暮らすアクアロ"></canvas>
+      </div>
+      <p class="hint">イグニスとアクアロが、それぞれ自由に生活しています</p>
     </section>
 
     <section class="panel">
-      <div class="monsters" role="group" aria-label="モンスター選択">
-        <button class="monster active fire" data-monster="fire" type="button"><i></i><span>火</span><b>イグニス</b></button>
-        <button class="monster water" data-monster="water" type="button"><i></i><span>水</span><b>アクアロ</b></button>
-        <button class="monster nature" data-monster="nature" type="button"><i></i><span>緑</span><b>リーフィ</b></button>
-        <button class="monster chankocchi" data-monster="chankocchi" type="button"><i></i><span>生命</span><b>ちゃんこっち</b></button>
-      </div>
-      <div class="controls" aria-label="方向操作">
-        <button data-dir="up" type="button">▲</button>
-        <button data-dir="left" type="button">◀</button>
-        <button id="stop" type="button">●</button>
-        <button data-dir="right" type="button">▶</button>
-        <button data-dir="down" type="button">▼</button>
-      </div>
-      <div class="status"><b id="state">部屋を探検中</b><span>移動中は足踏み、止まると呼吸に切り替わります</span></div>
+      <div class="resident-status"><span><i class="fire-dot"></i><b>イグニス</b><small id="state-fire">公園を探検中</small></span><span><i class="water-dot"></i><b>アクアロ</b><small id="state-water">池の近くを散歩中</small></span></div>
       <nav class="lab-nav" aria-label="LABO研究メニュー">
         <button data-lab="生成" type="button"><i>⬡</i><b>生成</b><small>新しい生命</small></button>
         <button data-lab="お世話" type="button"><i>♨</i><b>お世話</b><small>食事と観察</small></button>
@@ -86,7 +76,7 @@
       <div id="move-learn" class="move-learn" hidden></div>
     </div>
   </section>
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=24"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {

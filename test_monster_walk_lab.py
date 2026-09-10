@@ -35,6 +35,16 @@ class MonsterWalkLabTest(unittest.TestCase):
         self.assertIn("contextmenu", script)
         self.assertIn("selectstart", script)
 
+    def test_park_has_two_independent_residents_at_half_size(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        css = (ROOT / "style.css").read_text(encoding="utf-8")
+        script = (ROOT / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="actor-fire"', html)
+        self.assertIn('id="actor-water"', html)
+        self.assertIn("width:clamp(56px,13vw,85px)", css)
+        self.assertIn("const residents=[", script)
+        self.assertIn("chooseResidentTarget", script)
+
 
 if __name__ == "__main__":
     unittest.main()
