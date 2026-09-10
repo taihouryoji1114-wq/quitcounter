@@ -57,12 +57,12 @@
   <section id="battle" class="battle-screen" hidden aria-label="モンスターバトル">
     <div class="battle-topbar"><b>LABO BATTLE</b><button id="battle-close" type="button">×</button></div>
     <div class="battle-field">
-      <div class="battle-hud enemy-hud"><div><b>アクアロ</b><span>Lv.5</span></div><div class="hp-line"><small>HP</small><i><em id="enemy-hp"></em></i></div></div>
+      <div class="battle-hud enemy-hud"><div><b>アクアロ</b><span>Lv.5　水</span></div><div class="hp-line"><small>HP</small><i><em id="enemy-hp"></em></i></div></div>
       <canvas id="enemy-battler" class="battler enemy-battler" width="320" height="320"></canvas>
       <div class="battle-platform enemy-platform"></div>
       <canvas id="player-battler" class="battler player-battler" width="320" height="320"></canvas>
       <div class="battle-platform player-platform"></div>
-      <div class="battle-hud player-hud"><div><b>イグニス</b><span>Lv.5</span></div><div class="hp-line"><small>HP</small><i><em id="player-hp"></em></i></div><strong><span id="player-hp-text">24</span> / 24</strong></div>
+      <div class="battle-hud player-hud"><div><b>イグニス</b><span id="player-level">Lv.5　火</span></div><div class="hp-line"><small>HP</small><i><em id="player-hp"></em></i></div><strong><span id="player-hp-text">24</span> / <span id="player-hp-max">24</span></strong><div class="xp-line"><small>EXP</small><i><em id="player-xp"></em></i></div></div>
     </div>
     <div class="battle-console">
       <div id="battle-message" class="battle-message">アクアロが あらわれた！</div>
@@ -71,15 +71,12 @@
         <button data-command="item" type="button">どうぐ</button><button data-command="run" type="button">にげる</button>
       </div>
       <div id="battle-moves" class="battle-moves" hidden>
-        <button data-move="ember" type="button"><b>ひのこ</b><small>ほのお</small></button>
-        <button data-move="tackle" type="button"><b>たいあたり</b><small>ノーマル</small></button>
-        <button data-move="tail" type="button"><b>しっぽアタック</b><small>ノーマル</small></button>
-        <button data-move="guard" type="button"><b>ほのおのまもり</b><small>へんか</small></button>
         <button id="move-back" class="move-back" type="button">もどる</button>
       </div>
+      <div id="move-learn" class="move-learn" hidden></div>
     </div>
   </section>
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {

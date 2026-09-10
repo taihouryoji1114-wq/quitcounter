@@ -79,9 +79,28 @@ document.querySelector('#stop').addEventListener('click',()=>{auto=false;manual=
 const battle=document.querySelector('#battle'),battleMessage=document.querySelector('#battle-message');
 const battleCommand=document.querySelector('#battle-command'),battleMoves=document.querySelector('#battle-moves');
 const playerHpBar=document.querySelector('#player-hp'),enemyHpBar=document.querySelector('#enemy-hp');
-const playerHpText=document.querySelector('#player-hp-text');
+const playerHpText=document.querySelector('#player-hp-text'),playerHpMax=document.querySelector('#player-hp-max');
+const playerLevel=document.querySelector('#player-level'),playerXpBar=document.querySelector('#player-xp');
 const playerBattler=document.querySelector('#player-battler'),enemyBattler=document.querySelector('#enemy-battler');
-let battleState={player:24,enemy:24,busy:false,guard:false,over:false};
+const moveLearn=document.querySelector('#move-learn'),moveBack=document.querySelector('#move-back');
+const TYPE_CHART={fire:{nature:2,water:.5},water:{fire:2,nature:.5},nature:{water:2,fire:.5}};
+const MOVE_DATA={
+  ember:{name:'ひのこ',type:'fire',power:[4,6]},tackle:{name:'たいあたり',type:'normal',power:[3,5]},
+  tail:{name:'しっぽアタック',type:'normal',power:[4,5]},guard:{name:'ほのおのまもり',type:'fire',guard:true},
+  fireFang:{name:'ほのおのキバ',type:'fire',power:[6,8]},flameWheel:{name:'かえんぐるま',type:'fire',power:[7,9]},
+};
+const TYPE_NAME={fire:'ほのお',water:'みず',nature:'みどり',normal:'ノーマル'};
+const LEARN_LEVELS={6:'fireFang',8:'flameWheel'};
+function loadProfile(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('laboIgnisProfile')||'{}');
+    return {level:Math.max(5,Number(saved.level)||5),xp:Math.max(0,Number(saved.xp)||0),stage:Math.max(1,Number(saved.stage)||1),moves:Array.isArray(saved.moves)&&saved.moves.length?saved.moves.slice(0,4):['ember','tackle','tail','guard'],pendingMove:saved.pendingMove||null};
+  }catch(_){return {level:5,xp:0,stage:1,moves:['ember','tackle','tail','guard'],pendingMove:null}}
+}
+let profile=loadProfile(),battleState={player:24,playerMax:24,enemy:24,busy:false,guard:false,over:false};
+function saveProfile(){localStorage.setItem('laboIgnisProfile',JSON.stringify(profile))}
+function xpNeeded(){return profile.level*12}
+function typeMultiplier(attackType,defenderType){return TYPE_CHART[attackType]?.[defenderType]||1}
 
 function drawBattleSprite(canvas,file,column){
   const image=new Image();image.onload=()=>{
@@ -92,37 +111,65 @@ function drawBattleSprite(canvas,file,column){
   };image.src=`${ASSET}${file}`;
 }
 function updateBattleHp(){
-  playerHpBar.style.width=`${Math.max(0,battleState.player)/24*100}%`;
+  playerHpBar.style.width=`${Math.max(0,battleState.player)/battleState.playerMax*100}%`;
   enemyHpBar.style.width=`${Math.max(0,battleState.enemy)/24*100}%`;
   playerHpText.textContent=Math.max(0,battleState.player);
-  playerHpBar.classList.toggle('low',battleState.player<=7);enemyHpBar.classList.toggle('low',battleState.enemy<=7);
+  playerHpMax.textContent=battleState.playerMax;playerLevel.textContent=`Lv.${profile.level}　火`;
+  playerXpBar.style.width=`${Math.min(100,profile.xp/xpNeeded()*100)}%`;
+  playerHpBar.classList.toggle('low',battleState.player<=battleState.playerMax*.3);enemyHpBar.classList.toggle('low',battleState.enemy<=7);
 }
-function showCommands(){battleCommand.hidden=false;battleMoves.hidden=true}
-function showMoves(){if(battleState.busy||battleState.over)return;battleCommand.hidden=true;battleMoves.hidden=false;battleMessage.textContent='どの技を つかう？'}
+function renderMoves(){
+  battleMoves.querySelectorAll('[data-move]').forEach(button=>button.remove());
+  profile.moves.forEach(id=>{const move=MOVE_DATA[id];if(!move)return;const button=document.createElement('button');button.type='button';button.dataset.move=id;button.innerHTML=`<b>${move.name}</b><small>${TYPE_NAME[move.type]}</small>`;button.addEventListener('click',()=>useMove(id));battleMoves.insertBefore(button,moveBack)});
+}
+function showCommands(){battleCommand.hidden=false;battleMoves.hidden=true;moveLearn.hidden=true}
+function showMoves(){if(battleState.busy||battleState.over)return;renderMoves();battleCommand.hidden=true;battleMoves.hidden=false;moveLearn.hidden=true;battleMessage.textContent='どの技を つかう？'}
 function battleText(text,delay=720){battleMessage.textContent=text;return new Promise(resolve=>setTimeout(resolve,delay))}
-function battleHit(target){target.classList.remove('hit');void target.offsetWidth;target.classList.add('hit')}
-function battleAttack(target){target.classList.remove('attack');void target.offsetWidth;target.classList.add('attack')}
+function animateOnce(target,name){target.classList.remove(name);void target.offsetWidth;target.classList.add(name);setTimeout(()=>target.classList.remove(name),460)}
+function battleHit(target){animateOnce(target,'hit')}
+function battleAttack(target){animateOnce(target,'attack')}
 function damage(min,max){return min+Math.floor(Math.random()*(max-min+1))}
+
+function showMoveReplacement(newMoveId){
+  profile.pendingMove=newMoveId;saveProfile();battleCommand.hidden=true;battleMoves.hidden=true;moveLearn.hidden=false;moveLearn.replaceChildren();
+  const title=document.createElement('p');title.textContent=`${MOVE_DATA[newMoveId].name}を覚える。忘れる技を選んでください。`;moveLearn.append(title);
+  profile.moves.forEach((oldId,index)=>{const button=document.createElement('button');button.type='button';button.textContent=`${MOVE_DATA[oldId].name}と交換`;button.addEventListener('click',()=>{profile.moves[index]=newMoveId;profile.pendingMove=null;saveProfile();moveLearn.hidden=true;battleMessage.textContent=`${MOVE_DATA[newMoveId].name}を おぼえた！`});moveLearn.append(button)});
+  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='今は覚えない';cancel.addEventListener('click',()=>{profile.pendingMove=null;saveProfile();moveLearn.hidden=true;battleMessage.textContent='技を覚えずに終えた'});moveLearn.append(cancel);
+}
+async function awardExperience(){
+  const gained=40;profile.xp+=gained;await battleText(`経験値を ${gained} かくとく！`);let learned=null,evolved=false;
+  while(profile.xp>=xpNeeded()){
+    profile.xp-=xpNeeded();profile.level+=1;await battleText(`イグニスは Lv.${profile.level}に あがった！`);
+    if(LEARN_LEVELS[profile.level])learned=LEARN_LEVELS[profile.level];
+    if(profile.level>=10&&profile.stage===1){profile.stage=2;evolved=true}
+  }
+  saveProfile();updateBattleHp();
+  if(evolved)await battleText('イグニスに 進化の力が めばえた！');
+  if(learned){if(profile.moves.length<4){profile.moves.push(learned);saveProfile();await battleText(`${MOVE_DATA[learned].name}を おぼえた！`)}else showMoveReplacement(learned)}
+}
 
 async function useMove(name){
   if(battleState.busy||battleState.over)return;battleState.busy=true;battleMoves.hidden=true;
-  const moves={ember:['ひのこ',4,6],tackle:['たいあたり',3,5],tail:['しっぽアタック',4,5]};
-  if(name==='guard'){
+  const move=MOVE_DATA[name];
+  if(!move){battleState.busy=false;return}
+  if(move.guard){
     battleState.guard=true;battleAttack(playerBattler);await battleText('イグニスは ほのおのまもりを まとった！');
   }else{
-    const move=moves[name];battleAttack(playerBattler);await battleText(`イグニスの ${move[0]}！`,480);
-    battleHit(enemyBattler);battleState.enemy-=damage(move[1],move[2]);updateBattleHp();await battleText('アクアロに ダメージ！');
+    const multiplier=typeMultiplier(move.type,'water');battleAttack(playerBattler);await battleText(`イグニスの ${move.name}！`,480);
+    battleHit(enemyBattler);battleState.enemy-=Math.max(1,Math.round((damage(...move.power)+Math.floor((profile.level-5)/2))*multiplier));updateBattleHp();
+    await battleText(multiplier>1?'効果は ばつぐんだ！':multiplier<1?'効果は いまひとつ…':'アクアロに ダメージ！');
   }
-  if(battleState.enemy<=0){battleState.over=true;await battleText('アクアロは たおれた！');battleMessage.textContent='イグニスの かち！　画面をタップして再戦';battle.classList.add('battle-won');battleState.busy=false;return}
-  const enemyMove=Math.random()<.68?['みずでっぽう',5,7]:['たいあたり',3,5];battleAttack(enemyBattler);await battleText(`アクアロの ${enemyMove[0]}！`,480);
-  battleHit(playerBattler);let hit=damage(enemyMove[1],enemyMove[2]);if(battleState.guard){hit=Math.max(1,Math.floor(hit/2));battleState.guard=false}
-  battleState.player-=hit;updateBattleHp();await battleText('イグニスに ダメージ！');
+  if(battleState.enemy<=0){battleState.over=true;await battleText('アクアロは たおれた！');battle.classList.add('battle-won');await awardExperience();if(!profile.pendingMove)battleMessage.textContent='イグニスの かち！　画面をタップして再戦';battleState.busy=false;return}
+  const enemyMove=Math.random()<.68?{name:'みずでっぽう',type:'water',power:[4,6]}:{name:'たいあたり',type:'normal',power:[3,5]};
+  battleAttack(enemyBattler);await battleText(`アクアロの ${enemyMove.name}！`,480);
+  const multiplier=typeMultiplier(enemyMove.type,'fire');battleHit(playerBattler);let hit=Math.max(1,Math.round(damage(...enemyMove.power)*multiplier));if(battleState.guard){hit=Math.max(1,Math.floor(hit/2));battleState.guard=false}
+  battleState.player-=hit;updateBattleHp();await battleText(multiplier>1?'効果は ばつぐんだ！':multiplier<1?'効果は いまひとつ…':'イグニスに ダメージ！');
   if(battleState.player<=0){battleState.over=true;await battleText('イグニスは たおれた！');battleMessage.textContent='アクアロの かち！　画面をタップして再戦';battle.classList.add('battle-lost')}
   else{battleMessage.textContent='イグニスは どうする？';showCommands()}
   battleState.busy=false;
 }
 function startBattle(){
-  auto=false;manual=null;target={x,y};battleState={player:24,enemy:24,busy:false,guard:false,over:false};
+  auto=false;manual=null;target={x,y};const maxHp=24+(profile.level-5)*4;battleState={player:maxHp,playerMax:maxHp,enemy:24,busy:false,guard:false,over:false};
   battle.classList.remove('battle-won','battle-lost');battle.hidden=false;updateBattleHp();showCommands();
   battleMessage.textContent='アクアロが あらわれた！';
   drawBattleSprite(playerBattler,monsters.fire.thumb,1);drawBattleSprite(enemyBattler,monsters.water.thumb,0);
@@ -131,13 +178,13 @@ function startBattle(){
 function closeBattle(){battle.hidden=true}
 document.querySelector('#battle-close').addEventListener('click',closeBattle);
 document.querySelector('#move-back').addEventListener('click',()=>{battleMessage.textContent='イグニスは どうする？';showCommands()});
-document.querySelectorAll('[data-move]').forEach(button=>button.addEventListener('click',()=>useMove(button.dataset.move)));
 document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{
   if(button.dataset.command==='fight'){showMoves();return}
   if(button.dataset.command==='run'){closeBattle();return}
   battleMessage.textContent=button.dataset.command==='party'?'交代できる仲間は まだいない！':'どうぐは まだ持っていない！';
 }));
-battleMessage.addEventListener('click',()=>{if(battleState.over)startBattle()});
+battleMessage.addEventListener('click',()=>{if(battleState.over&&!profile.pendingMove)startBattle()});
+[playerBattler,enemyBattler].forEach(target=>target.addEventListener('animationend',()=>target.classList.remove('hit','attack')));
 const requestedMonster=new URLSearchParams(location.search).get('monster');
 setMonster(monsters[requestedMonster]?requestedMonster:(localStorage.getItem('walkLabMonster')||'fire'));
 chooseTarget(.25,.7);requestAnimationFrame(tick);
