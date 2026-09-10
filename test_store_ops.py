@@ -54,6 +54,16 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.delete_order_request(item["id"])
         self.assertEqual(self.manager.order_requests(), [])
 
+    def test_order_request_can_be_edited_without_losing_its_state(self):
+        item = self.manager.add_order_request("ビール 500ケース")
+        created_at = item["created_at"]
+        updated = self.manager.update_order_request(item["id"], "ビール 5ケース")
+        self.assertEqual(updated["message"], "ビール 5ケース")
+        self.assertEqual(updated["category"], "ドリンク")
+        self.assertEqual(updated["created_at"], created_at)
+        self.assertFalse(updated["completed"])
+        self.assertIn("updated_at", updated)
+
     def test_order_requests_are_automatically_classified(self):
         vegetable = self.manager.add_order_request("玉ねぎを2ケースお願いします")
         drink = self.manager.add_order_request("ビールとレモンサワーを発注")

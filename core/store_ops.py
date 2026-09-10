@@ -625,6 +625,20 @@ class StoreOperationsManager:
                 return
         raise ValueError("発注依頼が見つかりません。")
 
+    def update_order_request(self, request_id, message, category=None):
+        """依頼の入力ミスを、履歴や対応状態を失わずに修正する。"""
+        message = str(message or "").strip()
+        if not message:
+            raise ValueError("発注してほしいものを入力してください。")
+        for item in self._data_manager.data.setdefault("store_order_requests", []):
+            if isinstance(item, dict) and item.get("id") == request_id:
+                item["message"] = message[:200]
+                item["category"] = self.order_request_category(message, category)
+                item["updated_at"] = datetime.now().isoformat(timespec="minutes")
+                self._data_manager.save()
+                return dict(item)
+        raise ValueError("発注依頼が見つかりません。")
+
     def delete_order_request(self, request_id):
         values = self._data_manager.data.setdefault("store_order_requests", [])
         before = len(values)

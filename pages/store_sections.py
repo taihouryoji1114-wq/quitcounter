@@ -69,6 +69,38 @@ def order_requests_page():
     can_manage = has_permission("store_manage")
     content = section_shell("発注依頼", "気づいたその場で、発注してほしい物を共有")
     with content:
+        edit_target = {"id": None}
+        with ui.dialog() as edit_dialog, ui.card().classes("w-full max-w-md q-pa-lg"):
+            ui.label("発注依頼を修正").classes("text-lg font-black")
+            edit_message = ui.textarea("品名・個数").props("outlined autogrow").classes("w-full")
+            edit_category = ui.select(
+                ["自動判定", *store_ops.ORDER_REQUEST_CATEGORIES], value="自動判定",
+                label="分類",
+            ).props("outlined dense options-dense").classes("w-full")
+
+            def save_edit():
+                try:
+                    store_ops.update_order_request(
+                        edit_target["id"], edit_message.value,
+                        None if edit_category.value == "自動判定" else edit_category.value,
+                    )
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                edit_dialog.close()
+                ui.navigate.to("/store-ops/order-requests")
+
+            with ui.row().classes("w-full gap-2"):
+                ui.button("キャンセル", on_click=edit_dialog.close).props("flat no-caps").classes("grow")
+                ui.button("修正を保存", icon="save", on_click=save_edit).props(
+                    "unelevated no-caps color=primary").classes("grow")
+
+        def open_edit(item):
+            edit_target["id"] = item["id"]
+            edit_message.value = item.get("message", "")
+            edit_category.value = item.get("category") or "自動判定"
+            edit_dialog.open()
+
         message = ui.textarea("発注してほしい物").props(
             "outlined autogrow placeholder='例：玉ねぎ 2ケース（1行に1つ）'").classes("w-full")
         ui.label("複数ある場合は1行に1つ入力すると、自動で分割・分類します").classes(
@@ -104,6 +136,8 @@ def order_requests_page():
                             ui.label(request["message"]).classes("text-sm font-black")
                             ui.label(str(request.get("created_at", ""))[:16].replace("T", " ")).classes(
                                 "text-[9px] text-grey-6 q-mt-xs")
+                        ui.button(icon="edit", on_click=lambda _, item=request: open_edit(item)).props(
+                            "flat round dense color=primary aria-label='発注依頼を修正'")
                         if can_manage:
                             ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
                                 store_ops.set_order_request_completed(item_id, True),
@@ -117,6 +151,8 @@ def order_requests_page():
                 for request in completed_requests:
                     with ui.row().classes("w-full items-center no-wrap q-py-sm"):
                         ui.label(request["message"]).classes("text-xs text-grey-7 grow")
+                        ui.button(icon="edit", on_click=lambda _, item=request: open_edit(item)).props(
+                            "flat round dense color=primary aria-label='発注依頼を修正'")
                         if can_manage:
                             ui.button("戻す", icon="undo", on_click=lambda _, item_id=request["id"]: (
                                 store_ops.set_order_request_completed(item_id, False),

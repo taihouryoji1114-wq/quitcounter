@@ -1,7 +1,9 @@
 {
   "name": "LABO",
   "short_name": "LABO",
-  "start_url": "/static/monster-walk-lab/index.html?v=13",
+  "id": "/static/monster-walk-lab/",
+  "start_url": "/static/monster-walk-lab/index.html",
+  "scope": "/static/monster-walk-lab/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#102c38",
