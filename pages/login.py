@@ -70,18 +70,6 @@ def schedule_login():
     login_screen("schedule", "My Schedule", "/schedule", "自分だけの予定を開く")
 
 
-@ui.page("/gunryakugoma/login")
-def gunryakugoma_login():
-    login_screen("gunryakugoma", "軍略駒", "/gunryakugoma",
-                 "一手で戦局を動かす", app_name="gunryakugoma")
-
-
-@ui.page("/chankocchi/login")
-def chankocchi_login():
-    login_screen("chankocchi", "ちゃんこっち", "/chankocchi",
-                 "今日も一緒に暮らそう", app_name="chankocchi")
-
-
 @ui.page("/chess-coach/login")
 def chess_coach_login():
     login_screen("chess_coach", "CHESS MENTOR", "/chess-coach",

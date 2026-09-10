@@ -1,4 +1,4 @@
-from nicegui import app, ui
+from nicegui import ui
 
 from core.auth import current_role, log_out
 from pages.announcement_controls import announcement_player
@@ -7,9 +7,6 @@ from pages.announcement_controls import announcement_player
 def store_header_actions():
     announcement_player()
     with ui.row().classes("gap-0"):
-        if current_role() == "owner" and app.storage.user.get("return_to_chankocchi"):
-            ui.button(icon="pets", on_click=lambda: ui.navigate.to("/chankocchi")).props(
-                "flat round aria-label='ちゃんこっちへ戻る'").classes("text-amber-8")
         ui.button(icon="logout", on_click=lambda: log_out("/store-ops/login")).props(
             "flat round aria-label='ログアウト'").classes("text-grey-8")
 

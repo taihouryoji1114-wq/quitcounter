@@ -47,8 +47,6 @@ import pages.attendance
 import pages.smoking
 import pages.settings
 import pages.workout
-import pages.gunryakugoma
-import pages.chankocchi
 import pages.chess_coach
 import pages.system_status
 

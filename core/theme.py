@@ -20,14 +20,6 @@ class Theme:
             manifest = "/static/schedule-manifest.json"
             icon = "/static/schedule_icon.svg"
             theme_color = "#172F4B"
-        elif app_name == "gunryakugoma":
-            manifest = "/static/gunryakugoma-manifest.json"
-            icon = "/static/gunryakugoma_icon.png"
-            theme_color = "#17120D"
-        elif app_name == "chankocchi":
-            manifest = "/static/chankocchi-manifest.json"
-            icon = "/static/chankocchi_stage1.png"
-            theme_color = "#8A5C3C"
         elif app_name == "chess_coach":
             manifest = "/static/chess-coach-manifest.json"
             icon = "/static/chess_coach_icon.svg"

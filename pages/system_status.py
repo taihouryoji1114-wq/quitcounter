@@ -55,37 +55,10 @@ def system_status_page():
         with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
             ui.label("アプリ別データ概算").classes("text-xl font-bold")
             ui.label("サーバーに保存されているデータを分類").classes("text-grey-7 text-sm q-mb-md")
-            for name in ("未来決算", "店舗管理", "Habitory", "スケジュール",
-                         "ちゃんこっち", "その他"):
+            for name in ("未来決算", "店舗管理", "Habitory", "スケジュール", "その他"):
                 with ui.row().classes("w-full justify-between q-py-sm border-t border-grey-3"):
                     ui.label(name)
                     ui.label(_size(status["groups"][name])).classes("font-bold")
-
-        with ui.card().classes("surface-card w-full q-pa-lg q-mb-md"):
-            with ui.row().classes("w-full items-center justify-between no-wrap"):
-                with ui.column().classes("gap-0"):
-                    ui.label("軍略駒").classes("text-xl font-bold")
-                    ui.label("戦績・武将育成・途中の戦場").classes("text-grey-7 text-sm")
-                ui.badge("端末内に自動保存", color="blue-grey-8")
-            with ui.row().classes("w-full justify-between q-mt-md q-pt-md border-t border-grey-3"):
-                ui.label("この端末の保存量").classes("text-grey-7")
-                local_size = ui.label("確認中…").classes("font-bold")
-
-            async def update_local_size():
-                try:
-                    value = await ui.run_javascript(
-                        """(() => {
-                            const keys = ['gunryaku_empire', 'gunryaku_battle_v1'];
-                            return keys.reduce((sum, key) => sum + new Blob([localStorage.getItem(key) || '']).size, 0);
-                        })()""",
-                        timeout=2.0,
-                    )
-                    local_size.set_text(_size(int(value or 0)))
-                except Exception:
-                    local_size.set_text("確認できません")
-
-            ui.timer(0.2, update_local_size, once=True)
-            ui.label("軍略駒は現在、この端末のブラウザに保存されるため、上の1GB使用量には含まれません").classes("text-grey-6 text-xs q-mt-sm")
 
         if status["percent"] < 70 and status["writable"]:
             ui.label("主要アプリの保存容量には十分な余裕があります").classes("w-full text-center text-positive font-bold q-mt-sm")
