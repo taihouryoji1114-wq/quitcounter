@@ -694,14 +694,29 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.manager.mark_ordered(item["id"])
         self.manager.save_purchase_quantities({item["id"]: 4}, "2026-08-23")
 
-        reset_at = self.manager.reset_inventory_check()
+        reset_at = self.manager.reset_inventory_check("備品")
 
         saved = self.manager.items()[0]
         self.assertEqual(saved["current_stock"], 2)
         self.assertEqual(saved["status"], "low")
         self.assertEqual(self.manager.order_list()[0]["order_state"], "ordered")
         self.assertEqual(self.manager.purchase_quantities("2026-08-23")[item["id"]], 4)
-        self.assertEqual(self.manager.inventory_check_reset_at(), reset_at)
+        self.assertEqual(self.manager.inventory_check_reset_at("備品"), reset_at)
+
+    def test_inventory_check_clear_is_scoped_to_one_category(self):
+        vegetable = self.manager.add_item("白菜", "野菜仕入れ")
+        supply = self.manager.add_item("ラップ", "備品")
+        self.manager.save_inventory_check([
+            {"item_id": vegetable["id"], "status": "low"},
+            {"item_id": supply["id"], "status": "out"},
+        ])
+        self.manager.reset_inventory_check("野菜仕入れ")
+        self.assertTrue(self.manager.inventory_check_reset_at("野菜仕入れ"))
+        self.assertEqual(self.manager.inventory_check_reset_at("備品"), "")
+
+    def test_inventory_check_clear_requires_category(self):
+        with self.assertRaises(ValueError):
+            self.manager.reset_inventory_check()
 
     def test_handover_uses_only_area_without_subcategory(self):
         item = self.manager.add_handover_template("出汁を確認", "厨房", "ちゃんこ")

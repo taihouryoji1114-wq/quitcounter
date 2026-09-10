@@ -287,14 +287,24 @@ class StoreOperationsManager:
             self._data_manager.save()
         return len(prepared)
 
-    def inventory_check_reset_at(self):
-        """在庫確認フォームを最後に手動リセットした時刻を返す。"""
+    def inventory_check_reset_at(self, category=None):
+        """Return the time when one inventory category was last cleared."""
+        if category:
+            value = self._data_manager.data.get("store_inventory_check_reset_by_category", {})
+            if isinstance(value, dict) and value.get(category):
+                return str(value[category])
+        # Keep compatibility with the former all-category clear operation.
         return str(self._data_manager.data.get("store_inventory_check_reset_at", ""))
 
-    def reset_inventory_check(self):
-        """在庫の実績や発注情報を残したまま、確認フォームだけを未入力に戻す。"""
+    def reset_inventory_check(self, category=None):
+        """Clear only one category's form fields while preserving stock records."""
+        if not category:
+            raise ValueError("入力欄を空にする分類を選んでください。")
+        if category not in {value["name"] for value in self.inventory_categories()}:
+            raise ValueError("在庫の分類が正しくありません。")
         reset_at = datetime.now().isoformat(timespec="microseconds")
-        self._data_manager.data["store_inventory_check_reset_at"] = reset_at
+        self._data_manager.data.setdefault(
+            "store_inventory_check_reset_by_category", {})[category] = reset_at
         self._data_manager.save()
         return reset_at
 
@@ -1248,6 +1258,14 @@ class StoreOperationsManager:
         for item in self.prep_templates():
             if item["id"] not in selected:
                 continue
+            # Clear every representation first. Older versions could leave a
+            # legacy あり・なし record behind after an item's type was edited.
+            for key in (
+                    "store_service_prep_records", "store_service_prep_quantities",
+                    "store_service_prep_choices", "store_service_prep_subchecks",
+                    "store_service_prep_notes"):
+                self._data_manager.data.setdefault(key, {}).setdefault(
+                    record_date, {}).setdefault(period, {}).pop(item["id"], None)
             item_type = self._live_board_type(item.get("item_type") or
                                               ("quantity" if self._is_quantity_prep(item) else
                                                "completion"))
@@ -1256,20 +1274,10 @@ class StoreOperationsManager:
                     "store_service_prep_quantities", {}).setdefault(
                         record_date, {}).setdefault(period, {})[item["id"]] = item.get(
                             "initial_value", 0)
-            elif self._is_leftover_rice(item):
-                self._data_manager.data.setdefault(
-                    "store_service_prep_choices", {}).setdefault(
-                        record_date, {}).setdefault(period, {}).pop(item["id"], None)
-            else:
+            elif not self._is_leftover_rice(item):
                 self._data_manager.data.setdefault(
                     "store_service_prep_records", {}).setdefault(
                         record_date, {}).setdefault(period, {})[item["id"]] = "incomplete"
-            self._data_manager.data.setdefault(
-                "store_service_prep_subchecks", {}).setdefault(
-                    record_date, {}).setdefault(period, {}).pop(item["id"], None)
-            self._data_manager.data.setdefault(
-                "store_service_prep_notes", {}).setdefault(
-                    record_date, {}).setdefault(period, {}).pop(item["id"], None)
             self._record_live_board_update(record_date, period, item["id"], "reset")
             changed += 1
         if changed:

@@ -101,14 +101,14 @@ def render_live_board(business_date, period, period_label):
                             for destination in store_ops.DAILY_ORDER_DESTINATIONS:
                                 store_ops.set_daily_order_check(
                                     business_date, destination, False)
-                            ui.notify("LIVE BOARDをリセットしました", type="positive")
+                            ui.notify("この営業の入力内容を消しました", type="positive")
                             ui.navigate.to("/store-ops")
 
                         def advance():
                             store_ops.advance_service_context()
                             ui.navigate.to("/store-ops")
 
-                        ui.menu_item("すべて初期状態へ戻す", on_click=reset_all)
+                        ui.menu_item("この営業の入力内容を消す", on_click=reset_all)
                         ui.menu_item("次の営業へ切り替える", on_click=advance)
 
         def refresh_progress():

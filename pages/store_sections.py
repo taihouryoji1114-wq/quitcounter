@@ -181,7 +181,6 @@ def inventory_page():
     is_owner = current_role() == "owner"
     categories = store_ops.inventory_categories()
     subcategories = store_ops.inventory_subcategories()
-    reset_at = store_ops.inventory_check_reset_at()
     content = section_shell("在庫確認", "現在の在庫をまとめて入力")
     with content:
         if is_owner:
@@ -268,6 +267,7 @@ def inventory_page():
         for category in sorted(grouped, key=lambda value: (
                 ordered_names.index(value) if value in ordered_names else 999, value)):
             category_items = grouped[category]
+            reset_at = store_ops.inventory_check_reset_at(category)
             expansion = ui.expansion(f"{category}　{len(category_items)}品", icon="folder",
                                      value=False).classes("surface-card inventory-main-category w-full q-mb-sm")
             with expansion:
@@ -333,21 +333,28 @@ def inventory_page():
 
         ui.button("まとめて保存", icon="save", on_click=save_all).classes("w-full q-mt-md")
         with ui.dialog() as reset_dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
-            ui.label("在庫確認をリセットしますか？").classes("text-lg font-black")
-            ui.label("現在の入力欄だけを未入力に戻します。商品・確認履歴・管理者の仕入れ予定は消えません。").classes(
+            ui.label("どの分類の入力欄を空にしますか？").classes("text-lg font-black")
+            ui.label("選んだ分類の入力欄だけを空にします。在庫数・確認履歴・仕入れ予定は消えません。").classes(
                 "text-xs text-grey-7 q-mt-sm")
+            reset_category = ui.select(
+                [value["name"] for value in categories], label="分類",
+            ).props("outlined dense options-dense").classes("w-full q-mt-md")
 
             def reset_check():
-                store_ops.reset_inventory_check()
+                try:
+                    store_ops.reset_inventory_check(reset_category.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="warning")
+                    return
                 reset_dialog.close()
                 ui.navigate.to("/store-ops/inventory")
 
             with ui.row().classes("w-full gap-2 q-mt-md"):
                 ui.button("戻る", on_click=reset_dialog.close).props("flat").classes("grow")
-                ui.button("リセット", icon="restart_alt", on_click=reset_check).props(
+                ui.button("入力欄を空にする", icon="backspace", on_click=reset_check).props(
                     "unelevated color=negative").classes("grow")
 
-        ui.button("在庫確認をリセット", icon="restart_alt", on_click=reset_dialog.open).props(
+        ui.button("分類ごとに入力欄を空にする", icon="backspace", on_click=reset_dialog.open).props(
             "outline color=negative no-caps").classes("w-full q-mt-sm")
         if is_owner:
             ui.button("仕入れリストを開く", icon="shopping_basket", on_click=lambda: ui.navigate.to(
