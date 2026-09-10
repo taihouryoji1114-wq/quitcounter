@@ -30,6 +30,22 @@ def portal():
     with content:
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
+        ).on("click", lambda _: ui.navigate.to("/static/miniature-war/index.html?v=1")):
+            with ui.row().classes("w-full items-center no-wrap"):
+                with ui.element("div").classes(
+                    "w-14 h-14 rounded-xl q-mr-md bg-red-10 text-white flex items-center justify-center"
+                ):
+                    ui.label("戦").classes("text-3xl font-bold")
+                with ui.column().classes("gap-0"):
+                    ui.label("百兵戦図").classes("text-xl font-bold")
+                    ui.label("50対50のミニチュア戦争実験").classes(
+                        "text-grey-7 q-mt-xs"
+                    )
+                ui.space()
+                ui.icon("shield").classes("text-2xl text-red-8")
+
+        with ui.card().classes(
+            "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/static/dadada-millionaire/index.html?v=6")):
             with ui.row().classes("w-full items-center no-wrap"):
                 ui.image("/static/dadada-millionaire/assets/icon.svg").classes(
