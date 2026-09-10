@@ -68,6 +68,7 @@ autoButton.addEventListener('click',()=>{auto=!auto;manual=null;autoButton.class
 document.querySelectorAll('.monster').forEach(b=>{const url=`url('${ASSET}${monsters[b.dataset.monster].thumb}')`;b.style.setProperty('--thumb',url);b.addEventListener('click',()=>setMonster(b.dataset.monster))});
 document.querySelectorAll('[data-lab]').forEach(button=>button.addEventListener('click',()=>{
   if(button.dataset.lab==='バトル'){startBattle();return}
+  if(button.dataset.lab==='街'){openTown();return}
   state.textContent=`${button.dataset.lab}研究を準備中`;
   thought.textContent={生成:'✦',お世話:'♡',部屋:'⌂',バトル:'⚔'}[button.dataset.lab];
   thought.style.left=`calc(${x*100}% + 28px)`;thought.style.top=`calc(${y*100}% - 74px)`;
@@ -125,7 +126,8 @@ function renderMoves(){
 function showCommands(){battleCommand.hidden=false;battleMoves.hidden=true;moveLearn.hidden=true}
 function showMoves(){if(battleState.busy||battleState.over)return;renderMoves();battleCommand.hidden=true;battleMoves.hidden=false;moveLearn.hidden=true;battleMessage.textContent='どの技を つかう？'}
 function battleText(text,delay=720){battleMessage.textContent=text;return new Promise(resolve=>setTimeout(resolve,delay))}
-function animateOnce(target,name){target.classList.remove(name);void target.offsetWidth;target.classList.add(name);setTimeout(()=>target.classList.remove(name),460)}
+function clearBattleEffect(target){target.classList.remove('hit','attack');target.style.removeProperty('filter');target.style.removeProperty('animation')}
+function animateOnce(target,name){clearBattleEffect(target);void target.offsetWidth;target.classList.add(name);setTimeout(()=>clearBattleEffect(target),460)}
 function battleHit(target){animateOnce(target,'hit')}
 function battleAttack(target){animateOnce(target,'attack')}
 function damage(min,max){return min+Math.floor(Math.random()*(max-min+1))}
@@ -170,7 +172,7 @@ async function useMove(name){
 }
 function startBattle(){
   auto=false;manual=null;target={x,y};const maxHp=24+(profile.level-5)*4;battleState={player:maxHp,playerMax:maxHp,enemy:24,busy:false,guard:false,over:false};
-  battle.classList.remove('battle-won','battle-lost');battle.hidden=false;updateBattleHp();showCommands();
+  battle.classList.remove('battle-won','battle-lost');clearBattleEffect(playerBattler);clearBattleEffect(enemyBattler);battle.hidden=false;updateBattleHp();showCommands();
   battleMessage.textContent='アクアロが あらわれた！';
   drawBattleSprite(playerBattler,monsters.fire.thumb,1);drawBattleSprite(enemyBattler,monsters.water.thumb,0);
   setTimeout(()=>{if(!battleState.busy&&!battleState.over)battleMessage.textContent='イグニスは どうする？'},800);
@@ -184,7 +186,24 @@ document.querySelectorAll('[data-command]').forEach(button=>button.addEventListe
   battleMessage.textContent=button.dataset.command==='party'?'交代できる仲間は まだいない！':'どうぐは まだ持っていない！';
 }));
 battleMessage.addEventListener('click',()=>{if(battleState.over&&!profile.pendingMove)startBattle()});
-[playerBattler,enemyBattler].forEach(target=>target.addEventListener('animationend',()=>target.classList.remove('hit','attack')));
+[playerBattler,enemyBattler].forEach(target=>target.addEventListener('animationend',()=>clearBattleEffect(target)));
+
+const town=document.querySelector('#town'),townMap=document.querySelector('#town-map'),townHero=document.querySelector('#town-hero');
+let townPosition={x:.50,y:.79},townDirection=null,townLast=performance.now();
+const townObstacles=[
+  [.06,.08,.35,.39],[.66,.07,.96,.38],[.68,.69,.96,.97],
+  [.03,.70,.34,.98],[0,0,.14,.48],[.92,.36,1,.78],[.16,.43,.34,.59]
+];
+function townBlocked(x,y){const padX=.022,padY=.035;return x<.035||x>.965||y<.045||y>.965||townObstacles.some(([l,t,r,b])=>x+padX>l&&x-padX<r&&y+padY>t&&y-padY<b)}
+function paintTownHero(){townHero.style.left=`${townPosition.x*100}%`;townHero.style.top=`${townPosition.y*100}%`;townHero.classList.toggle('walking',!!townDirection);townHero.classList.remove('face-up','face-down','face-left','face-right');townHero.classList.add(`face-${townDirection||'down'}`)}
+function openTown(){auto=false;manual=null;target={x,y};town.hidden=false;paintTownHero()}
+function closeTown(){townDirection=null;town.hidden=true;paintTownHero()}
+function moveTown(now){const dt=Math.min(.04,(now-townLast)/1000);townLast=now;if(!town.hidden&&townDirection){const speed=.31*dt;let nx=townPosition.x+(townDirection==='left'?-speed:townDirection==='right'?speed:0),ny=townPosition.y+(townDirection==='up'?-speed:townDirection==='down'?speed:0);if(!townBlocked(nx,townPosition.y))townPosition.x=nx;if(!townBlocked(townPosition.x,ny))townPosition.y=ny;paintTownHero()}requestAnimationFrame(moveTown)}
+document.querySelector('#town-close').addEventListener('click',closeTown);
+document.querySelectorAll('[data-town-dir]').forEach(button=>{const begin=event=>{event.preventDefault();townDirection=button.dataset.townDir;paintTownHero()};const end=()=>{townDirection=null;paintTownHero()};button.addEventListener('pointerdown',begin);button.addEventListener('pointerup',end);button.addEventListener('pointercancel',end);button.addEventListener('pointerleave',end)});
+document.addEventListener('keydown',event=>{if(town.hidden)return;const key={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key];if(key){event.preventDefault();townDirection=key;paintTownHero()}});
+document.addEventListener('keyup',event=>{if(!town.hidden&&event.key.startsWith('Arrow')){townDirection=null;paintTownHero()}});
+requestAnimationFrame(moveTown);
 const requestedMonster=new URLSearchParams(location.search).get('monster');
 setMonster(monsters[requestedMonster]?requestedMonster:(localStorage.getItem('walkLabMonster')||'fire'));
 chooseTarget(.25,.7);requestAnimationFrame(tick);
