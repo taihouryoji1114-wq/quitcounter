@@ -40,6 +40,30 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertFalse(today["鶏肉"])
         self.assertFalse(tomorrow["豊洲"])
         self.assertEqual(set(today), {"鶏肉", "ミクリード", "豊洲", "酒屋"})
+        self.assertTrue(self.manager.live_board_last_updated_at("2026-08-20", "lunch"))
+
+    def test_live_board_last_update_tracks_prep_actions(self):
+        item = self.manager.add_prep_template("白菜", "厨房")
+        self.assertEqual(
+            self.manager.live_board_last_updated_at("2026-08-20", "dinner"), "")
+        self.manager.set_service_prep_status(
+            "2026-08-20", "dinner", item["id"], "done")
+        self.assertTrue(
+            self.manager.live_board_last_updated_at("2026-08-20", "dinner"))
+
+    def test_live_board_last_update_tracks_choice_and_subchecks(self):
+        rice = self.manager.add_prep_template("余り米", "厨房")
+        self.manager.set_service_prep_choice(
+            "2026-08-20", "dinner", rice["id"], "あり")
+        self.assertTrue(
+            self.manager.live_board_last_updated_at("2026-08-20", "dinner"))
+
+        checked = self.manager.add_prep_template(
+            "薬味", "厨房", check_items=["ねぎ", "しょうが"])
+        self.manager.set_service_prep_subchecks(
+            "2026-08-21", "lunch", checked["id"], ["ねぎ"])
+        self.assertTrue(
+            self.manager.live_board_last_updated_at("2026-08-21", "lunch"))
 
     def test_staff_can_add_and_complete_order_request(self):
         item = self.manager.add_order_request("ラップを発注お願いします")

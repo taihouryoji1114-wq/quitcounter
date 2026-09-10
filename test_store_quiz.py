@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from core.data import DataManager
-from core.store_quiz import StoreQuizManager
+from core.store_quiz import StoreQuizManager, TSUMIRE_KNOWLEDGE_PACK
 
 
 class StoreQuizManagerTest(unittest.TestCase):
@@ -34,6 +34,13 @@ class StoreQuizManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.seed_question_pack("basic", questions), 1)
         self.assertEqual(self.manager.seed_question_pack("basic", questions), 0)
         self.assertEqual(len(self.manager.questions()), 1)
+
+    def test_tsumire_question_pack_has_scientifically_accurate_answer(self):
+        question, answer, wrong = TSUMIRE_KNOWLEDGE_PACK[0]
+        self.assertIn("つみれ", question)
+        self.assertIn("空気や水蒸気", answer)
+        self.assertIn("魚のたんぱく質", answer)
+        self.assertEqual(len(wrong), 3)
 
     def test_notice_only_returns_active_items(self):
         item = self.manager.add_notice("本日の業務連絡", "予約があります")

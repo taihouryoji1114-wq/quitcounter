@@ -190,6 +190,13 @@ SERVICE_AND_TABLE_PACK = (
     ("『ザク1人前』の正しい意味は？", "1人前のすり鉢に入った具材（野菜）", ["刻んだ野菜1種類", "1人前の肉だけ", "小鍋に入った完成品"]),
 )
 
+TSUMIRE_KNOWLEDGE_PACK = (
+    ("つみれが加熱すると膨らむ主な理由は何ですか？",
+     "中の空気や水蒸気が熱で膨張し、加熱で固まった魚のたんぱく質が閉じ込めるため",
+     ["魚の脂が溶けて体積が増えるため", "塩が加熱によって膨張するため", "表面だけが水を吸い続けるため"]),
+)
+
 store_quiz.seed_question_pack("chanko_dojo_basic_20260826", CHANKO_DOJO_BASIC_PACK)
 store_quiz.seed_question_pack("chanko_tsukune_20260830", TSUKUNE_PREP_PACK)
 store_quiz.seed_question_pack("chanko_service_tables_20260906", SERVICE_AND_TABLE_PACK)
+store_quiz.seed_question_pack("chanko_tsumire_knowledge_20260910", TSUMIRE_KNOWLEDGE_PACK)

@@ -568,7 +568,27 @@ class StoreOperationsManager:
             raise ValueError("発注先が正しくありません。")
         self._data_manager.data.setdefault("store_daily_order_checks", {}).setdefault(
             record_date, {})[destination] = bool(checked)
+        self._data_manager.data.setdefault("store_daily_order_updates", {}).setdefault(
+            record_date, {})[destination] = datetime.now().isoformat(timespec="seconds")
         self._data_manager.save()
+
+    def live_board_last_updated_at(self, record_date, period):
+        """Return the newest staff operation timestamp for one LIVE BOARD lane."""
+        self._date(record_date)
+        period = self._service_period(period)
+        timestamps = []
+        prep_updates = self._data_manager.data.get(
+            "store_service_prep_updates", {}).get(record_date, {}).get(period, {})
+        if isinstance(prep_updates, dict):
+            timestamps.extend(
+                value.get("updated_at", "") for value in prep_updates.values()
+                if isinstance(value, dict) and value.get("updated_at")
+            )
+        order_updates = self._data_manager.data.get(
+            "store_daily_order_updates", {}).get(record_date, {})
+        if isinstance(order_updates, dict):
+            timestamps.extend(value for value in order_updates.values() if isinstance(value, str))
+        return max(timestamps, default="")
 
     def order_requests(self, open_only=False):
         values = self._data_manager.data.get("store_order_requests", [])
@@ -1130,6 +1150,7 @@ class StoreOperationsManager:
         values = self._data_manager.data.setdefault(
             "store_service_prep_subchecks", {}).setdefault(record_date, {}).setdefault(period, {})
         values[item_id] = checked
+        self._record_live_board_update(record_date, period, item_id, "subchecks")
         self._data_manager.save()
         return checked
 
@@ -1214,6 +1235,7 @@ class StoreOperationsManager:
             values[item_id] = choice
         else:
             values.pop(item_id, None)
+        self._record_live_board_update(record_date, period, item_id, "choice")
         self._data_manager.save()
 
     def reset_service_prep_items(self, record_date, period, item_ids):
@@ -1247,6 +1269,7 @@ class StoreOperationsManager:
             self._data_manager.data.setdefault(
                 "store_service_prep_notes", {}).setdefault(
                     record_date, {}).setdefault(period, {}).pop(item["id"], None)
+            self._record_live_board_update(record_date, period, item["id"], "reset")
             changed += 1
         if changed:
             self._data_manager.save()

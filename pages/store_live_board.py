@@ -55,6 +55,16 @@ def render_live_board(business_date, period, period_label):
         return completed, len(eligible)
 
     complete, total = counts()
+
+    def update_time_text():
+        value = store_ops.live_board_last_updated_at(business_date, period)
+        if not value:
+            return "最終更新 まだありません"
+        try:
+            return f"最終更新 {value[11:16]}"
+        except (IndexError, TypeError):
+            return "最終更新時刻を確認できません"
+
     board_expansion = ui.expansion(
         f"LIVE BOARD　　{complete} / {total}", icon="dashboard", value=False,
     ).props("duration=160").classes("live-board-collapsed w-full")
@@ -66,7 +76,9 @@ def render_live_board(business_date, period, period_label):
                 ui.label(f"{business_date.replace('-', '/')}　{period_label}").classes(
                     "live-board-date")
             with ui.row().classes("items-center no-wrap gap-1"):
-                progress_label = ui.label(f"{complete} / {total}").classes("live-board-progress")
+                with ui.column().classes("live-board-summary gap-0 items-end"):
+                    progress_label = ui.label(f"{complete} / {total}").classes("live-board-progress")
+                    updated_label = ui.label(update_time_text()).classes("live-board-updated")
                 with ui.button(icon="more_vert").props(
                         "flat round dense aria-label='LIVE BOARDメニュー'").classes("live-board-more"):
                     with ui.menu():
@@ -90,6 +102,7 @@ def render_live_board(business_date, period, period_label):
             done, all_items = counts()
             progress_label.set_text(f"{done} / {all_items}")
             board_expansion.set_text(f"LIVE BOARD　　{done} / {all_items}")
+            updated_label.set_text(update_time_text())
 
         for category in category_names:
             grouped = [item for item in items if item.get("area", "厨房") == category]
@@ -222,7 +235,7 @@ def render_live_board(business_date, period, period_label):
 
     ui.add_css("""
     .live-board-collapsed{overflow:hidden;border:1px solid rgba(255,255,255,.95)!important;border-radius:22px!important;background:linear-gradient(145deg,#fff,#eef4f0)!important;box-shadow:0 11px 0 #cad6cf,0 18px 28px rgba(35,58,47,.18)!important}.live-board-collapsed>.q-expansion-item__container>.q-item{min-height:76px!important;padding:0 20px!important;color:#173c30;font-size:15px;font-weight:950;letter-spacing:.04em}.live-board-collapsed .q-expansion-item__content{padding:0 8px 14px}.live-board-v2{padding:16px 14px 10px!important;border:1px solid #dfe8e2!important;border-radius:18px!important;background:rgba(255,255,255,.98)!important;color:#17352b!important;box-shadow:none!important}
-    .live-board-head{padding:1px 3px 12px;border-bottom:1px solid #e5ece8}.live-board-title{font-size:22px;font-weight:950;letter-spacing:.06em}.live-board-date{font-size:10px;color:#718078;font-weight:750}.live-board-progress{padding:7px 12px;border-radius:999px;background:#173e31;color:white;font-size:13px;font-weight:950;letter-spacing:.05em}.live-board-more{color:#60756b!important}
+    .live-board-head{padding:1px 3px 12px;border-bottom:1px solid #e5ece8}.live-board-title{font-size:22px;font-weight:950;letter-spacing:.06em}.live-board-date{font-size:10px;color:#718078;font-weight:750}.live-board-summary{margin-right:2px}.live-board-progress{padding:7px 12px;border-radius:999px;background:#173e31;color:white;font-size:13px;font-weight:950;letter-spacing:.05em}.live-board-updated{margin-top:3px;padding-right:2px;color:#718078;font-size:8px;font-weight:850;white-space:nowrap}.live-board-more{color:#60756b!important}
     .live-board-section{padding-top:15px}.live-board-category{width:100%;padding:7px 10px;color:#fff;font-size:11px;font-weight:950;letter-spacing:.08em;background:var(--category-color);border-radius:8px}.live-board-item{height:96px!important;min-height:96px!important;max-height:96px!important;padding:8px 2px;border-bottom:1px solid #edf1ef;overflow:hidden}.live-board-item>.q-row{height:79px!important;min-height:79px!important;max-height:79px!important}.live-board-copy{display:flex!important;flex:1;flex-direction:column;justify-content:center;min-width:0;max-height:76px;overflow:hidden}.live-board-name{display:-webkit-box;max-width:100%;max-height:36px;overflow:hidden;font-size:14px;font-weight:900;line-height:1.3;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}.live-board-note{display:-webkit-box;margin-top:3px;max-width:100%;max-height:30px;overflow:hidden;color:#a06b18;font-size:10px;font-weight:800;line-height:1.4;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}.live-board-controls{gap:5px!important;flex:0 0 auto;margin-left:8px}
     .live-completion-button{min-width:72px!important;min-height:42px!important;border-radius:12px!important;font-size:11px!important;font-weight:950!important}.live-completion-button.is-pending{color:#b92f36!important;background:#fde6e7!important;border:1px solid #f4b9bd!important}.live-completion-button.is-done{color:#17623e!important;background:#e2f3e9!important}
     .live-status-button{width:42px!important;height:42px!important;font-size:18px!important;font-weight:950!important;border:1px solid #dfe5e2!important;background:#fff!important}.live-status-button.status-good{color:#248455!important}.live-status-button.status-warning{color:#c68110!important}.live-status-button.status-bad{color:#ca4b4b!important}.live-status-button.is-selected{color:white!important;box-shadow:0 4px 12px rgba(30,45,38,.15)!important}.live-status-button.status-good.is-selected{background:#2b8d5d!important}.live-status-button.status-warning.is-selected{background:#d99520!important}.live-status-button.status-bad.is-selected{background:#d45555!important}.live-status-meaning{max-width:43px;font-size:7px;font-weight:800;color:#7a8580;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.live-status-option{width:43px}
