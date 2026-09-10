@@ -18,10 +18,24 @@ def render_live_board(business_date, period, period_label):
     items = store_ops.service_prep_items(business_date, period)
     items = [item for item in items if item.get("visible", True)
              and category_visibility.get(item.get("area", "厨房"), True)]
+    order_checks = store_ops.daily_order_checks(business_date)
+    items.extend({
+        "id": f"daily-order:{destination}",
+        "destination": destination,
+        "name": f"{destination}発注",
+        "area": "発注",
+        "item_type": "completion",
+        "status": "done" if order_checks[destination] else "incomplete",
+        "source": "daily_order",
+        "visible": True,
+    } for destination in store_ops.DAILY_ORDER_DESTINATIONS)
     category_names = [value["name"] for value in categories if value.get("visible", True)]
     for item in items:
         if item.get("area", "厨房") not in category_names:
             category_names.append(item.get("area", "厨房"))
+    # Daily ordering always appears as the final section of the staff board.
+    category_names = [name for name in category_names if name != "発注"] + ["発注"]
+    category_colors.setdefault("発注", "#9F3E42")
 
     def counts():
         eligible = [item for item in items if item.get("item_type") not in {"quantity", "memo"}
@@ -48,6 +62,9 @@ def render_live_board(business_date, period, period_label):
                         def reset_all():
                             store_ops.reset_service_prep_items(
                                 business_date, period, [item["id"] for item in items])
+                            for destination in store_ops.DAILY_ORDER_DESTINATIONS:
+                                store_ops.set_daily_order_check(
+                                    business_date, destination, False)
                             ui.notify("LIVE BOARDをリセットしました", type="positive")
                             ui.navigate.to("/store-ops")
 
@@ -149,8 +166,13 @@ def render_live_board(business_date, period, period_label):
                                 def toggle_completion(selected=item, paint=paint_completion):
                                     selected["status"] = (
                                         "incomplete" if selected.get("status") == "done" else "done")
-                                    store_ops.set_service_prep_status(
-                                        business_date, period, selected["id"], selected["status"])
+                                    if selected.get("source") == "daily_order":
+                                        store_ops.set_daily_order_check(
+                                            business_date, selected["destination"],
+                                            selected["status"] == "done")
+                                    else:
+                                        store_ops.set_service_prep_status(
+                                            business_date, period, selected["id"], selected["status"])
                                     paint()
                                     refresh_progress()
 
