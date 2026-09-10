@@ -35,6 +35,8 @@ def render_store_navigation():
                  "/store-ops/cleaning", "text-teal-7")
         app_card("マニュアル", "手順・考え方・行動指針", "menu_book",
                  "/store-ops/manual", "text-orange-8")
+        app_card("消防訓練", "東京消防庁の公式教材を受講", "local_fire_department",
+                 "/store-ops/fire-training", "text-red-8")
         app_card("イベントスケジュール", "店舗行事と予定を共有", "event",
                  "/store-ops/events", "text-purple-7")
         app_card("ちゃんはや", "ちゃんこで早押しクイズ", "quiz",
@@ -622,6 +624,8 @@ def store_dashboard_page():
                      "/store-ops/cleaning", "text-teal-7")
             app_card("マニュアル", "手順・考え方・行動指針", "menu_book",
                      "/store-ops/manual", "text-orange-8")
+            app_card("消防訓練", "東京消防庁の公式教材を受講", "local_fire_department",
+                     "/store-ops/fire-training", "text-red-8")
             app_card("イベントスケジュール", "店舗行事と予定を共有", "event",
                      "/store-ops/events", "text-purple-7")
             app_card("ちゃんはや", "ちゃんこで早押しクイズ", "quiz",
@@ -711,4 +715,3 @@ def placeholder_page(title, subtitle, icon):
         with ui.card().classes("surface-card w-full q-pa-xl text-center"):
             ui.icon(icon).classes("text-6xl text-primary")
             ui.label("このページを次に作り込みます").classes("text-base font-black q-mt-md")
-

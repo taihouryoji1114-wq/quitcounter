@@ -34,6 +34,7 @@ import pages.store_manual
 import pages.store_manual_admin
 import pages.store_cleaning
 import pages.store_cleaning_admin
+import pages.store_fire_training
 import pages.store_checklist
 import pages.store_sections
 import pages.store_events
