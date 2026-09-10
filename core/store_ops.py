@@ -19,6 +19,8 @@ class StoreOperationsManager:
         "デシャップ冷凍庫", "厨房冷凍庫", "外冷凍庫",
     )
     DAILY_ORDER_DESTINATIONS = ("鶏肉", "ミクリード", "豊洲", "酒屋")
+    DAILY_ORDER_CATEGORY = "発注"
+    DAILY_ORDER_CATEGORY_COLOR = "#9F3E42"
     ORDER_REQUEST_CATEGORIES = ("野菜", "ドリンク", "その他")
     ORDER_CATEGORY_KEYWORDS = {
         "野菜": ("野菜", "玉ねぎ", "しいたけ", "きゅうり", "ごぼう", "にんにく",
@@ -726,6 +728,34 @@ class StoreOperationsManager:
                 result.append(dict(category))
                 known.add(name)
                 changed = True
+        order_category = next((value for value in configured
+                               if isinstance(value, dict)
+                               and value.get("active", True)
+                               and value.get("system_key") == "daily_order"), None)
+        if order_category is None:
+            order_category = next((value for value in configured
+                                   if isinstance(value, dict)
+                                   and value.get("active", True)
+                                   and value.get("name") == self.DAILY_ORDER_CATEGORY), None)
+            if order_category is not None:
+                order_category["system_key"] = "daily_order"
+                for value in result:
+                    if value.get("id") == order_category.get("id"):
+                        value["system_key"] = "daily_order"
+                        break
+                changed = True
+        if order_category is None:
+            category = {
+                "id": uuid4().hex,
+                "name": self.DAILY_ORDER_CATEGORY,
+                "active": True,
+                "visible": True,
+                "color": self.DAILY_ORDER_CATEGORY_COLOR,
+                "system_key": "daily_order",
+            }
+            configured.append(category)
+            result.append(dict(category))
+            changed = True
         if changed:
             self._data_manager.save()
         return result

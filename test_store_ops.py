@@ -299,6 +299,13 @@ class StoreOperationsManagerTest(unittest.TestCase):
             category["id"], "刺場", True, "#A14D4D")
         self.assertEqual(updated["color"], "#A14D4D")
 
+    def test_daily_order_category_is_available_in_live_board_settings(self):
+        categories = self.manager.live_board_categories()
+        category = next(value for value in categories if value["name"] == "発注")
+        self.assertEqual(category["color"], "#9F3E42")
+        self.assertTrue(category["visible"])
+        self.assertEqual(category["system_key"], "daily_order")
+
     def test_memo_only_live_board_item_enables_short_memo_without_progress_status(self):
         item = self.manager.add_prep_template("本日の注意", "ホール", item_type="memo")
         self.assertTrue(item["note_enabled"])

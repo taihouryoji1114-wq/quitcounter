@@ -15,27 +15,38 @@ def render_live_board(business_date, period, period_label):
     categories = store_ops.live_board_categories()
     category_visibility = {value["name"]: value.get("visible", True) for value in categories}
     category_colors = {value["name"]: value.get("color", "#527A68") for value in categories}
+    order_category = next((value for value in categories
+                           if value.get("system_key") == "daily_order"), {
+                               "name": store_ops.DAILY_ORDER_CATEGORY,
+                               "visible": True,
+                               "color": store_ops.DAILY_ORDER_CATEGORY_COLOR,
+                           })
+    order_category_name = order_category["name"]
     items = store_ops.service_prep_items(business_date, period)
     items = [item for item in items if item.get("visible", True)
              and category_visibility.get(item.get("area", "厨房"), True)]
     order_checks = store_ops.daily_order_checks(business_date)
-    items.extend({
-        "id": f"daily-order:{destination}",
-        "destination": destination,
-        "name": f"{destination}発注",
-        "area": "発注",
-        "item_type": "completion",
-        "status": "done" if order_checks[destination] else "incomplete",
-        "source": "daily_order",
-        "visible": True,
-    } for destination in store_ops.DAILY_ORDER_DESTINATIONS)
+    if order_category.get("visible", True):
+        items.extend({
+            "id": f"daily-order:{destination}",
+            "destination": destination,
+            "name": f"{destination}発注",
+            "area": order_category_name,
+            "item_type": "completion",
+            "status": "done" if order_checks[destination] else "incomplete",
+            "source": "daily_order",
+            "visible": True,
+        } for destination in store_ops.DAILY_ORDER_DESTINATIONS)
     category_names = [value["name"] for value in categories if value.get("visible", True)]
     for item in items:
         if item.get("area", "厨房") not in category_names:
             category_names.append(item.get("area", "厨房"))
     # Daily ordering always appears as the final section of the staff board.
-    category_names = [name for name in category_names if name != "発注"] + ["発注"]
-    category_colors.setdefault("発注", "#9F3E42")
+    category_names = [name for name in category_names if name != order_category_name]
+    if order_category.get("visible", True):
+        category_names.append(order_category_name)
+    category_colors.setdefault(order_category_name, order_category.get(
+        "color", store_ops.DAILY_ORDER_CATEGORY_COLOR))
 
     def counts():
         eligible = [item for item in items if item.get("item_type") not in {"quantity", "memo"}
