@@ -9,7 +9,8 @@ class MonsterWalkLabTest(unittest.TestCase):
     def test_battle_hit_has_no_yellow_sepia_effect(self):
         css = (ROOT / "style.css").read_text(encoding="utf-8")
         self.assertNotIn("sepia(1) saturate(5)", css)
-        self.assertIn("grayscale(1)", css)
+        battle_hit = css.split("@keyframes battle-hit", 1)[1].split("}", 5)[0]
+        self.assertNotIn("filter:", battle_hit)
 
     def test_command_area_is_larger_than_previous_layout(self):
         css = (ROOT / "style.css").read_text(encoding="utf-8")
@@ -20,9 +21,19 @@ class MonsterWalkLabTest(unittest.TestCase):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
         script = (ROOT / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="town-map"', html)
+        self.assertIn('id="town-canvas"', html)
         self.assertIn('id="town-hero"', html)
         self.assertIn("function townBlocked", script)
+        self.assertIn("townBlockedTiles", script)
+        self.assertIn("function drawTownMap", script)
         self.assertIn("requestAnimationFrame(moveTown)", script)
+
+    def test_long_press_selection_is_disabled(self):
+        css = (ROOT / "style.css").read_text(encoding="utf-8")
+        script = (ROOT / "app.js").read_text(encoding="utf-8")
+        self.assertIn("-webkit-touch-callout:none", css)
+        self.assertIn("contextmenu", script)
+        self.assertIn("selectstart", script)
 
 
 if __name__ == "__main__":

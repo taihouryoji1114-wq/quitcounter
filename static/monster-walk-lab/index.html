@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="labo-icon.png">
   <link rel="manifest" href="manifest.json">
   <title>LABO</title>
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
   <main class="app">
@@ -58,18 +58,10 @@
   <section id="town" class="town-screen" hidden aria-label="始まりの街">
     <header class="town-topbar"><div><small>STARTING TOWN</small><b>はじまりの街・ミナモ町</b></div><button id="town-close" type="button" aria-label="LABOへ戻る">×</button></header>
     <div id="town-map" class="town-map">
-      <div class="town-grass grass-a"></div><div class="town-grass grass-b"></div>
-      <div class="town-path path-v"></div><div class="town-path path-h"></div>
-      <div class="town-house house-home"><i></i><b>主人公の家</b></div>
-      <div class="town-house house-labo"><i></i><b>研究所</b></div>
-      <div class="town-house house-shop"><i></i><b>ショップ</b></div>
-      <div class="town-pond"><i></i></div>
-      <div class="town-trees trees-left"></div><div class="town-trees trees-right"></div>
-      <div class="town-sign">ミナモ町<br><small>水と緑の はじまりの街</small></div>
+      <canvas id="town-canvas" width="640" height="576" aria-label="ミナモ町のマップ"></canvas>
       <div id="town-hero" class="town-hero face-down" aria-label="仮の主人公"><i class="hero-head"></i><i class="hero-body"></i><i class="hero-feet"></i></div>
-      <div class="town-exit"><span>次の道路</span>↑</div>
     </div>
-    <div class="town-help">仮主人公で街を歩けます。建物・木・池には入れません。</div>
+    <div class="town-help"><b>ミナモ町</b><span>水辺から冒険が始まる、小さな研究の街。</span></div>
     <div class="town-pad" aria-label="街の移動操作"><button data-town-dir="up">▲</button><button data-town-dir="left">◀</button><button data-town-dir="down">▼</button><button data-town-dir="right">▶</button></div>
   </section>
   <section id="battle" class="battle-screen" hidden aria-label="モンスターバトル">
@@ -94,7 +86,7 @@
       <div id="move-learn" class="move-learn" hidden></div>
     </div>
   </section>
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=22"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {

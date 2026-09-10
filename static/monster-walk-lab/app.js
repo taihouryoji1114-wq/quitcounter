@@ -126,7 +126,7 @@ function renderMoves(){
 function showCommands(){battleCommand.hidden=false;battleMoves.hidden=true;moveLearn.hidden=true}
 function showMoves(){if(battleState.busy||battleState.over)return;renderMoves();battleCommand.hidden=true;battleMoves.hidden=false;moveLearn.hidden=true;battleMessage.textContent='どの技を つかう？'}
 function battleText(text,delay=720){battleMessage.textContent=text;return new Promise(resolve=>setTimeout(resolve,delay))}
-function clearBattleEffect(target){target.classList.remove('hit','attack');target.style.removeProperty('filter');target.style.removeProperty('animation')}
+function clearBattleEffect(target){target.getAnimations?.().forEach(animation=>animation.cancel());target.classList.remove('hit','attack');target.style.animation='none';target.style.filter='drop-shadow(0 4px 0 #0002)';void target.offsetWidth;target.style.removeProperty('animation')}
 function animateOnce(target,name){clearBattleEffect(target);void target.offsetWidth;target.classList.add(name);setTimeout(()=>clearBattleEffect(target),460)}
 function battleHit(target){animateOnce(target,'hit')}
 function battleAttack(target){animateOnce(target,'attack')}
@@ -188,22 +188,31 @@ document.querySelectorAll('[data-command]').forEach(button=>button.addEventListe
 battleMessage.addEventListener('click',()=>{if(battleState.over&&!profile.pendingMove)startBattle()});
 [playerBattler,enemyBattler].forEach(target=>target.addEventListener('animationend',()=>clearBattleEffect(target)));
 
-const town=document.querySelector('#town'),townMap=document.querySelector('#town-map'),townHero=document.querySelector('#town-hero');
-let townPosition={x:.50,y:.79},townDirection=null,townLast=performance.now();
-const townObstacles=[
-  [.06,.08,.35,.39],[.66,.07,.96,.38],[.68,.69,.96,.97],
-  [.03,.70,.34,.98],[0,0,.14,.48],[.92,.36,1,.78],[.16,.43,.34,.59]
-];
-function townBlocked(x,y){const padX=.022,padY=.035;return x<.035||x>.965||y<.045||y>.965||townObstacles.some(([l,t,r,b])=>x+padX>l&&x-padX<r&&y+padY>t&&y-padY<b)}
-function paintTownHero(){townHero.style.left=`${townPosition.x*100}%`;townHero.style.top=`${townPosition.y*100}%`;townHero.classList.toggle('walking',!!townDirection);townHero.classList.remove('face-up','face-down','face-left','face-right');townHero.classList.add(`face-${townDirection||'down'}`)}
-function openTown(){auto=false;manual=null;target={x,y};town.hidden=false;paintTownHero()}
+const town=document.querySelector('#town'),townMap=document.querySelector('#town-map'),townHero=document.querySelector('#town-hero'),townCanvas=document.querySelector('#town-canvas');
+const TOWN_W=640,TOWN_H=576,TILE=32;
+let townPosition={x:320,y:490},townDirection=null,townLast=performance.now();
+const townBlockedTiles=new Set();
+function blockTownRect(x,y,w,h){for(let row=y;row<y+h;row++)for(let col=x;col<x+w;col++)townBlockedTiles.add(`${col},${row}`)}
+function prepareTownCollision(){townBlockedTiles.clear();for(let x=0;x<20;x++){townBlockedTiles.add(`${x},0`);townBlockedTiles.add(`${x},17`)}for(let y=0;y<18;y++){townBlockedTiles.add(`0,${y}`);townBlockedTiles.add(`19,${y}`)}blockTownRect(2,2,5,5);blockTownRect(13,2,5,5);blockTownRect(13,12,5,5);blockTownRect(2,12,5,5);blockTownRect(1,7,3,1);blockTownRect(16,8,3,1)}
+function townBlocked(x,y){const points=[[x-9,y-5],[x+9,y-5],[x-9,y+5],[x+9,y+5]];return points.some(([px,py])=>townBlockedTiles.has(`${Math.floor(px/TILE)},${Math.floor(py/TILE)}`))}
+function drawTownMap(){const c=townCanvas.getContext('2d');c.imageSmoothingEnabled=false;const rect=(x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(x*TILE,y*TILE,w*TILE,h*TILE)};for(let y=0;y<18;y++)for(let x=0;x<20;x++){rect(x,y,1,1,(x+y)%2?'#79bd62':'#74b75e');c.fillStyle='#65a850';c.fillRect(x*TILE+5,y*TILE+7,3,5);c.fillRect(x*TILE+23,y*TILE+20,2,4)}rect(8,0,4,18,'#e7ce98');rect(0,8,20,3,'#e7ce98');for(let y=0;y<18;y++){c.fillStyle='#cfb77e';c.fillRect(8*TILE,y*TILE,4,3)}for(let x=0;x<20;x++){c.fillStyle='#cfb77e';c.fillRect(x*TILE,8*TILE,3,3)}
+  const tree=(x,y)=>{rect(x,y,1,1,'#3f783f');c.fillStyle='#28613a';c.fillRect(x*TILE+3,y*TILE+2,26,23);c.fillStyle='#4d914b';c.fillRect(x*TILE+7,y*TILE+3,18,13);c.fillStyle='#795132';c.fillRect(x*TILE+13,y*TILE+23,6,9)};for(let x=0;x<20;x++){tree(x,0);tree(x,17)}for(let y=1;y<17;y++){tree(0,y);tree(19,y)}
+  const house=(x,y,wall,roof,label)=>{rect(x,y+2,5,3,wall);c.fillStyle=roof;c.fillRect(x*TILE-5,y*TILE+18,5*TILE+10,38);c.fillStyle='#703f37';for(let i=0;i<5;i++)c.fillRect(x*TILE-3+i*34,y*TILE+22,30,5);c.fillStyle='#f3e8b7';c.fillRect((x+1)*TILE,(y+3)*TILE,24,20);c.fillRect((x+3)*TILE,(y+3)*TILE,24,20);c.fillStyle='#76503a';c.fillRect((x+2)*TILE+5,(y+3)*TILE,22,64);c.fillStyle='#fff8d9';c.fillRect(x*TILE+18,(y+5)*TILE-7,124,18);c.fillStyle='#294a3d';c.font='bold 12px sans-serif';c.textAlign='center';c.fillText(label,x*TILE+80,(y+5)*TILE+7)};house(2,2,'#f1dfb4','#bd5947','主人公の家');house(13,2,'#d7edf0','#4b8190','モンスター研究所');house(13,12,'#f4d7a1','#d8893d','道具屋');
+  rect(2,12,5,5,'#d1c779');c.fillStyle='#51aabc';c.fillRect(2*TILE+8,12*TILE+8,5*TILE-16,5*TILE-16);c.strokeStyle='#9ee4e5';c.lineWidth=4;for(let i=0;i<4;i++){c.beginPath();c.arc(2*TILE+80,12*TILE+80,18+i*17,0,Math.PI*2);c.stroke()}
+  c.fillStyle='#a87544';c.fillRect(3*TILE,7*TILE+5,72,22);c.fillStyle='#fff5ce';c.font='bold 10px sans-serif';c.fillText('ミナモ町',3*TILE+36,7*TILE+20);c.fillStyle='#fff';c.font='bold 10px sans-serif';c.fillText('↑ 1ばん道路',10*TILE,28);c.fillStyle='#e95b65';for(const [x,y] of [[7,3],[7,4],[12,13],[7,14]]){c.fillRect(x*TILE+7,y*TILE+9,5,5);c.fillRect(x*TILE+18,y*TILE+18,5,5)}
+}
+function paintTownHero(){townHero.style.left=`${townPosition.x/TOWN_W*100}%`;townHero.style.top=`${townPosition.y/TOWN_H*100}%`;townHero.classList.toggle('walking',!!townDirection);townHero.classList.remove('face-up','face-down','face-left','face-right');townHero.classList.add(`face-${townDirection||'down'}`)}
+function openTown(){auto=false;manual=null;target={x,y};town.hidden=false;drawTownMap();paintTownHero()}
 function closeTown(){townDirection=null;town.hidden=true;paintTownHero()}
-function moveTown(now){const dt=Math.min(.04,(now-townLast)/1000);townLast=now;if(!town.hidden&&townDirection){const speed=.31*dt;let nx=townPosition.x+(townDirection==='left'?-speed:townDirection==='right'?speed:0),ny=townPosition.y+(townDirection==='up'?-speed:townDirection==='down'?speed:0);if(!townBlocked(nx,townPosition.y))townPosition.x=nx;if(!townBlocked(townPosition.x,ny))townPosition.y=ny;paintTownHero()}requestAnimationFrame(moveTown)}
+function moveTown(now){const dt=Math.min(.04,(now-townLast)/1000);townLast=now;if(!town.hidden&&townDirection){const speed=155*dt;let nx=townPosition.x+(townDirection==='left'?-speed:townDirection==='right'?speed:0),ny=townPosition.y+(townDirection==='up'?-speed:townDirection==='down'?speed:0);if(!townBlocked(nx,townPosition.y))townPosition.x=nx;if(!townBlocked(townPosition.x,ny))townPosition.y=ny;paintTownHero()}requestAnimationFrame(moveTown)}
 document.querySelector('#town-close').addEventListener('click',closeTown);
 document.querySelectorAll('[data-town-dir]').forEach(button=>{const begin=event=>{event.preventDefault();townDirection=button.dataset.townDir;paintTownHero()};const end=()=>{townDirection=null;paintTownHero()};button.addEventListener('pointerdown',begin);button.addEventListener('pointerup',end);button.addEventListener('pointercancel',end);button.addEventListener('pointerleave',end)});
 document.addEventListener('keydown',event=>{if(town.hidden)return;const key={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key];if(key){event.preventDefault();townDirection=key;paintTownHero()}});
 document.addEventListener('keyup',event=>{if(!town.hidden&&event.key.startsWith('Arrow')){townDirection=null;paintTownHero()}});
 requestAnimationFrame(moveTown);
+prepareTownCollision();drawTownMap();
+document.addEventListener('contextmenu',event=>{if(event.target.closest('.app,.battle-screen,.town-screen'))event.preventDefault()});
+document.addEventListener('selectstart',event=>{if(event.target.closest('.app,.battle-screen,.town-screen'))event.preventDefault()});
 const requestedMonster=new URLSearchParams(location.search).get('monster');
 setMonster(monsters[requestedMonster]?requestedMonster:(localStorage.getItem('walkLabMonster')||'fire'));
 chooseTarget(.25,.7);requestAnimationFrame(tick);
