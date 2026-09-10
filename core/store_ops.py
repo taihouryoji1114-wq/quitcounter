@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import unicodedata
 from uuid import uuid4
 
+from core.clock import now_jst
 from core.data import data
 
 
@@ -569,7 +570,7 @@ class StoreOperationsManager:
         self._data_manager.data.setdefault("store_daily_order_checks", {}).setdefault(
             record_date, {})[destination] = bool(checked)
         self._data_manager.data.setdefault("store_daily_order_updates", {}).setdefault(
-            record_date, {})[destination] = datetime.now().isoformat(timespec="seconds")
+            record_date, {})[destination] = now_jst().isoformat(timespec="seconds")
         self._data_manager.save()
 
     def live_board_last_updated_at(self, record_date, period):
@@ -1174,7 +1175,7 @@ class StoreOperationsManager:
     def _record_live_board_update(self, record_date, period, item_id, action):
         values = self._data_manager.data.setdefault(
             "store_service_prep_updates", {}).setdefault(record_date, {}).setdefault(period, {})
-        values[item_id] = {"updated_at": datetime.now().isoformat(timespec="seconds"),
+        values[item_id] = {"updated_at": now_jst().isoformat(timespec="seconds"),
                            "updated_by": "staff", "action": action}
 
     def set_service_prep_status(self, record_date, period, item_id, status):

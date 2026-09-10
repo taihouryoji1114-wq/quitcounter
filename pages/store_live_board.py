@@ -1,5 +1,8 @@
+from datetime import datetime, timezone
+
 from nicegui import ui
 
+from core.clock import JAPAN
 from core.store_ops import store_ops
 
 
@@ -8,6 +11,21 @@ STATUS_META = {
     "attention": ("△", "warning"),
     "incomplete": ("×", "bad"),
 }
+
+
+def format_live_board_update_time(value):
+    """Show both new offset-aware and legacy server timestamps in Japan time."""
+    if not value:
+        return "最終更新 まだありません"
+    try:
+        timestamp = datetime.fromisoformat(str(value))
+        # Older records were written by the public server without a timezone.
+        # That server runs in UTC, so interpret those values before displaying.
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        return f"最終更新 {timestamp.astimezone(JAPAN):%H:%M}"
+    except (TypeError, ValueError):
+        return "最終更新時刻を確認できません"
 
 
 def render_live_board(business_date, period, period_label):
@@ -58,12 +76,7 @@ def render_live_board(business_date, period, period_label):
 
     def update_time_text():
         value = store_ops.live_board_last_updated_at(business_date, period)
-        if not value:
-            return "最終更新 まだありません"
-        try:
-            return f"最終更新 {value[11:16]}"
-        except (IndexError, TypeError):
-            return "最終更新時刻を確認できません"
+        return format_live_board_update_time(value)
 
     board_expansion = ui.expansion(
         f"LIVE BOARD　　{complete} / {total}", icon="dashboard", value=False,

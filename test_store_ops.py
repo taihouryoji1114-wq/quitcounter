@@ -5,6 +5,7 @@ from pathlib import Path
 
 from core.data import DataManager
 from core.store_ops import StoreOperationsManager
+from pages.store_live_board import format_live_board_update_time
 
 
 class StoreOperationsManagerTest(unittest.TestCase):
@@ -64,6 +65,16 @@ class StoreOperationsManagerTest(unittest.TestCase):
             "2026-08-21", "lunch", checked["id"], ["ねぎ"])
         self.assertTrue(
             self.manager.live_board_last_updated_at("2026-08-21", "lunch"))
+
+    def test_live_board_update_time_is_displayed_in_japan_time(self):
+        self.assertEqual(
+            format_live_board_update_time("2026-09-10T10:15:00"),
+            "最終更新 19:15",
+        )
+        self.assertEqual(
+            format_live_board_update_time("2026-09-10T19:15:00+09:00"),
+            "最終更新 19:15",
+        )
 
     def test_staff_can_add_and_complete_order_request(self):
         item = self.manager.add_order_request("ラップを発注お願いします")
