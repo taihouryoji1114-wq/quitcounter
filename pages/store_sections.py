@@ -1,10 +1,23 @@
+from datetime import datetime
+
 from nicegui import ui
 
 from core.auth import current_role, has_permission, require_app_access
-from core.clock import operational_date_jst
+from core.clock import JAPAN, operational_date_jst
 from core.store_ops import store_ops
 from core.theme import Theme
 from pages.store_common import store_header_actions
+
+
+def format_inventory_check_time(value):
+    """Legacy checks use server-local datetime.now(); display in Japan time."""
+    if not value:
+        return "最終確認：未確認"
+    try:
+        checked = datetime.fromisoformat(str(value)).astimezone(JAPAN)
+        return f"最終確認：{checked:%Y/%m/%d %H:%M}"
+    except (TypeError, ValueError):
+        return "最終確認：日時不明"
 
 
 def section_shell(title, subtitle):
@@ -260,6 +273,9 @@ def inventory_page():
             ui.button("小分類と色を設定", icon="palette", on_click=category_dialog.open).props(
                 "outline no-caps").classes("w-full q-mb-md")
         fields = []
+        checked_labels = {}
+        ui.label("入力済みの商品は「まとめて保存」で確認日時も更新されます（日本時間）。").classes(
+            "text-xs text-grey-7 q-mb-sm")
         grouped = {}
         for item in items:
             grouped.setdefault(item.get("category", "その他"), []).append(item)
@@ -320,16 +336,26 @@ def inventory_page():
                                                           value=None if was_reset else item.get("status", "enough")).props(
                                                               "outlined dense options-dense").classes("stock-field")
                                         fields.append((item["id"], "status", field))
+                                    checked_labels[item["id"]] = ui.label(
+                                        format_inventory_check_time(last_check)
+                                    ).classes("inventory-checked-at")
 
         def save_all():
             updates = [{"item_id": item_id, kind: field.value}
                        for item_id, kind, field in fields if field.value not in (None, "")]
+            if not updates:
+                ui.notify("確認した在庫を入力してください", type="warning")
+                return
             try:
                 store_ops.save_inventory_check(updates)
             except ValueError as error:
                 ui.notify(str(error), type="negative")
                 return
-            ui.notify("在庫を保存しました", type="positive")
+            for item in store_ops.items():
+                if item["id"] in checked_labels:
+                    checked_labels[item["id"]].set_text(
+                        format_inventory_check_time(item.get("last_inventory_check_at")))
+            ui.notify("在庫と確認日時を保存しました", type="positive")
 
         ui.button("まとめて保存", icon="save", on_click=save_all).classes("w-full q-mt-md")
         with ui.dialog() as reset_dialog, ui.card().classes("surface-card w-80 q-pa-lg"):
@@ -431,6 +457,7 @@ def inventory_page():
         .inventory-item-new{display:flex!important;flex-direction:column!important;justify-content:space-between!important;min-width:0!important;min-height:132px;padding:11px!important;border-radius:16px!important;border:1px solid #E1E9E4!important;box-shadow:none!important;background:#fff!important}
         .inventory-item-name{display:-webkit-box;min-height:32px;max-height:32px;overflow:hidden;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:11px;font-weight:950;line-height:1.4;color:#17382C}
         .inventory-unit{margin-top:3px;font-size:8px;color:#8A9690}
+        .inventory-checked-at{font-size:10px;line-height:1.5;color:#527269;margin-top:6px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
         .stock-field{width:100%!important;margin-top:8px}.stock-field .q-field__control{min-height:40px!important;height:40px!important}.stock-field input{font-weight:900!important}
         .minimum-stock-mark{display:inline-flex;width:max-content;max-width:100%;margin-top:3px;padding:2px 6px;border-radius:999px;background:#FFF0CC;color:#8A5A08;font-size:8px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .inventory-main-category{background:#fff!important}.inventory-subcategory{margin:9px 0 13px;padding:8px;border-radius:17px;background:var(--subcategory-color)}.inventory-subcategory-title{padding:2px 5px 6px;font-size:12px;font-weight:950;color:#17382C}.inventory-group-button{margin:-7px -8px 0 0;color:#527269}.inventory-item-new{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:transform .15s,box-shadow .15s,opacity .12s}.inventory-item-new.drag-ready{box-shadow:0 4px 12px #17382C22!important}.inventory-reorder-mode .inventory-item-new{touch-action:none;box-shadow:0 4px 14px #17382C20!important}.inventory-reorder-mode .inventory-item-new:before{content:'⋮⋮';position:absolute;top:5px;left:7px;color:#739184;font-size:12px;font-weight:900}.inventory-item-new.drag-placeholder{opacity:.18!important;border:2px dashed #467561!important;background:#E8F1EC!important;box-shadow:none!important}.inventory-drag-ghost{position:fixed!important;z-index:99999!important;margin:0!important;pointer-events:none!important;opacity:.96!important;transform:scale(1.04)!important;box-shadow:0 18px 38px #17382C55!important;touch-action:none!important}.inventory-drag-ghost .q-field,.inventory-drag-ghost button{pointer-events:none!important}.inventory-sort-done{display:none;position:fixed;right:16px;top:max(12px,env(safe-area-inset-top));z-index:100000;padding:9px 20px;border:0;border-radius:999px;background:#167A54;color:#fff;font-size:14px;font-weight:900;box-shadow:0 7px 20px #17382C50}.inventory-reorder-mode .inventory-sort-done{display:block}
