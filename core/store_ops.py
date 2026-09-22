@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timedelta
 import unicodedata
 from uuid import uuid4
@@ -1014,12 +1015,12 @@ class StoreOperationsManager:
             self._data_manager.save()
 
     def active_service_context(self, default_date, default_period):
-        """Return the checklist context selected by staff.
+        """Advance the operating date automatically, preserving all manual inputs.
 
-        Once initialized, both the operating date and lunch/dinner period stay fixed
-        until ``advance_service_context`` is used.  This prevents a date change from
-        making completed work appear to have reset itself.
+        The lunch/dinner selection and explicit future-day preparation remain
+        staff-controlled. Date rollover is not a checklist reset.
         """
+        self._date(default_date)
         context = self._data_manager.data.get("store_active_service_context", {})
         record_date = str(context.get("date", ""))
         period = str(context.get("period", ""))
@@ -1030,6 +1031,25 @@ class StoreOperationsManager:
         except (TypeError, ValueError):
             record_date = str(default_date)
             period = self._service_period(default_period)
+            changed = True
+        if record_date < str(default_date):
+            # Copy independently so resetting today never changes yesterday.
+            for key in ("store_service_prep_records", "store_service_prep_quantities",
+                        "store_service_prep_choices", "store_service_prep_subchecks",
+                        "store_service_prep_notes", "store_service_prep_updates"):
+                records = self._data_manager.data.setdefault(key, {})
+                source = records.get(record_date, {}).get(period, {})
+                target = records.setdefault(str(default_date), {}).setdefault(period, {})
+                for item_id, value in source.items():
+                    target.setdefault(item_id, deepcopy(value))
+            for key in ("store_daily_order_checks", "store_daily_order_attention",
+                        "store_daily_order_updates"):
+                records = self._data_manager.data.setdefault(key, {})
+                source = records.get(record_date, {})
+                target = records.setdefault(str(default_date), {})
+                for destination, value in source.items():
+                    target.setdefault(destination, deepcopy(value))
+            record_date = str(default_date)
             changed = True
         if changed:
             self._data_manager.data["store_active_service_context"] = {

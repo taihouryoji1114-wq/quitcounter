@@ -60,6 +60,18 @@ def store_dashboard_page():
     business_date, period = store_ops.active_service_context(
         operational_date_jst().isoformat(), store_service_period_jst())
     period_label = "ランチ" if period == "lunch" else "ディナー"
+
+    async def follow_operating_date():
+        if operational_date_jst().isoformat() > business_date:
+            # Finish an open note editor before changing the page underneath it.
+            await ui.run_javascript("""
+                if (!document.querySelector('.q-dialog') &&
+                    !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+                    window.location.reload();
+                }
+            """)
+
+    ui.timer(30, follow_operating_date)
     store_ops.ensure_service_checklist(business_date, period)
     board = store_ops.service_handover_board(business_date, period)
     can_manage = has_permission("store_manage")

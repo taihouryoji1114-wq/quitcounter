@@ -531,19 +531,41 @@ class StoreOperationsManagerTest(unittest.TestCase):
         self.assertEqual({item["status"] for item in self.manager.service_prep_items(
             "2026-08-20", "dinner")}, {"incomplete"})
 
-    def test_service_context_date_and_period_change_only_manually(self):
+    def test_service_context_date_changes_automatically_period_stays_manual(self):
         self.assertEqual(
             self.manager.active_service_context("2026-08-20", "lunch"),
             ("2026-08-20", "lunch"),
         )
         self.assertEqual(
             self.manager.active_service_context("2026-08-22", "dinner"),
-            ("2026-08-20", "lunch"),
+            ("2026-08-22", "lunch"),
         )
         self.assertEqual(self.manager.advance_service_context(),
-                         ("2026-08-20", "dinner"))
+                         ("2026-08-22", "dinner"))
         self.assertEqual(self.manager.advance_service_context(),
-                         ("2026-08-21", "lunch"))
+                         ("2026-08-23", "lunch"))
+
+    def test_automatic_date_change_preserves_inputs_without_reset(self):
+        item = self.manager.add_prep_template("仕込み", "厨房")
+        self.manager.active_service_context("2026-08-20", "lunch")
+        self.manager.set_service_prep_status("2026-08-20", "lunch", item["id"], "done")
+        destination = self.manager.DAILY_ORDER_DESTINATIONS[0]
+        self.manager.set_daily_order_check("2026-08-20", destination, True)
+        self.manager.active_service_context("2026-08-22", "dinner")
+        self.assertEqual(self.manager.service_prep_items("2026-08-22", "lunch")[0]["status"], "done")
+        self.assertTrue(self.manager.daily_order_checks("2026-08-22")[destination])
+        self.manager.reset_service_prep_items("2026-08-22", "lunch", [item["id"]])
+        self.manager.active_service_context("2026-08-22", "lunch")
+        self.assertEqual(self.manager.service_prep_items("2026-08-22", "lunch")[0]["status"], "incomplete")
+        self.assertEqual(self.manager.service_prep_items("2026-08-20", "lunch")[0]["status"], "done")
+
+    def test_automatic_date_change_keeps_already_entered_target_values(self):
+        item = self.manager.add_prep_template("仕込み", "厨房")
+        self.manager.active_service_context("2026-08-20", "lunch")
+        self.manager.set_service_prep_status("2026-08-20", "lunch", item["id"], "done")
+        self.manager.set_service_prep_status("2026-08-21", "lunch", item["id"], "attention")
+        self.manager.active_service_context("2026-08-21", "dinner")
+        self.assertEqual(self.manager.service_prep_items("2026-08-21", "lunch")[0]["status"], "attention")
 
     def test_future_manual_service_context_is_not_moved_back(self):
         self.assertEqual(
