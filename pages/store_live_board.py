@@ -28,6 +28,25 @@ def format_live_board_update_time(value):
         return "最終更新時刻を確認できません"
 
 
+def live_board_summary(items):
+    eligible = [item for item in items if item.get("source") != "daily_order"
+                and item.get("visible", True)
+                and (item.get("item_type") not in {"quantity", "memo"}
+                     or item.get("progress_enabled"))]
+    groups = {"△": [], "×": [], "未完了": []}
+    seen = set()
+    for item in eligible:
+        if item.get("id") in seen:
+            continue
+        seen.add(item.get("id"))
+        status = item.get("status")
+        if status == "attention":
+            groups["△"].append(item)
+        elif status != "done":
+            groups["×" if item.get("item_type") == "status" else "未完了"].append(item)
+    return sum(item.get("status") in {"done", "attention"} for item in eligible), len(eligible), groups
+
+
 def render_live_board(business_date, period, period_label):
     """Render the staff-facing board: every routine action happens in place."""
     categories = store_ops.live_board_categories()
@@ -43,34 +62,18 @@ def render_live_board(business_date, period, period_label):
     items = store_ops.service_prep_items(business_date, period)
     items = [item for item in items if item.get("visible", True)
              and category_visibility.get(item.get("area", "厨房"), True)]
-    order_checks = store_ops.daily_order_checks(business_date)
-    if order_category.get("visible", True):
-        items.extend({
-            "id": f"daily-order:{destination}",
-            "destination": destination,
-            "name": f"{destination}発注",
-            "area": order_category_name,
-            "item_type": "completion",
-            "status": "done" if order_checks[destination] else "incomplete",
-            "source": "daily_order",
-            "visible": True,
-        } for destination in store_ops.DAILY_ORDER_DESTINATIONS)
     category_names = [value["name"] for value in categories if value.get("visible", True)]
     for item in items:
         if item.get("area", "厨房") not in category_names:
             category_names.append(item.get("area", "厨房"))
     # Daily ordering always appears as the final section of the staff board.
     category_names = [name for name in category_names if name != order_category_name]
-    if order_category.get("visible", True):
-        category_names.append(order_category_name)
     category_colors.setdefault(order_category_name, order_category.get(
         "color", store_ops.DAILY_ORDER_CATEGORY_COLOR))
 
     def counts():
-        eligible = [item for item in items if item.get("item_type") not in {"quantity", "memo"}
-                    or item.get("progress_enabled")]
-        completed = sum(item.get("status") == "done" for item in eligible)
-        return completed, len(eligible)
+        done, total, _ = live_board_summary(items)
+        return done, total
 
     complete, total = counts()
 
@@ -79,7 +82,7 @@ def render_live_board(business_date, period, period_label):
         return format_live_board_update_time(value)
 
     board_expansion = ui.expansion(
-        f"LIVE BOARD　　{complete} / {total}", icon="dashboard", value=False,
+        f"LIVE BOARD　今日の対応 {complete} / {total}", icon="dashboard", value=False,
     ).props("duration=160").classes("live-board-collapsed w-full")
     with ui.card() as board_card:
         board_card.classes("live-board-v2 w-full")
@@ -90,7 +93,7 @@ def render_live_board(business_date, period, period_label):
                     "live-board-date")
             with ui.row().classes("items-center no-wrap gap-1"):
                 with ui.column().classes("live-board-summary gap-0 items-end"):
-                    progress_label = ui.label(f"{complete} / {total}").classes("live-board-progress")
+                    progress_label = ui.label(f"今日の対応 {complete} / {total}").classes("live-board-progress")
                     updated_label = ui.label(update_time_text()).classes("live-board-updated")
                 with ui.button(icon="more_vert").props(
                         "flat round dense aria-label='LIVE BOARDメニュー'").classes("live-board-more"):
@@ -113,9 +116,10 @@ def render_live_board(business_date, period, period_label):
 
         def refresh_progress():
             done, all_items = counts()
-            progress_label.set_text(f"{done} / {all_items}")
-            board_expansion.set_text(f"LIVE BOARD　　{done} / {all_items}")
+            progress_label.set_text(f"今日の対応 {done} / {all_items}")
+            board_expansion.set_text(f"LIVE BOARD　今日の対応 {done} / {all_items}")
             updated_label.set_text(update_time_text())
+            handover_list.refresh()
 
         for category in category_names:
             grouped = [item for item in items if item.get("area", "厨房") == category]
@@ -182,7 +186,9 @@ def render_live_board(business_date, period, period_label):
                                     if maximum not in (None, ""):
                                         value = min(float(maximum), value)
                                     selected["quantity"] = value
-                                    label.set_text(quantity_text(value))
+                                    label.set_text(quantity_text(value, selected))
+                                    selected["status"] = "done" if selected.get("progress_enabled") and value > minimum else "incomplete"
+                                    refresh_progress()
 
                                 with controls:
                                     quantity_label.move(controls)
@@ -242,11 +248,48 @@ def render_live_board(business_date, period, period_label):
                                             ui.button("完了", on_click=save_note).props(
                                                 "unelevated dense no-caps").classes("w-full")
 
+        @ui.refreshable
+        def handover_list():
+            _, _, groups = live_board_summary(items)
+            with ui.column().classes("live-handover w-full gap-2"):
+                ui.label("引き継ぎリスト").classes("text-base font-bold")
+                ui.label("仕込み名を状態別に表示。日付が変わっても手動リセットまで維持します。").classes("text-xs text-grey-7")
+                for symbol, values in groups.items():
+                    with ui.column().classes("live-handover-group w-full gap-1"):
+                        ui.label(f"{symbol}　{len(values)}件").classes("font-bold")
+                        if not values:
+                            ui.label("該当なし").classes("text-xs text-grey-6")
+                        for value in values:
+                            ui.label(value["name"]).classes("live-handover-name")
+        handover_list()
+
+        if order_category.get("visible", True):
+            with ui.column().classes("live-orders w-full gap-2"):
+                ui.label("発注状況").classes("text-base font-bold")
+                ui.label("今日の対応数・引き継ぎリストには含めません。").classes("text-xs text-grey-7")
+                order_states = store_ops.daily_order_states(business_date)
+                for destination in store_ops.DAILY_ORDER_DESTINATIONS:
+                    with ui.row().classes("w-full items-center justify-between"):
+                        ui.label(destination).classes("font-bold")
+                        alert = ui.label("発注待ち").classes("text-red-8 text-xs font-bold")
+                        alert.set_visibility(order_states[destination] == "needed")
+
+                        def save_order(event, name=destination, badge=alert):
+                            store_ops.set_daily_order_state(business_date, name, event.value)
+                            badge.set_visibility(event.value == "needed")
+                            updated_label.set_text(update_time_text())
+
+                        ui.select({"unchecked": "未確認", "needed": "発注あり（未発注）",
+                                   "not_needed": "発注なし", "ordered": "発注済み"},
+                                  value=order_states[destination], on_change=save_order).props(
+                                      "outlined dense options-dense").classes("live-order-select")
+
         if not items:
             ui.label("表示する項目はありません").classes("live-board-empty")
     board_card.move(board_expansion)
 
     ui.add_css("""
+    .live-handover,.live-orders{margin-top:18px;padding:14px;background:#f4f7f3;border:1px solid #dce7de;border-radius:14px}.live-handover-group{padding:10px;background:white;border-radius:9px}.live-handover-name{font-size:13px;overflow-wrap:anywhere}.live-orders{background:#f1f5fa}.live-order-select{width:175px;max-width:100%}
     .live-board-collapsed{overflow:hidden;border:1px solid rgba(255,255,255,.95)!important;border-radius:22px!important;background:linear-gradient(145deg,#fff,#eef4f0)!important;box-shadow:0 11px 0 #cad6cf,0 18px 28px rgba(35,58,47,.18)!important}.live-board-collapsed>.q-expansion-item__container>.q-item{min-height:76px!important;padding:0 20px!important;color:#173c30;font-size:15px;font-weight:950;letter-spacing:.04em}.live-board-collapsed .q-expansion-item__content{padding:0 8px 14px}.live-board-v2{padding:16px 14px 10px!important;border:1px solid #dfe8e2!important;border-radius:18px!important;background:rgba(255,255,255,.98)!important;color:#17352b!important;box-shadow:none!important}
     .live-board-head{padding:1px 3px 12px;border-bottom:1px solid #e5ece8}.live-board-title{font-size:22px;font-weight:950;letter-spacing:.06em}.live-board-date{font-size:10px;color:#718078;font-weight:750}.live-board-summary{margin-right:2px}.live-board-progress{padding:7px 12px;border-radius:999px;background:#173e31;color:white;font-size:13px;font-weight:950;letter-spacing:.05em}.live-board-updated{margin-top:3px;padding-right:2px;color:#718078;font-size:8px;font-weight:850;white-space:nowrap}.live-board-more{color:#60756b!important}
     .live-board-section{padding-top:15px}.live-board-category{width:100%;padding:7px 10px;color:#fff;font-size:11px;font-weight:950;letter-spacing:.08em;background:var(--category-color);border-radius:8px}.live-board-item{height:96px!important;min-height:96px!important;max-height:96px!important;padding:8px 2px;border-bottom:1px solid #edf1ef;overflow:hidden}.live-board-item>.q-row{height:79px!important;min-height:79px!important;max-height:79px!important}.live-board-copy{display:flex!important;flex:1;flex-direction:column;justify-content:center;min-width:0;max-height:76px;overflow:hidden}.live-board-name{display:-webkit-box;max-width:100%;max-height:36px;overflow:hidden;font-size:14px;font-weight:900;line-height:1.3;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}.live-board-note{display:-webkit-box;margin-top:3px;max-width:100%;max-height:30px;overflow:hidden;color:#a06b18;font-size:10px;font-weight:800;line-height:1.4;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}.live-board-controls{gap:5px!important;flex:0 0 auto;margin-left:8px}

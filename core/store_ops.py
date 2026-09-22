@@ -580,6 +580,29 @@ class StoreOperationsManager:
             raise ValueError("発注先が正しくありません。")
         self._data_manager.data.setdefault("store_daily_order_checks", {}).setdefault(
             record_date, {})[destination] = bool(checked)
+        self._data_manager.data.setdefault("store_daily_order_states", {}).setdefault(
+            record_date, {})[destination] = "ordered" if checked else "unchecked"
+        self._data_manager.data.setdefault("store_daily_order_updates", {}).setdefault(
+            record_date, {})[destination] = now_jst().isoformat(timespec="seconds")
+        self._data_manager.save()
+
+    def daily_order_states(self, record_date):
+        self._date(record_date)
+        saved = self._data_manager.data.get("store_daily_order_states", {}).get(record_date, {})
+        checks = self.daily_order_checks(record_date)
+        return {name: saved.get(name, "ordered" if checks[name] else "unchecked")
+                for name in self.DAILY_ORDER_DESTINATIONS}
+
+    def set_daily_order_state(self, record_date, destination, state):
+        if state not in {"unchecked", "needed", "not_needed", "ordered"}:
+            raise ValueError("発注状況が正しくありません。")
+        self._date(record_date)
+        if destination not in self.DAILY_ORDER_DESTINATIONS:
+            raise ValueError("発注先が正しくありません。")
+        self._data_manager.data.setdefault("store_daily_order_states", {}).setdefault(
+            record_date, {})[destination] = state
+        self._data_manager.data.setdefault("store_daily_order_checks", {}).setdefault(
+            record_date, {})[destination] = state == "ordered"
         self._data_manager.data.setdefault("store_daily_order_updates", {}).setdefault(
             record_date, {})[destination] = now_jst().isoformat(timespec="seconds")
         self._data_manager.save()
@@ -1043,7 +1066,7 @@ class StoreOperationsManager:
                 for item_id, value in source.items():
                     target.setdefault(item_id, deepcopy(value))
             for key in ("store_daily_order_checks", "store_daily_order_attention",
-                        "store_daily_order_updates"):
+                        "store_daily_order_updates", "store_daily_order_states"):
                 records = self._data_manager.data.setdefault(key, {})
                 source = records.get(record_date, {})
                 target = records.setdefault(str(default_date), {})
