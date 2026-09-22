@@ -23,7 +23,7 @@ def format_live_board_update_time(value):
         # That server runs in UTC, so interpret those values before displaying.
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=timezone.utc)
-        return f"最終更新 {timestamp.astimezone(JAPAN):%H:%M}"
+        return f"最終更新 {timestamp.astimezone(JAPAN):%Y/%m/%d %H:%M}"
     except (TypeError, ValueError):
         return "最終更新時刻を確認できません"
 
@@ -44,7 +44,13 @@ def live_board_summary(items):
             groups["△"].append(item)
         elif status != "done":
             groups["×" if item.get("item_type") == "status" else "未完了"].append(item)
-    return sum(item.get("status") in {"done", "attention"} for item in eligible), len(eligible), groups
+    return sum(item.get("reviewed", item.get("status") in {"done", "attention"}) for item in eligible), len(eligible), groups
+
+
+def confirmation_label(checked, total):
+    if not total:
+        return "確認項目なし"
+    return "全項目 確認済み ✓" if checked == total else f"未確認 あと{total - checked}件"
 
 
 def render_live_board(business_date, period, period_label):
@@ -82,7 +88,7 @@ def render_live_board(business_date, period, period_label):
         return format_live_board_update_time(value)
 
     board_expansion = ui.expansion(
-        f"LIVE BOARD　今日の対応 {complete} / {total}", icon="dashboard", value=False,
+        f"LIVE BOARD　{confirmation_label(complete, total)}", icon="dashboard", value=False,
     ).props("duration=160").classes("live-board-collapsed w-full")
     with ui.card() as board_card:
         board_card.classes("live-board-v2 w-full")
@@ -93,7 +99,7 @@ def render_live_board(business_date, period, period_label):
                     "live-board-date")
             with ui.row().classes("items-center no-wrap gap-1"):
                 with ui.column().classes("live-board-summary gap-0 items-end"):
-                    progress_label = ui.label(f"今日の対応 {complete} / {total}").classes("live-board-progress")
+                    progress_label = ui.label(confirmation_label(complete, total)).classes("live-board-progress")
                     updated_label = ui.label(update_time_text()).classes("live-board-updated")
                 with ui.button(icon="more_vert").props(
                         "flat round dense aria-label='LIVE BOARDメニュー'").classes("live-board-more"):
@@ -107,17 +113,16 @@ def render_live_board(business_date, period, period_label):
                             ui.notify("この営業の入力内容を消しました", type="positive")
                             ui.navigate.to("/store-ops")
 
-                        def advance():
-                            store_ops.advance_service_context()
-                            ui.navigate.to("/store-ops")
-
                         ui.menu_item("この営業の入力内容を消す", on_click=reset_all)
-                        ui.menu_item("次の営業へ切り替える", on_click=advance)
 
         def refresh_progress():
+            saved = {value["id"]: value for value in store_ops.service_prep_items(business_date, period)}
+            for value in items:
+                if value["id"] in saved:
+                    value.update(saved[value["id"]])
             done, all_items = counts()
-            progress_label.set_text(f"今日の対応 {done} / {all_items}")
-            board_expansion.set_text(f"LIVE BOARD　今日の対応 {done} / {all_items}")
+            progress_label.set_text(confirmation_label(done, all_items))
+            board_expansion.set_text(f"LIVE BOARD　{confirmation_label(done, all_items)}")
             updated_label.set_text(update_time_text())
             handover_list.refresh()
 
@@ -266,23 +271,18 @@ def render_live_board(business_date, period, period_label):
         if order_category.get("visible", True):
             with ui.column().classes("live-orders w-full gap-2"):
                 ui.label("発注状況").classes("text-base font-bold")
-                ui.label("今日の対応数・引き継ぎリストには含めません。").classes("text-xs text-grey-7")
-                order_states = store_ops.daily_order_states(business_date)
+                ui.label("確認件数・引き継ぎリストには含めません。").classes("text-xs text-grey-7")
+                order_checks = store_ops.daily_order_checks(business_date)
                 for destination in store_ops.DAILY_ORDER_DESTINATIONS:
                     with ui.row().classes("w-full items-center justify-between"):
                         ui.label(destination).classes("font-bold")
-                        alert = ui.label("発注待ち").classes("text-red-8 text-xs font-bold")
-                        alert.set_visibility(order_states[destination] == "needed")
-
-                        def save_order(event, name=destination, badge=alert):
-                            store_ops.set_daily_order_state(business_date, name, event.value)
-                            badge.set_visibility(event.value == "needed")
+                        def save_order(event, name=destination):
+                            store_ops.set_daily_order_check(business_date, name, event.value)
                             updated_label.set_text(update_time_text())
 
-                        ui.select({"unchecked": "未確認", "needed": "発注あり（未発注）",
-                                   "not_needed": "発注なし", "ordered": "発注済み"},
-                                  value=order_states[destination], on_change=save_order).props(
-                                      "outlined dense options-dense").classes("live-order-select")
+                        ui.toggle({False: "未発注", True: "発注済み"},
+                                  value=order_checks[destination], on_change=save_order).props(
+                                      "unelevated no-caps").classes("live-order-select")
 
         if not items:
             ui.label("表示する項目はありません").classes("live-board-empty")

@@ -1059,7 +1059,8 @@ class StoreOperationsManager:
             # Copy independently so resetting today never changes yesterday.
             for key in ("store_service_prep_records", "store_service_prep_quantities",
                         "store_service_prep_choices", "store_service_prep_subchecks",
-                        "store_service_prep_notes", "store_service_prep_updates"):
+                        "store_service_prep_notes", "store_service_prep_updates",
+                        "store_service_prep_reviewed"):
                 records = self._data_manager.data.setdefault(key, {})
                 source = records.get(record_date, {}).get(period, {})
                 target = records.setdefault(str(default_date), {}).setdefault(period, {})
@@ -1190,6 +1191,9 @@ class StoreOperationsManager:
                            "quantity": quantity, "choice_mode": choice_mode,
                            "choice": choice, "checked_items": checked,
                            "note": str(notes.get(item["id"], "")),
+                           "reviewed": self._data_manager.data.get("store_service_prep_reviewed", {}).get(
+                               record_date, {}).get(period, {}).get(item["id"],
+                                   status in {"done", "attention"} or updates.get(item["id"], {}).get("action") in {"status", "quantity", "choice", "subchecks"}),
                            "last_update": dict(updates.get(item["id"], {}))})
         return result
 
@@ -1226,6 +1230,9 @@ class StoreOperationsManager:
         return text
 
     def _record_live_board_update(self, record_date, period, item_id, action):
+        if action != "memo":
+            self._data_manager.data.setdefault("store_service_prep_reviewed", {}).setdefault(
+                record_date, {}).setdefault(period, {})[item_id] = action != "reset"
         values = self._data_manager.data.setdefault(
             "store_service_prep_updates", {}).setdefault(record_date, {}).setdefault(period, {})
         values[item_id] = {"updated_at": now_jst().isoformat(timespec="seconds"),

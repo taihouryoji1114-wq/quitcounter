@@ -69,11 +69,11 @@ class StoreOperationsManagerTest(unittest.TestCase):
     def test_live_board_update_time_is_displayed_in_japan_time(self):
         self.assertEqual(
             format_live_board_update_time("2026-09-10T10:15:00"),
-            "最終更新 19:15",
+            "最終更新 2026/09/10 19:15",
         )
         self.assertEqual(
             format_live_board_update_time("2026-09-10T19:15:00+09:00"),
-            "最終更新 19:15",
+            "最終更新 2026/09/10 19:15",
         )
 
     def test_staff_can_add_and_complete_order_request(self):
