@@ -1,3 +1,4 @@
+from core.staff_identity import staff_display_name
 from nicegui import ui
 
 from core.auth import require_app_access, require_permission
@@ -38,7 +39,7 @@ def store_settings_page():
     def confirm_delete(title, name, action):
         with ui.dialog() as dialog, ui.card().classes("settings-dialog q-pa-lg"):
             ui.label(title).classes("text-lg font-black")
-            ui.label(name).classes("text-sm text-grey-7 q-mt-xs")
+            ui.label(staff_display_name(name)).classes("text-sm text-grey-7 q-mt-xs")
             ui.label("過去の記録は残し、今後の一覧から非表示にします").classes(
                 "text-[9px] text-grey-6 q-mt-xs")
 
@@ -322,11 +323,11 @@ def store_settings_page():
                     visible_pin = shift_submissions.staff_pin_for_admin(staff_name)
                     configured = shift_submissions.has_staff_pin(staff_name)
                     with ui.row().classes("pin-admin-row w-full items-center justify-between"):
-                        ui.label(staff_name).classes("text-xs font-black")
+                        ui.label(staff_display_name(staff_name)).classes("text-xs font-black")
                         ui.label(
                             visible_pin or ("設定済み・再設定すると表示" if configured else "未設定")
                         ).classes("pin-admin-value")
-            pin_staff = ui.select(list(shift_submissions.STAFF), label="スタッフ").props(
+            pin_staff = ui.select({key: staff_display_name(key) for key in shift_submissions.STAFF}, label="スタッフ").props(
                 "outlined dense").classes("w-full q-mt-sm")
             new_pin = ui.input(
                 "新しい個人PIN（4〜8桁）", password=True, password_toggle_button=True,
@@ -342,7 +343,7 @@ def store_settings_page():
                     notify_error(error)
                     return
                 new_pin.value = ""
-                ui.notify(f"{pin_staff.value}の個人PINを設定しました", type="positive")
+                ui.notify(f"{staff_display_name(pin_staff.value)}の個人PINを設定しました", type="positive")
 
             ui.button("個人PINを設定・変更", icon="key", on_click=save_staff_pin).classes(
                 "w-full q-mt-sm")

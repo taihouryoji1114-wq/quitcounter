@@ -1,12 +1,14 @@
 from nicegui import ui
 
-from core.auth import current_role, log_out
+from core.auth import current_role, current_staff_id, log_out
 from pages.announcement_controls import announcement_player
 
 
 def store_header_actions():
     announcement_player()
     with ui.row().classes("gap-0"):
+        if current_staff_id():
+            ui.button("マイページ", icon="person", on_click=lambda: ui.navigate.to("/store-ops/me")).props("flat dense")
         ui.button(icon="logout", on_click=lambda: log_out("/store-ops/login")).props(
             "flat round aria-label='ログアウト'").classes("text-grey-8")
 

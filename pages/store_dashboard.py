@@ -21,6 +21,8 @@ def render_store_navigation():
                  "/store-ops/handover", "text-amber-8", open_handovers)
         app_card("発注依頼", "必要な物をその場で共有", "add_shopping_cart",
                  "/store-ops/order-requests", "text-red-7", open_requests)
+        app_card("シフトボード", "確定した勤務予定を確認", "event_available",
+                 "/store-ops/shift-board", "text-green-7")
         app_card("シフト提出", "半月ごとの勤務希望", "calendar_month",
                  "/store-ops/shift-submission", "text-blue-7")
     with ui.row().classes("w-full items-center justify-between q-mt-lg q-mb-xs"):

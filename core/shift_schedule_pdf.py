@@ -24,7 +24,8 @@ def create_shift_schedule_pdf(path, result, staff_names):
     title = ParagraphStyle("shift-title", parent=normal, fontSize=15, leading=19,
                            textColor=colors.HexColor("#173D30"))
     subtitle = ParagraphStyle("shift-subtitle", parent=normal, fontSize=8, leading=10)
-    rows = [[Paragraph("日付", normal), *[Paragraph(name, normal) for name in staff_names],
+    from core.staff_identity import staff_display_name
+    rows = [[Paragraph("日付", normal), *[Paragraph(staff_display_name(name), normal) for name in staff_names],
              Paragraph("不足", normal), Paragraph("実人数", normal)]]
     cut_cells = []
     fixed_cells = []

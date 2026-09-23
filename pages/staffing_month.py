@@ -1,3 +1,4 @@
+from core.staff_identity import staff_display_name
 from calendar import monthrange
 from copy import deepcopy
 from datetime import date
@@ -21,7 +22,7 @@ def monthly_timecards():
     with content:
         ui.button("日付別まとめ入力に切り替え", icon="groups", on_click=lambda: ui.navigate.to("/mirai-kessan/staffing/day")).props("flat")
         with ui.row().classes("w-full no-wrap gap-2"):
-            person = ui.select(list(staffing.HOURLY_STAFF), value="スタッフA", label="スタッフ").props("outlined dense").classes("grow")
+            person = ui.select({key: staff_display_name(key) for key in staffing.HOURLY_STAFF}, value="スタッフA", label="スタッフ").props("outlined dense").classes("grow")
             month_input = ui.input("対象月", value=today_jst().strftime("%Y-%m")).props("outlined dense type=month").classes("grow")
         editor = ui.column().classes("w-full gap-2")
 
@@ -174,7 +175,7 @@ def daily_timecards(request: Request):
                         status = "出勤" if work else "休み" if value.get("entry_confirmed") else "未入力"
                         with ui.card().classes("w-full q-pa-sm").style("border:1px solid #d7e3da;border-radius:14px;box-shadow:none"):
                             with ui.row().classes("w-full justify-between items-center"):
-                                ui.label(name).classes("font-bold")
+                                ui.label(staff_display_name(name)).classes("font-bold")
                                 state = ui.select(["未入力", "出勤", "休み"], value=status).props("outlined dense").style("width:110px")
                             inputs = {}
                             if name in staffing.HOURLY_STAFF:
@@ -214,7 +215,7 @@ def daily_timecards(request: Request):
                         work = row["state"].value == "出勤"
                         value = {key: field.value for key, field in row["inputs"].items()}
                         if work and name in staffing.HOURLY_STAFF and not any(value.get(k) for k in ("lunch_start", "lunch_end", "dinner_start", "dinner_end")):
-                            ui.notify(f"{name}の勤務時間を入力してください", type="negative")
+                            ui.notify(f"{staff_display_name(name)}の勤務時間を入力してください", type="negative")
                             return
                         updates[name] = dict(value, attended=work and name in staffing.SALARIED_STAFF,
                             entry_confirmed=row["state"].value != "未入力",

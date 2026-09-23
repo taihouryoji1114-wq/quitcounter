@@ -7,6 +7,29 @@ from pages.store_live_board import live_board_summary
 
 
 class LiveBoardGroupsTest(unittest.TestCase):
+    def test_legacy_cross_is_reviewed_and_reset_stays_unreviewed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = DataManager(Path(directory) / 'data.json')
+            manager = StoreOperationsManager(data)
+            item = manager.add_prep_template('出汁', '厨房')
+            data.data['store_service_prep_records'] = {
+                '2026-09-23': {'lunch': {item['id']: 'incomplete'}}}
+            values = manager.service_prep_items('2026-09-23', 'lunch')
+            self.assertTrue(values[0]['reviewed'])
+            manager.reset_service_prep_items('2026-09-23', 'lunch', [item['id']])
+            self.assertFalse(manager.service_prep_items('2026-09-23', 'lunch')[0]['reviewed'])
+            manager.confirm_service_prep_item('2026-09-23', 'lunch', item['id'])
+            saved = manager.service_prep_items('2026-09-23', 'lunch')[0]
+            self.assertTrue(saved['reviewed'])
+            self.assertEqual(saved['status'], 'incomplete')
+            reloaded = StoreOperationsManager(DataManager(Path(directory) / 'data.json'))
+            self.assertTrue(reloaded.service_prep_items('2026-09-23', 'lunch')[0]['reviewed'])
+
+    def test_memo_is_not_an_uncheckable_confirmation_target(self):
+        checked, total, _ = live_board_summary([
+            {'id': 'memo', 'item_type': 'memo', 'progress_enabled': True, 'status': 'incomplete'}])
+        self.assertEqual((checked, total), (0, 0))
+
     def test_names_are_grouped_and_attention_counts(self):
         items = [
             {'id': 'a', 'name': '唐揚げ', 'item_type': 'status', 'status': 'attention', 'note': '表示しない'},

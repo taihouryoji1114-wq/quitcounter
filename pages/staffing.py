@@ -1,3 +1,4 @@
+from core.staff_identity import staff_display_name
 from datetime import date, timedelta
 
 from fastapi import Request
@@ -62,7 +63,7 @@ def staffing_page(request: Request):
             ui.label("3人とも出勤入力は不要。月10日休みを月内に均等配分し、月給×経過日数÷月の日数で自動計上します。過去月は満額です。").classes(
                 "text-[9px] text-grey-6 q-mb-xs")
             salary_inputs = {
-                name: ui.number(f"{name}の額面給与", value=salaries[name] or None,
+                name: ui.number(f"{staff_display_name(name)}の額面給与", value=salaries[name] or None,
                                 min=0, step=1).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
                 for name in staffing.SALARIED_STAFF
             }
@@ -135,7 +136,7 @@ def staffing_page(request: Request):
                 colors = {"safe": "#E8F4EC", "warning": "#FFF4D9", "danger": "#FFE4D4", "over": "#FFE0E0"}
                 labels = {"safe": "余裕あり", "warning": "早めに確認", "danger": "要調整", "over": "上限到達"}
                 with ui.card().classes("dependent-card w-full q-pa-sm q-mb-xs").style(f"background:{colors[status['level']]}"):
-                    ui.label(f"{name}　{labels[status['level']]}　残り ¥{status['remaining']:,}").classes("text-xs font-bold")
+                    ui.label(f"{staff_display_name(name)}　{labels[status['level']]}　残り ¥{status['remaining']:,}").classes("text-xs font-bold")
 
         insurance = staffing.insurance_settings()
         rates = staffing.insurance_rates()
@@ -174,7 +175,7 @@ def staffing_page(request: Request):
                 for name in staffing.HOURLY_STAFF:
                     selections[name] = {}
                     with ui.row().classes("simple-shift-row w-full items-center no-wrap"):
-                        ui.label(name).classes("simple-shift-name")
+                        ui.label(staff_display_name(name)).classes("simple-shift-name")
                         for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
                             template = templates[name].get(prefix)
                             checked = bool(existing[name].get(f"{prefix}_start"))

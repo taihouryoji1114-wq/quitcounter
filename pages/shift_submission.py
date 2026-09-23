@@ -4,7 +4,8 @@ from pathlib import Path
 
 from nicegui import ui
 
-from core.auth import current_role, require_app_access
+from core.auth import current_role, current_staff_id, require_staff_identity, require_app_access
+from core.staff_identity import staff_display_name
 from core.clock import today_jst
 from core.shift_submissions import shift_submissions
 from core.shift_schedule_pdf import create_shift_schedule_pdf
@@ -17,17 +18,10 @@ def shift_submission_page():
     if not require_app_access("store_ops"):
         return
     Theme.page("シフト提出｜店舗運営", app_name="store-ops")
+    identity = current_staff_id()
     today = today_jst()
-    if today.day <= 5:
-        default_half, default_month, default_year = "second", today.month, today.year
-    elif today.day <= 20:
-        default_half = "first"
-        default_month = (today.month % 12) + 1
-        default_year = today.year + (1 if today.month == 12 else 0)
-    else:
-        default_half = "second"
-        default_month = (today.month % 12) + 1
-        default_year = today.year + (1 if today.month == 12 else 0)
+    from pages.store_personal import submission_period_for
+    default_year, default_month, default_half = submission_period_for(today)
 
     content = Theme.shell("シフト提出", "半月ごとの希望をまとめて提出",
                           back_to="/store-ops", action=store_header_actions,
@@ -39,8 +33,10 @@ def shift_submission_page():
                 "text-base font-black q-mt-xs")
 
         with ui.card().classes("surface-card w-full q-pa-lg"):
-            staff = ui.select(list(shift_submissions.STAFF), label="名前を選択").props(
+            staff = ui.select({key: staff_display_name(key) for key in ([identity] if identity else shift_submissions.STAFF)}, value=identity, label="名前").props(
                 "outlined dense").classes("w-full")
+            if identity:
+                staff.disable()
             with ui.row().classes("w-full gap-2 no-wrap q-mt-sm"):
                 year = ui.number("年", value=default_year, min=2026, max=2100, step=1).props(
                     "outlined dense").classes("grow")
@@ -56,6 +52,7 @@ def shift_submission_page():
 
             def render_editor(staff_name=None):
                 selected_staff = staff_name or staff.value
+                require_staff_identity(selected_staff)
                 if not selected_staff:
                     ui.notify("名前を選択してください", type="negative")
                     return
@@ -103,6 +100,7 @@ def shift_submission_page():
 
                     def save_submission():
                         try:
+                            require_staff_identity(selected_staff)
                             result = shift_submissions.save(
                                 selected_staff, period["year"], period["month"], period["half"],
                                 {day: {key: field.value for key, field in day_fields.items()}
@@ -125,12 +123,13 @@ def shift_submission_page():
                     if submission["submitted_at"]:
                         def cancel_submission():
                             with ui.dialog() as cancel_dialog, ui.card().classes("w-full max-w-sm"):
-                                ui.label(f"{selected_staff}：{period['label']}").classes("font-bold")
+                                ui.label(f"{staff_display_name(selected_staff)}：{period['label']}").classes("font-bold")
                                 needs_review = current_role() != "owner" and today_jst() > date.fromisoformat(period["deadline"])
                                 ui.label("半月分の取消申請を送ります。承認までは元の提出を残します。" if needs_review else "この半月分の提出を取り消し、未提出に戻します。")
                                 confirm_pin = ui.input("本人の個人PIN", password=True).props("outlined inputmode=numeric") if current_role() != "owner" else None
                                 def execute():
                                     try:
+                                        require_staff_identity(selected_staff)
                                         result = shift_submissions.cancel_submission(
                                             selected_staff, period["year"], period["month"], period["half"],
                                             pin=confirm_pin.value if confirm_pin else None,
@@ -176,14 +175,15 @@ def shift_submission_page():
                 if not staff.value:
                     ui.notify("名前を選択してください", type="negative")
                     return
-                if current_role() == "owner":
-                    render_editor(staff.value)
+                require_staff_identity(staff.value)
+                if identity or current_role() == "owner":
+                    render_editor(identity or staff.value)
                     return
                 if not shift_submissions.has_staff_pin(staff.value):
                     ui.notify("個人PINが未設定です。管理者に設定してもらってください", type="warning")
                     return
                 pin_target["staff"] = staff.value
-                pin_message.set_text(f"{staff.value}さんの個人PINを入力してください")
+                pin_message.set_text(f"{staff_display_name(staff.value)}さんの個人PINを入力してください")
                 pin_input.value = ""
                 pin_dialog.open()
 
@@ -245,7 +245,7 @@ def shift_submission_page():
                     "text-[9px] text-grey-6 w-full")
 
                 def update_manual_summary():
-                    summary = [f"{day}日 {name}＝{value}"
+                    summary = [f"{day}日 {staff_display_name(name)}＝{value}"
                                for day, records in sorted(manual_overrides.items(), key=lambda pair: int(pair[0]))
                                for name, value in records.items()]
                     manual_list.set_text("／".join(summary) if summary else "固定した変更はありません")
@@ -337,7 +337,7 @@ def shift_submission_page():
                                     f"grid-template-columns:{columns}"):
                                 ui.label("日付").classes("direct-head direct-date")
                                 for name in shift_submissions.STAFF:
-                                    ui.label(name).classes("direct-head")
+                                    ui.label(staff_display_name(name)).classes("direct-head")
                                 ui.label("不足").classes("direct-head")
                                 ui.label("実人数").classes("direct-head")
                                 lunch_totals = {name: 0 for name in shift_submissions.STAFF}
@@ -405,7 +405,7 @@ def shift_submission_page():
                         for name, summary in result["preference_summary"].items():
                             if summary["requested_days"]:
                                 ui.label(
-                                    f'{name}：希望 {summary["requested_days"]}日／希望通り {summary["accepted_days"]}日／一部含む削減 {summary["cut_days"]}日'
+                                    f'{staff_display_name(name)}：希望 {summary["requested_days"]}日／希望通り {summary["accepted_days"]}日／一部含む削減 {summary["cut_days"]}日'
                                 ).classes("text-[10px] text-grey-7")
                         ui.label("L＝ランチ、D＝ディナー。これは編集前提の下書きです。").classes(
                             "text-[9px] text-grey-6 q-mt-xs")
@@ -460,7 +460,7 @@ def shift_submission_page():
                                 "text-sm font-black text-warning q-mt-sm q-mb-xs")
                             for name, request in pending.items():
                                 with ui.card().classes("change-request-card w-full q-pa-md q-mb-sm"):
-                                    ui.label(name).classes("text-sm font-black")
+                                    ui.label(staff_display_name(name)).classes("text-sm font-black")
                                     ui.label(f"申請日時 {request.get('requested_at', '')[5:].replace('-', '/')}").classes(
                                         "text-[9px] text-grey-6")
                                     changes = []
@@ -504,7 +504,7 @@ def shift_submission_page():
                         table = ['<div class="shift-sheet-scroll"><table class="shift-sheet">',
                                  '<thead><tr><th class="date-head" rowspan="2">日付</th>']
                         for name in shift_submissions.STAFF:
-                            table.append(f'<th class="staff-head" colspan="2">{escape(name)}</th>')
+                            table.append(f'<th class="staff-head" colspan="2">{escape(staff_display_name(name))}</th>')
                         table.append('</tr><tr>')
                         for _ in shift_submissions.STAFF:
                             table.append('<th class="lunch-head">ランチ</th><th class="dinner-head">ディナー</th>')

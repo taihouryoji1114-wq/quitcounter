@@ -83,6 +83,13 @@ def verify_pin(value):
 def authenticate_pin(value, app_id=None):
     """Return the matching account without exposing which configured PIN matched."""
     entered = _normalize_pin(value)
+    personal = None
+    if app_id == "store_ops":
+        from core.staff_identity import personal_staff_account
+        try:
+            personal = personal_staff_account(entered)
+        except ValueError:
+            return None
     accounts = (
         ("owner", "user1", os.environ.get("RBASE_OWNER_PIN") or os.environ.get("HABITORY_PIN", "")),
         ("partner", "user2", os.environ.get("RBASE_PARTNER_PIN", "")),
@@ -97,8 +104,11 @@ def authenticate_pin(value, app_id=None):
             account = {"role": role, "user_id": user_id}
             if app_id and app_id not in ROLE_PERMISSIONS.get(role, set()):
                 continue
+            # Personal PINs never grant a shared account's elevated role.
+            if personal:
+                return personal
             return account
-    return None
+    return personal
 
 
 def _normalize_pin(value):
@@ -109,7 +119,12 @@ def _normalize_pin(value):
 def log_in(account=None):
     app.storage.user["authenticated"] = True
     account = account or {"role": "owner", "user_id": "user1"}
+    for key in ("staff_id", "staff_display_name", "account_user_id", "selected_user_id"):
+        app.storage.user.pop(key, None)
     app.storage.user["role"] = account.get("role", "owner")
+    if account.get("staff_id"):
+        app.storage.user["staff_id"] = account["staff_id"]
+        app.storage.user["staff_display_name"] = account["display_name"]
     if account.get("user_id"):
         app.storage.user["account_user_id"] = account["user_id"]
         app.storage.user["selected_user_id"] = account["user_id"]
@@ -144,3 +159,27 @@ def select_user_for_browser(user_id):
     data.users.get_user(user_id)
     app.storage.user["selected_user_id"] = user_id
     return user_id
+
+
+def current_staff_id():
+    from core.staff_identity import STAFF_NAMES
+    value = app.storage.user.get("staff_id")
+    return value if is_authenticated() and current_role() == "staff" and value in STAFF_NAMES else None
+
+
+def require_staff_identity(staff_id):
+    """Enforce session identity in server-side callbacks, not just selectors."""
+    identity = current_staff_id()
+    if identity and staff_id != identity:
+        raise ValueError("本人のシフトだけ操作できます。")
+
+
+def current_staff_actor():
+    try:
+        staff_id = current_staff_id()
+        if staff_id:
+            from core.staff_identity import staff_display_name
+            return {"staff_id": staff_id, "name": staff_display_name(staff_id)}
+    except RuntimeError:
+        pass  # Background jobs and tests do not have a browser session.
+    return None

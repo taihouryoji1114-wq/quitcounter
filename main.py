@@ -39,6 +39,8 @@ import pages.store_checklist
 import pages.store_sections
 import pages.store_events
 import pages.store_chanhaya
+import pages.store_shift_board
+import pages.store_personal
 import pages.shift_submission
 import pages.financial_reports
 import pages.business_audit

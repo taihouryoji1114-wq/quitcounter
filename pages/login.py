@@ -1,4 +1,6 @@
-from nicegui import ui
+from time import time
+
+from nicegui import app, ui
 
 from core.auth import authenticate_pin, can_access, is_authenticated, log_in
 from core.theme import Theme
@@ -6,6 +8,9 @@ from core.theme import Theme
 
 def login_screen(app_id, name, destination, subtitle, app_name="habitory"):
     def target_for_role(role):
+        from core.auth import current_staff_id
+        if app_id == "store_ops" and current_staff_id():
+            return "/store-ops/me"
         if app_id == "future_financials" and role not in {"owner", "executive"}:
             return "/mirai-kessan/input"
         return destination
@@ -29,11 +34,21 @@ def login_screen(app_id, name, destination, subtitle, app_name="habitory"):
             ).classes("w-full q-mb-md")
 
             def submit():
+                lock_until = app.storage.user.get("pin_lock_until", 0)
+                if time() < lock_until:
+                    ui.notify("少し待ってからもう一度入力してください", type="warning")
+                    return
                 account = authenticate_pin(pin.value, app_id)
                 if not account:
+                    attempts = app.storage.user.get("pin_attempts", 0) + 1
+                    app.storage.user["pin_attempts"] = attempts
+                    if attempts >= 5:
+                        app.storage.user["pin_lock_until"] = time() + 60
+                        app.storage.user["pin_attempts"] = 0
                     pin.value = ""
                     ui.notify("PINが違います", type="negative")
                     return
+                app.storage.user["pin_attempts"] = 0
                 log_in(account)
                 ui.navigate.to(target_for_role(account["role"]))
 

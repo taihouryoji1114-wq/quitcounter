@@ -28,11 +28,14 @@ def format_live_board_update_time(value):
         return "最終更新時刻を確認できません"
 
 
+def confirmation_items(items):
+    return [item for item in items if item.get("source") != "daily_order"
+            and item.get("visible", True) and item.get("item_type") != "memo"
+            and (item.get("item_type") != "quantity" or item.get("progress_enabled"))]
+
+
 def live_board_summary(items):
-    eligible = [item for item in items if item.get("source") != "daily_order"
-                and item.get("visible", True)
-                and (item.get("item_type") not in {"quantity", "memo"}
-                     or item.get("progress_enabled"))]
+    eligible = confirmation_items(items)
     groups = {"△": [], "×": [], "未完了": []}
     seen = set()
     for item in eligible:
@@ -67,7 +70,8 @@ def render_live_board(business_date, period, period_label):
     order_category_name = order_category["name"]
     items = store_ops.service_prep_items(business_date, period)
     items = [item for item in items if item.get("visible", True)
-             and category_visibility.get(item.get("area", "厨房"), True)]
+             and category_visibility.get(item.get("area", "厨房"), True)
+             and item.get("area", "厨房") != order_category_name]
     category_names = [value["name"] for value in categories if value.get("visible", True)]
     for item in items:
         if item.get("area", "厨房") not in category_names:
@@ -87,6 +91,32 @@ def render_live_board(business_date, period, period_label):
         value = store_ops.live_board_last_updated_at(business_date, period)
         return format_live_board_update_time(value)
 
+    @ui.refreshable
+    def handover_list():
+        _, _, groups = live_board_summary(items)
+        with ui.card().classes("live-handover-top w-full gap-1"):
+            with ui.row().classes("w-full items-center justify-between gap-2"):
+                ui.label("引き継ぎリスト").classes("text-sm font-bold")
+                ui.button("仕入れリスト", icon="shopping_basket", on_click=lambda:
+                          ui.navigate.to("/store-ops/purchase-list")).props("flat dense no-caps")
+            summary = "　".join(f"{symbol} {len(values)}件" for symbol, values in groups.items())
+            with ui.expansion(summary, icon="list_alt").classes("w-full live-handover-details"):
+                for symbol, values in groups.items():
+                    with ui.column().classes("live-handover-group w-full gap-1"):
+                        ui.label(f"{symbol}　{len(values)}件").classes("font-bold")
+                        if not values:
+                            ui.label("該当なし").classes("text-xs text-grey-6")
+                        for value in values:
+                            ui.label(value["name"]).classes("live-handover-name")
+    handover_list()
+
+    def actor_text(value):
+        update = value.get("last_update", {})
+        if not update.get("staff_id"):
+            return ""
+        return f"{update.get('updated_by', '')} · {format_live_board_update_time(update.get('updated_at')).replace('最終更新 ', '')}"
+
+    actor_labels = {}
     board_expansion = ui.expansion(
         f"LIVE BOARD　{confirmation_label(complete, total)}", icon="dashboard", value=False,
     ).props("duration=160").classes("live-board-collapsed w-full")
@@ -120,11 +150,32 @@ def render_live_board(business_date, period, period_label):
             for value in items:
                 if value["id"] in saved:
                     value.update(saved[value["id"]])
+                    if value["id"] in actor_labels:
+                        actor_labels[value["id"]].set_text(actor_text(value))
             done, all_items = counts()
             progress_label.set_text(confirmation_label(done, all_items))
             board_expansion.set_text(f"LIVE BOARD　{confirmation_label(done, all_items)}")
             updated_label.set_text(update_time_text())
             handover_list.refresh()
+            unconfirmed_list.refresh()
+
+        @ui.refreshable
+        def unconfirmed_list():
+            pending = [value for value in confirmation_items(items) if not value.get("reviewed")]
+            if not pending:
+                return
+            with ui.expansion("未確認の項目を確認する", icon="fact_check").classes("w-full"):
+                ui.label("作業が未完了でも、確認したらそのまま記録できます。").classes("text-xs text-grey-7")
+                for value in pending:
+                    with ui.row().classes("w-full items-center justify-between"):
+                        ui.label(value["name"]).classes("text-sm")
+
+                        def confirm(selected=value):
+                            store_ops.confirm_service_prep_item(business_date, period, selected["id"])
+                            refresh_progress()
+
+                        ui.button("この状態で確認", on_click=confirm).props("outline dense no-caps")
+        unconfirmed_list()
 
         for category in category_names:
             grouped = [item for item in items if item.get("area", "厨房") == category]
@@ -138,6 +189,7 @@ def render_live_board(business_date, period, period_label):
                         with ui.row().classes("w-full items-center justify-between no-wrap"):
                             with ui.column().classes("live-board-copy gap-0"):
                                 ui.label(item["name"]).classes("live-board-name")
+                                actor_labels[item["id"]] = ui.label(actor_text(item)).classes("text-[9px] text-grey-7")
                                 note_label = ui.label(item.get("note", "")).classes(
                                     "live-board-note")
                                 note_label.set_visibility(bool(item.get("note")))
@@ -253,21 +305,6 @@ def render_live_board(business_date, period, period_label):
                                             ui.button("完了", on_click=save_note).props(
                                                 "unelevated dense no-caps").classes("w-full")
 
-        @ui.refreshable
-        def handover_list():
-            _, _, groups = live_board_summary(items)
-            with ui.column().classes("live-handover w-full gap-2"):
-                ui.label("引き継ぎリスト").classes("text-base font-bold")
-                ui.label("仕込み名を状態別に表示。日付が変わっても手動リセットまで維持します。").classes("text-xs text-grey-7")
-                for symbol, values in groups.items():
-                    with ui.column().classes("live-handover-group w-full gap-1"):
-                        ui.label(f"{symbol}　{len(values)}件").classes("font-bold")
-                        if not values:
-                            ui.label("該当なし").classes("text-xs text-grey-6")
-                        for value in values:
-                            ui.label(value["name"]).classes("live-handover-name")
-        handover_list()
-
         if order_category.get("visible", True):
             with ui.column().classes("live-orders w-full gap-2"):
                 ui.label("発注状況").classes("text-base font-bold")
@@ -289,6 +326,7 @@ def render_live_board(business_date, period, period_label):
     board_card.move(board_expansion)
 
     ui.add_css("""
+    .live-handover-top{padding:8px 14px!important;margin-bottom:12px;border:1px solid #dce7de;border-radius:14px!important;background:#f4f7f3!important;box-shadow:none!important}.live-handover-details .q-item{min-height:36px;padding:2px 0}.live-handover-details .q-expansion-item__content{padding:4px 0}.live-handover-group{margin-top:6px}
     .live-handover,.live-orders{margin-top:18px;padding:14px;background:#f4f7f3;border:1px solid #dce7de;border-radius:14px}.live-handover-group{padding:10px;background:white;border-radius:9px}.live-handover-name{font-size:13px;overflow-wrap:anywhere}.live-orders{background:#f1f5fa}.live-order-select{width:175px;max-width:100%}
     .live-board-collapsed{overflow:hidden;border:1px solid rgba(255,255,255,.95)!important;border-radius:22px!important;background:linear-gradient(145deg,#fff,#eef4f0)!important;box-shadow:0 11px 0 #cad6cf,0 18px 28px rgba(35,58,47,.18)!important}.live-board-collapsed>.q-expansion-item__container>.q-item{min-height:76px!important;padding:0 20px!important;color:#173c30;font-size:15px;font-weight:950;letter-spacing:.04em}.live-board-collapsed .q-expansion-item__content{padding:0 8px 14px}.live-board-v2{padding:16px 14px 10px!important;border:1px solid #dfe8e2!important;border-radius:18px!important;background:rgba(255,255,255,.98)!important;color:#17352b!important;box-shadow:none!important}
     .live-board-head{padding:1px 3px 12px;border-bottom:1px solid #e5ece8}.live-board-title{font-size:22px;font-weight:950;letter-spacing:.06em}.live-board-date{font-size:10px;color:#718078;font-weight:750}.live-board-summary{margin-right:2px}.live-board-progress{padding:7px 12px;border-radius:999px;background:#173e31;color:white;font-size:13px;font-weight:950;letter-spacing:.05em}.live-board-updated{margin-top:3px;padding-right:2px;color:#718078;font-size:8px;font-weight:850;white-space:nowrap}.live-board-more{color:#60756b!important}

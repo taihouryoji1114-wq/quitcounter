@@ -1193,7 +1193,11 @@ class StoreOperationsManager:
                            "note": str(notes.get(item["id"], "")),
                            "reviewed": self._data_manager.data.get("store_service_prep_reviewed", {}).get(
                                record_date, {}).get(period, {}).get(item["id"],
-                                   status in {"done", "attention"} or updates.get(item["id"], {}).get("action") in {"status", "quantity", "choice", "subchecks"}),
+                                   status in {"done", "attention"}
+                                   or updates.get(item["id"], {}).get("action") in {"status", "quantity", "choice", "subchecks", "review"}
+                                   or (updates.get(item["id"], {}).get("action") != "reset"
+                                       and (item["id"] in states or item["id"] in quantities
+                                            or item["id"] in choices or item["id"] in subchecks))),
                            "last_update": dict(updates.get(item["id"], {}))})
         return result
 
@@ -1229,14 +1233,26 @@ class StoreOperationsManager:
         self._data_manager.save()
         return text
 
+    def confirm_service_prep_item(self, record_date, period, item_id):
+        """Confirm an unchanged value, including zero stock or unfinished work."""
+        self._date(record_date)
+        period = self._service_period(period)
+        if not any(item["id"] == item_id for item in self.prep_templates()):
+            raise ValueError("仕込み項目が見つかりません。")
+        self._record_live_board_update(record_date, period, item_id, "review")
+        self._data_manager.save()
+
     def _record_live_board_update(self, record_date, period, item_id, action):
         if action != "memo":
             self._data_manager.data.setdefault("store_service_prep_reviewed", {}).setdefault(
                 record_date, {}).setdefault(period, {})[item_id] = action != "reset"
         values = self._data_manager.data.setdefault(
             "store_service_prep_updates", {}).setdefault(record_date, {}).setdefault(period, {})
+        from core.auth import current_staff_actor
+        actor = current_staff_actor()
         values[item_id] = {"updated_at": now_jst().isoformat(timespec="seconds"),
-                           "updated_by": "staff", "action": action}
+                           "updated_by": actor["name"] if actor else "staff", "action": action,
+                           "staff_id": actor["staff_id"] if actor else ""}
 
     def set_service_prep_status(self, record_date, period, item_id, status):
         self._date(record_date)
