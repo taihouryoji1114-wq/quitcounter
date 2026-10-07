@@ -12,6 +12,7 @@ app.add_static_files("/static", str(STATIC_DIR))
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)
 
 # ページ読み込み
+import pages.couple
 import pages.home
 import pages.calendar_page
 import pages.hydration

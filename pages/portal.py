@@ -28,6 +28,9 @@ def portal():
         brand="R-BASE",
     )
     with content:
+        with ui.card().classes("habit-card w-full q-pa-lg q-mb-md cursor-pointer").on("click", lambda _: ui.navigate.to("/couple")):
+            ui.label("🌸 夫婦円満").classes("text-xl font-bold")
+            ui.label("ふたりで育てる、なかよしガーデン").classes("text-grey-7")
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/static/ceo-academy/index.html?v=1")):

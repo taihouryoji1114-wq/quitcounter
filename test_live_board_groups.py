@@ -80,3 +80,9 @@ class LiveBoardGroupsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class HandoverDateLabelTest(unittest.TestCase):
+    def test_original_saved_update_date_is_shown_in_japan_time(self):
+        from pages.store_live_board import handover_date_label
+        self.assertEqual(handover_date_label({'last_update': {'updated_at': '2026-10-06T23:30:00+00:00'}}), '記録更新 2026/10/07 08:30')
+        self.assertEqual(handover_date_label({}), '記録日時なし')

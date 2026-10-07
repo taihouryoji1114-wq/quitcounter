@@ -28,6 +28,14 @@ def format_live_board_update_time(value):
         return "最終更新時刻を確認できません"
 
 
+def handover_date_label(item):
+    update = item.get("last_update", {})
+    value = update.get("updated_at")
+    if not value:
+        return "記録日時なし"
+    return format_live_board_update_time(value).replace("最終更新", "記録更新", 1)
+
+
 def confirmation_items(items):
     return [item for item in items if item.get("source") != "daily_order"
             and item.get("visible", True) and item.get("item_type") != "memo"
@@ -108,6 +116,7 @@ def render_live_board(business_date, period, period_label):
                             ui.label("該当なし").classes("text-xs text-grey-6")
                         for value in values:
                             ui.label(value["name"]).classes("live-handover-name")
+                            ui.label(handover_date_label(value)).classes("text-xs text-grey-7")
     handover_list()
 
     def actor_text(value):

@@ -1,3 +1,4 @@
+from core.staff_identity import staff_display_name
 from nicegui import app, ui
 
 from core.auth import current_role, has_permission, require_app_access
@@ -94,7 +95,7 @@ def store_dashboard_page():
                             ui.label(notice["details"]).classes(
                                 "text-[10px] text-grey-7 whitespace-pre-wrap q-mt-xs")
                         staff_name = ui.select(
-                            list(staffing.STAFF), label="確認するスタッフ名").props(
+                            {key: staff_display_name(key) for key in staffing.STAFF}, label="確認するスタッフ名").props(
                             "outlined dense options-dense").classes(
                                 "notice-staff-name w-full q-mt-sm")
 
@@ -121,11 +122,11 @@ def store_dashboard_page():
                         explanation_requests = notice.get("explanation_requests", [])
                         if acknowledgements:
                             ui.label("確認済み：" + "、".join(
-                                value.get("name", "") for value in acknowledgements)).classes(
+                                staff_display_name(value.get("name", "")) for value in acknowledgements)).classes(
                                     "notice-response-list text-positive")
                         if explanation_requests:
                             ui.label("説明希望：" + "、".join(
-                                value.get("name", "") for value in explanation_requests)).classes(
+                                staff_display_name(value.get("name", "")) for value in explanation_requests)).classes(
                                     "notice-response-list text-warning")
         notice_history = [item for item in store_quiz.notices(include_closed=True)
                           if not item.get("active", True)]

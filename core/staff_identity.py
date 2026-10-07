@@ -6,7 +6,8 @@ STAFF_NAMES = dict(zip((f"スタッフ{letter}" for letter in "ABCDEFG"),
 
 
 def staff_display_name(staff_id):
-    return STAFF_NAMES.get(unicodedata.normalize("NFKC", str(staff_id)), staff_id)
+    normalized = unicodedata.normalize("NFKC", str(staff_id))
+    return STAFF_NAMES.get(normalized, {"スタッフH": "未登録枠1", "スタッフI": "未登録枠2"}.get(normalized, staff_id))
 
 
 def personal_staff_account(pin):

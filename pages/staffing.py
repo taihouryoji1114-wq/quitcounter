@@ -76,7 +76,7 @@ def staffing_page(request: Request):
             wage_inputs = {}
             with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
                 for name in staffing.HOURLY_STAFF:
-                    wage_inputs[name] = ui.number(name, value=wages[name] or None, min=0, step=1).props(
+                    wage_inputs[name] = ui.number(staff_display_name(name), value=wages[name] or None, min=0, step=1).props(
                         "outlined dense prefix=¥ suffix=/時 inputmode=numeric")
 
             def save_wages():
@@ -91,7 +91,7 @@ def staffing_page(request: Request):
             with ui.element("div").classes("grid grid-cols-2 gap-2 w-full"):
                 for name in staffing.STAFF:
                     commute_inputs[name] = ui.number(
-                        name, value=commute_rates[name] or None, min=0, step=1
+                        staff_display_name(name), value=commute_rates[name] or None, min=0, step=1
                     ).props("outlined dense prefix=¥ inputmode=numeric")
             def save_commute():
                 staffing.save_commute_rates({name: field.value for name, field in commute_inputs.items()})
@@ -106,7 +106,7 @@ def staffing_page(request: Request):
             options = {key: label for key, (label, _) in staffing.DEPENDENT_LIMITS.items()}
             for name in staffing.STAFF:
                 dependent_inputs[name] = {}
-                with ui.expansion(name, value=False).classes("staff-shift w-full q-mb-xs"):
+                with ui.expansion(staff_display_name(name), value=False).classes("staff-shift w-full q-mb-xs"):
                     dependent_inputs[name]["mode"] = ui.select(
                         options, value=settings[name]["mode"], label="管理する基準"
                     ).props("outlined dense options-dense").classes("w-full")
@@ -146,7 +146,7 @@ def staffing_page(request: Request):
             insurance_inputs = {}
             for name in staffing.STAFF:
                 insurance_inputs[name] = {}
-                with ui.expansion(name, value=False).classes("staff-shift w-full q-mb-xs"):
+                with ui.expansion(staff_display_name(name), value=False).classes("staff-shift w-full q-mb-xs"):
                     insurance_inputs[name]["social"] = ui.checkbox("健康保険・厚生年金に加入", value=insurance[name]["social"])
                     insurance_inputs[name]["standard_monthly"] = ui.number("標準報酬月額", value=insurance[name]["standard_monthly"] or None, min=0).props("outlined dense prefix=¥")
                     insurance_inputs[name]["care"] = ui.checkbox("介護保険対象", value=insurance[name]["care"])

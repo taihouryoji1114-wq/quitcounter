@@ -1,3 +1,4 @@
+from core.staff_identity import staff_display_name
 from datetime import datetime
 from nicegui import ui
 from core.auth import has_permission, require_app_access
@@ -151,7 +152,7 @@ def store_fire_training_page():
             with ui.column().classes("w-full q-pa-md gap-2"):
                 ui.label("参考：東京消防庁 自衛消防活動要領").classes("text-sm font-black")
                 ui.button("公式教材を開く", icon="open_in_new", on_click=lambda: ui.run_javascript(f"window.open('{COURSE_URL}','_blank','noopener')")).props("outline no-caps").classes("w-full")
-                staff = ui.select(list(staffing.STAFF), label="受講したスタッフ名").props("outlined options-dense").classes("w-full")
+                staff = ui.select({key: staff_display_name(key) for key in staffing.STAFF}, label="受講したスタッフ名").props("outlined options-dense").classes("w-full")
                 confirmed = ui.checkbox("公式教材を最後まで確認しました")
                 def complete():
                     if not confirmed.value:
@@ -165,7 +166,7 @@ def store_fire_training_page():
                     record = records.get(name)
                     with ui.row().classes("training-row w-full items-center no-wrap"):
                         ui.icon("check_circle" if record else "radio_button_unchecked").classes("text-positive" if record else "text-grey-4")
-                        ui.label(name).classes("text-xs font-bold grow")
+                        ui.label(staff_display_name(name)).classes("text-xs font-bold grow")
                         if record:
                             ui.label(datetime.fromisoformat(record["completed_at"]).strftime("%Y/%m/%d %H:%M")).classes("text-[9px] text-grey-6")
                             if can_manage: ui.button(icon="delete_outline", on_click=lambda _, n=name: (fire_training.remove(n), reload("受講記録を取り消しました"))).props("flat round dense color=grey")

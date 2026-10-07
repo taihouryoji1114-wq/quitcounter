@@ -1,3 +1,4 @@
+from core.staff_identity import staff_display_name
 from nicegui import ui
 
 from core.auth import current_role, log_out, require_app_access, require_permission
@@ -40,7 +41,7 @@ def attendance_input_page():
                         with ui.element("div").classes(
                                 "attendance-progress-person entered" if item["latest_date"]
                                 else "attendance-progress-person"):
-                            ui.label(name).classes("attendance-progress-name")
+                            ui.label(staff_display_name(name)).classes("attendance-progress-name")
                             ui.label(latest).classes("attendance-progress-latest")
                             ui.label(f"{item['entered_count']}日分").classes(
                                 "attendance-progress-count")
@@ -58,7 +59,7 @@ def attendance_input_page():
                 with ui.card().classes("attendance-input-card w-full q-pa-md q-mt-sm"):
                     for name in staffing.HOURLY_STAFF:
                         fields[name] = {}
-                        with ui.expansion(name, value=name in staffing.SALARIED_STAFF).classes(
+                        with ui.expansion(staff_display_name(name), value=name in staffing.SALARIED_STAFF).classes(
                             "attendance-person w-full q-mb-xs"):
                             if name in staffing.SALARIED_STAFF:
                                 fields[name]["attended"] = ui.checkbox(
