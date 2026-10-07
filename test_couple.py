@@ -43,3 +43,5 @@ class CoupleTest(unittest.TestCase):
         import pages.couple as page
         with patch.object(page,'person_id',return_value='user1'),patch.object(page,'garden',self.g):
             with ui.column():page.couple_page()
+            self.g.check('user1'); self.g.check('user2')
+            with ui.column():page.couple_page()
