@@ -1,0 +1,17 @@
+{
+  "id": "/couple",
+  "name": "夫婦円満",
+  "short_name": "夫婦円満",
+  "start_url": "/couple",
+  "scope": "/couple",
+  "display": "standalone",
+  "background_color": "#f8f5ee",
+  "theme_color": "#557c60",
+  "icons": [
+    {
+      "src": "/static/couple-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -32,6 +32,13 @@ class CoupleGarden:
             day[key].append(person)
         self.manager.save()
 
+    def together(self, person):
+        root = self.root(person)
+        day = root['days'].setdefault(today_jst().isoformat(), {'thanks': [], 'rainbow': []})
+        day['thanks'] = ['user1', 'user2']
+        day['together_at'] = day.get('together_at') or now_jst().isoformat()
+        self.manager.save()
+
     def note(self, person, category, text, shared=False):
         self.validate(person)
         text = str(text or '').strip()

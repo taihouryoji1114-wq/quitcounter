@@ -14,7 +14,7 @@ def person_id():
 @ui.page('/couple/login')
 def couple_login():
     from pages.login import login_screen
-    login_screen('couple', '夫婦円満', '/couple', 'ふたりで育てる、なかよしガーデン')
+    login_screen('couple', '夫婦円満', '/couple', 'ふたりで育てる、なかよしガーデン', app_name='couple')
 
 
 @ui.page('/couple')
@@ -24,6 +24,9 @@ def couple_page():
     except ValueError:
         ui.navigate.to('/couple/login')
         return
+    from core.theme import Theme
+    Theme.page('夫婦円満', app_name='couple')
+    ui.add_head_html('<script src="/static/couple-hold.js"></script>')
     today = today_jst()
     month = {'year': today.year, 'month': today.month}
     ui.add_css('''
@@ -31,6 +34,7 @@ def couple_page():
     .garden-shell{max-width:820px;margin:auto;padding:28px 18px 70px;width:100%;gap:22px}
     .garden-card{background:#fffdf9;border:1px solid #e8e6dc;border-radius:26px;padding:24px;width:100%;box-shadow:0 8px 30px #43564c08}
     .garden-hero{background:linear-gradient(130deg,#e5eee1,#f7ebdf);border-radius:32px;padding:30px;width:100%}
+    .together-pad{touch-action:none;user-select:none;-webkit-user-select:none;padding:22px 0}.together-heart{touch-action:none;-webkit-touch-callout:none;border:none;width:42%;height:145px;border-radius:36px;font-size:70px;background:#ead3d3;color:#b66d7b;transition:transform .15s,background .15s}.together-heart.holding{background:#a9c6af;color:white;transform:scale(.94)}.together-heart:disabled{opacity:.65}
     .garden-kicker{font-size:11px;letter-spacing:.2em;color:#738975}
     .garden-hero{align-items:center;text-align:center;background:transparent;padding:12px 0 20px}
     .thanks-button{width:100%;min-height:150px;border-radius:40px!important;font-size:clamp(24px,6vw,38px)!important;background:linear-gradient(135deg,#557c60,#355b48)!important;box-shadow:0 14px 30px #355b4828!important;color:#fff!important}
@@ -91,10 +95,15 @@ def couple_page():
             with ui.column().classes('garden-hero gap-3'):
                 ui.label('夫婦円満').classes('text-sm')
                 ui.label(f'🌸 ふたりで咲かせた花　{count}輪').classes('text-xl font-bold q-mb-md')
-                button = ui.button('今日もありがとう ♡', on_click=lambda: action(lambda p: garden.check(p))).props('unelevated color=green-8').classes('thanks-button')
-                if person in current.get('thanks', []):
-                    button.disable()
-                ui.label('今日の花が咲きました 🌸' if len(current.get('thanks', [])) == 2 else 'あなたのありがとうは届きました。もうひとりが押すと花が咲きます。' if person in current.get('thanks', []) else 'ふたりが押すと、庭に今日のカードが生まれます。').classes('text-xs q-mt-sm')
+                ui.label('今日もありがとう').classes('text-3xl font-bold')
+                completed = len(current.get('thanks', [])) == 2
+                with ui.element('div').classes('together-pad w-full').props('data-done=' + ('true' if completed else 'false')) as pad:
+                    with ui.row().classes('w-full no-wrap justify-center gap-5'):
+                        for side in ('left', 'right'):
+                            with ui.element('button').props(f'data-heart={side} aria-label="{"左" if side == "left" else "右"}のハート"' + (' disabled' if completed else '')).classes('together-heart'):
+                                ui.label('♥').classes('pointer-events-none')
+                    ui.label('今日の花が咲きました 🌸' if completed else '左右のハートを、ふたりで3秒長押し').props('data-status').classes('text-sm text-center q-mt-md')
+                pad.on('pointerdown', lambda: action(lambda p: garden.together(p)), js_handler='(e) => window.coupleHold(e, emit)')
             with ui.column().classes('w-full gap-2'):
                 with ui.row().classes('w-full justify-between items-center'):
                     ui.button(icon='chevron_left', on_click=lambda: change_month(-1)).props('flat round aria-label=前月')
@@ -111,7 +120,7 @@ def couple_page():
                         with ui.column().classes('garden-empty'):
                             ui.label('🌱').classes('text-4xl self-center')
                             ui.label('最初の花を、ふたりで。').classes('font-bold')
-                            ui.label('ありがとうが揃った日が、ここに浮かびます。').classes('text-xs')
+                            ui.label('ふたりで3秒。今日の花が、ここに浮かびます。').classes('text-xs')
                     with ui.element('div').classes('garden-memories'):
                         for key, value in flowers:
                             with ui.element('button').classes('memory-card').props(f'aria-label="{key}の花を開く"').on('click', lambda _, k=key: show_day(k)):

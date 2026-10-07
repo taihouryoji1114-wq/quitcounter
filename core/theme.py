@@ -8,7 +8,11 @@ class Theme:
     def page(title="Habitory", app_name="habitory"):
         ui.colors(primary="#4F7C68", secondary="#A7BCAE", positive="#4F7C68")
         ui.page_title(title)
-        if app_name == "mirai-kessan":
+        if app_name == "couple":
+            manifest = "/static/couple-manifest.json"
+            icon = "/static/couple-icon.png"
+            theme_color = "#557c60"
+        elif app_name == "mirai-kessan":
             manifest = "/static/mirai-kessan-manifest.json"
             icon = "/static/mirai_kessan_icon.png"
             theme_color = "#164A38"
