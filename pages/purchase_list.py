@@ -1,4 +1,10 @@
 from nicegui import ui
+from pages.store_live_board import format_live_board_update_time
+
+def inventory_check_label(item):
+    value = item.get("last_inventory_check_at")
+    return format_live_board_update_time(value).replace("最終更新", "在庫確認", 1) if value else "在庫確認日時：記録なし"
+
 
 from core.auth import current_role, require_app_access
 from core.clock import operational_date_jst
@@ -61,6 +67,7 @@ def purchase_list_page():
                                             "dense color=positive aria-label='仕入れ完了'")
                             with ui.column().classes("gap-0 grow min-w-0"):
                                 ui.label(item["name"]).classes("text-sm font-black")
+                                ui.label(inventory_check_label(item)).classes("text-xs text-grey-7")
                                 subcategory = item.get("subcategory")
                                 if subcategory:
                                     ui.label(subcategory).classes("purchase-subcategory")
@@ -79,7 +86,9 @@ def purchase_list_page():
                 for item in completed_items:
                     with ui.row().classes("purchase-row w-full items-center no-wrap"):
                         ui.icon("check_circle").classes("text-positive")
-                        ui.label(item["name"]).classes("text-sm font-black grow")
+                        with ui.column().classes("grow gap-0"):
+                            ui.label(item["name"]).classes("text-sm font-black")
+                            ui.label(inventory_check_label(item)).classes("text-xs text-grey-7")
                         ui.button("戻す", icon="undo", on_click=lambda _, selected=item:
                                   set_completed(selected["id"], False)).props(
                                       "flat dense no-caps color=primary")

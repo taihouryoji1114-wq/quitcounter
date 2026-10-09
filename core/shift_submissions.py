@@ -519,6 +519,9 @@ class ShiftSubmissionManager:
                     "submitted_at": now,
                     "approved_change": True,
                 }
+        if approved:
+            from core.shift_board import ShiftBoardManager
+            ShiftBoardManager(self._data_manager).apply_approved_change(staff, year, month, half)
         self._data_manager.save()
         return True
 
