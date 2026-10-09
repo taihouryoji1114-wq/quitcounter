@@ -138,3 +138,20 @@ class ApprovedBoardUpdateTest(unittest.TestCase):
             self.assertNotIn('3',updated['entries']['スタッフA'])
             restored=ShiftBoardManager(DataManager(Path(tmp)/'data.json'))
             self.assertEqual(restored.month(2026,10)['published'],updated)
+
+class LegacyShiftTimesTest(unittest.TestCase):
+    def test_legacy_board_backfills_accepted_time_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = DataManager(Path(tmp)/'data.json')
+            data.data['store_manual_shift_board'] = {'2026-10': {'draft': {}, 'published': {
+                'entries': {'スタッフA': {'1':'ランチ'}}, 'updated_at':'2026/10/01 10:00'}}}
+            data.data['store_shift_submissions'] = {'2026-10-first': {'スタッフA': {
+                'submitted_at':'2026-09-20', 'days': {'1':{'type':'ランチ','start':'11:30','end':'14:30'}}}}}
+            data.data['store_shift_change_requests'] = {'2026-10-first': {'スタッフA': {
+                'status':'pending','days':{'1':{'type':'ランチ','start':'12:30','end':'15:00'}}}}}
+            board = ShiftBoardManager(data)
+            first = board.month(2026,10)['published']['cells']['スタッフA']['1']
+            self.assertIn('11:30〜14:30',first['text'])
+            self.assertNotIn('12:30',first['text'])
+            data.data['store_shift_submissions']['2026-10-first']['スタッフA']['days']['1']['start']='13:00'
+            self.assertEqual(board.month(2026,10)['published']['cells']['スタッフA']['1'],first)

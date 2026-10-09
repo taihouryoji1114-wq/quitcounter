@@ -18,8 +18,25 @@ class ShiftBoardManager:
         return date(int(year), int(month), 1).strftime('%Y-%m')
 
     def month(self, year, month):
-        return deepcopy(self.data.data.get('store_manual_shift_board', {}).get(
-            self.key(year, month), {'draft': {}, 'published': None}))
+        key = self.key(year, month)
+        board = deepcopy(self.data.data.get('store_manual_shift_board', {}).get(
+            key, {'draft': {}, 'published': None}))
+        published = board.get('published')
+        changed = False
+        if published:
+            cells = published.setdefault('cells', {})
+            for staff, entries in published.get('entries', {}).items():
+                if staff not in self.STAFF:
+                    continue
+                for day, text in entries.items():
+                    if day not in cells.setdefault(staff, {}):
+                        # One-time backfill uses accepted submissions, never pending requests.
+                        cells[staff][day] = self.resolve(year, month, staff, day, text)
+                        changed = True
+            if changed:
+                self.data.data.setdefault('store_manual_shift_board', {})[key] = deepcopy(board)
+                self.data.save()
+        return board
 
     def save_staff(self, year, month, staff, entries):
         if staff not in self.STAFF:
