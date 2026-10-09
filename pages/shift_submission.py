@@ -13,6 +13,31 @@ from core.theme import Theme
 from pages.store_common import store_header_actions
 
 
+def submission_overview_html(period, submitted):
+    """One compact cell per person/day, with escaped submitted time labels."""
+    staff_ids = [s for s in shift_submissions.STAFF if s != '副社長']
+    table = ['<div class="compact-overview"><table><thead><tr><th class="compact-date">日付</th>']
+    for staff in staff_ids:
+        table.append('<th>' + escape(staff_display_name(staff)) + '</th>')
+    table.append('</tr></thead><tbody>')
+    for day in range(period['start'], period['end'] + 1):
+        weekday = '月火水木金土日'[date(period['year'], period['month'], day).weekday()]
+        table.append(f'<tr><th class="compact-date">{day} {weekday}</th>')
+        for staff in staff_ids:
+            record = submitted.get(staff)
+            value = shift_submissions._day_value(record.get('days', {}).get(str(day), {})) if record else {'type':'','start':'','end':''}
+            kind = value['type']
+            css = {'ランチ':'lunch', 'ディナー':'dinner', '通し':'both', '絶対休み':'off'}.get(kind, 'empty')
+            label = {'ランチ':'昼', 'ディナー':'夜', '通し':'通し', '絶対休み':'休'}.get(kind, '休' if record else '未提出')
+            text = escape(label)
+            if value['start'] or value['end']:
+                text += '<small>' + escape(value['start'] + '〜') + '<br>' + escape(value['end']) + '</small>'
+            table.append(f'<td class="{css}">{text}</td>')
+        table.append('</tr>')
+    table.append('</tbody></table></div>')
+    return ''.join(table)
+
+
 @ui.page("/store-ops/shift-submission")
 def shift_submission_page():
     if not require_app_access("store_ops"):
@@ -471,7 +496,7 @@ def shift_submission_page():
                                         value = shift_submissions._day_value(raw)
                                         text = value["type"] or "休み"
                                         if value["start"] or value["end"]:
-                                            text += f" {value['start'] or '指定なし'}〜{value['end'] or '指定なし'}"
+                                            text += f" {value['start']}〜{value['end']}"
                                         return text
 
                                     for request_day in sorted(
@@ -501,50 +526,13 @@ def shift_submission_page():
                                                 period["half"], True),
                                             show_overview()
                                         )).props("unelevated no-caps color=positive").classes("grow")
-                        table = ['<div class="shift-sheet-scroll"><table class="shift-sheet">',
-                                 '<thead><tr><th class="date-head" rowspan="2">日付</th>']
-                        for name in shift_submissions.STAFF:
-                            table.append(f'<th class="staff-head" colspan="2">{escape(staff_display_name(name))}</th>')
-                        table.append('</tr><tr>')
-                        for _ in shift_submissions.STAFF:
-                            table.append('<th class="lunch-head">ランチ</th><th class="dinner-head">ディナー</th>')
-                        table.append('</tr></thead><tbody>')
-                        for day in range(period["start"], period["end"] + 1):
-                            weekday = date(period["year"], period["month"], day).strftime("%a")
-                            weekday_jp = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木",
-                                          "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
-                            weekend = " sunday" if weekday_jp == "日" else (
-                                " saturday" if weekday_jp == "土" else "")
-                            table.append(f'<tr><th class="date-cell{weekend}"><b>{day}</b><span>{weekday_jp}</span></th>')
-                            for name in shift_submissions.STAFF:
-                                record = submitted.get(name)
-                                value = shift_submissions._day_value(
-                                    record.get("days", {}).get(str(day), {})) if record else {
-                                        "type": "", "start": "", "end": ""}
-                                time_text = ""
-                                if value["start"] or value["end"]:
-                                    time_text = f"{value['start'] or '—'}〜{value['end'] or '—'}"
-                                for meal in ("ランチ", "ディナー"):
-                                    shift_type = value["type"]
-                                    active = shift_type in {meal, "通し"}
-                                    if shift_type == "絶対休み":
-                                        text, css = "休", "absolute-off"
-                                    elif active:
-                                        text = time_text or ("通し" if shift_type == "通し" else "希望")
-                                        css = "lunch-on" if meal == "ランチ" else "dinner-on"
-                                    elif not record:
-                                        text, css = "未提出", "not-submitted"
-                                    else:
-                                        text, css = "", "day-off"
-                                    table.append(f'<td class="shift-cell {css}">{escape(text)}</td>')
-                            table.append('</tr>')
-                        table.append('</tbody></table></div>')
-                        ui.html(''.join(table), sanitize=False).classes("w-full")
+                        ui.html(submission_overview_html(period, submitted), sanitize=False).classes("w-full")
 
                 ui.button("選択中の期間を確認", icon="refresh", on_click=show_overview).props(
                     "outline no-caps").classes("w-full q-mb-sm")
 
         ui.add_css("""
+        .compact-overview{width:100%;border:1px solid #d6ded8;border-radius:10px;overflow:hidden}.compact-overview table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:clamp(8px,1.8vw,12px)}.compact-overview th,.compact-overview td{border:1px solid #d6ded8;text-align:center;padding:3px 1px;overflow-wrap:anywhere;line-height:1.2;height:30px}.compact-overview th{background:#edf2ee;font-weight:bold}.compact-overview .compact-date{width:36px}.compact-overview small{display:block;font-size:inherit}.compact-overview .lunch{background:#ffe0b2}.compact-overview .dinner{background:#d6eaff}.compact-overview .both{background:#d5edcf}.compact-overview .off{background:#f7e2e0}.compact-overview .empty{background:#f8f9f8;color:#888}
         .shift-guide{border:0!important;border-radius:24px!important;color:white!important;background:linear-gradient(135deg,#173D30,#4F7C68)!important}
         .shift-day-row{padding:9px 0;border-bottom:1px solid #EDF1EE}.shift-day-label{font-size:11px;font-weight:900}.shift-input-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:start}.shift-kind{width:100%}.shift-time-pair{width:100%}.shift-time{width:50%;min-width:0;flex:1}.shift-time .q-field__label{font-size:9px}.pending-notice{padding:9px 11px;border-radius:10px;background:#FFF2D9;color:#966317;font-size:10px;font-weight:900}.shift-submit{background:#2F7457!important;color:#fff!important;border-radius:14px!important;font-weight:900!important}.change-request-card{border:1px solid #E6B65E!important;border-radius:17px!important;box-shadow:none!important;background:#FFFBF2!important}.request-summary{padding:8px 10px;border-radius:9px;background:#fff;font-size:9px;line-height:1.6}.admin-day-card{border:1px solid #E1E9E4!important;border-radius:17px!important;box-shadow:none!important}.admin-shift-row{padding:5px 0;border-top:1px solid #F0F2F1}.admin-staff-name{width:64px;flex:0 0 64px;font-size:10px;font-weight:900}.admin-shift-value{min-width:0;padding:5px 8px;border-radius:8px;font-size:9px;font-weight:800}.admin-shift-value.available{background:#DFF2E7;color:#276D49}.admin-shift-value.absolute-off{background:#FFE2E2;color:#A43E3E}.admin-shift-value.day-off{background:#F1F3F2;color:#7C8781}.admin-shift-value.not-submitted{background:#FFF0D7;color:#9A671D}
         .shift-sheet-scroll{width:100%;max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.shift-sheet{border-collapse:separate;border-spacing:0;min-width:max-content;font-size:9px}.shift-sheet th,.shift-sheet td{border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;text-align:center}.shift-sheet thead th{position:sticky;z-index:4;background:#243E34;color:#fff}.shift-sheet thead tr:first-child th{top:0;height:36px}.shift-sheet thead tr:nth-child(2) th{top:36px;height:28px}.date-head{left:0;z-index:7!important;min-width:58px}.staff-head{min-width:156px;font-size:10px}.lunch-head,.dinner-head{width:78px;min-width:78px}.lunch-head{background:#315F72!important}.dinner-head{background:#795B35!important}.date-cell{position:sticky;left:0;z-index:3;width:58px;height:48px;background:#F5F7F5;color:#34443C}.date-cell b,.date-cell span{display:block}.date-cell b{font-size:13px}.date-cell.saturday{color:#2E6FA2;background:#EFF7FC}.date-cell.sunday{color:#B24B4B;background:#FFF2F1}.shift-cell{width:78px;max-width:78px;height:48px;padding:4px;white-space:normal;font-weight:800;line-height:1.25}.shift-cell.lunch-on{background:#D9F0FA;color:#245D75}.shift-cell.dinner-on{background:#F8E8C9;color:#79551F}.shift-cell.absolute-off{background:#F8DADA;color:#9A3C3C}.shift-cell.not-submitted{color:#A08760;background:#FFF9ED;font-size:8px}.shift-cell.day-off{background:#FAFBFA}

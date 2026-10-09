@@ -83,7 +83,7 @@ class ShiftBoardManager:
             warnings.append('希望は' + wanted + 'です')
         start, end = wish.get('start', ''), wish.get('end', '')
         times = re.findall(r'\d{1,2}:\d{2}', text)
-        wish_time = (start or '未指定') + '〜' + (end or '未指定')
+        wish_time = start + '〜' + end
         if times:
             if (start and times[0] != start) or (end and times[-1] != end):
                 warnings.append('入力時間と希望時間が異なります（希望 ' + wish_time + '）')

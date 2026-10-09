@@ -51,7 +51,7 @@ def shift_board_page():
                             cell = {'text': text or '—', 'kind': kind, 'warning': ''}
                         color = {'ランチ':'#ffe0b2','ディナー':'#d6eaff','通し':'#d5edcf'}.get(cell['kind'], '#f8f9f8')
                         with ui.column().classes('shift-cell gap-0 ' + ('shift-own' if staff == identity else '')).style('background:'+color):
-                            ui.label(cell['text'].replace('ディナー', '夜').replace('ランチ', '昼').replace('希望 ', '').replace('〜', '\n'))
+                            ui.label(cell['text'].replace('未指定', '').replace('ディナー', '夜').replace('ランチ', '昼').replace('希望 ', '').replace('〜', '〜\n'))
                             if warnings and cell.get('warning'):
                                 with ui.element('button').classes('shift-warning').props('aria-label="希望との相違を確認"'):
                                     ui.label('⚠')
