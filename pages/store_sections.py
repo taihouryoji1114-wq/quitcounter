@@ -133,7 +133,7 @@ def order_requests_page():
             ui.navigate.to("/store-ops/order-requests")
 
         ui.button("発注依頼を追加", icon="send", on_click=add_request).classes("w-full q-mt-sm")
-        ui.label(f"未対応　{len(open_requests)}件").classes("text-base font-black q-mt-xl q-mb-sm")
+        ui.label(f"表示時点の未対応　{len(open_requests)}件").classes("text-base font-black q-mt-xl q-mb-sm")
         if not open_requests:
             ui.label("未対応の発注依頼はありません").classes("request-empty w-full")
         for group_name in store_ops.ORDER_REQUEST_CATEGORIES:
@@ -152,14 +152,12 @@ def order_requests_page():
                         ui.button(icon="edit", on_click=lambda _, item=request: open_edit(item)).props(
                             "flat round dense color=primary aria-label='発注依頼を修正'")
                         if can_manage:
-                            ui.button("対応済み", icon="check", on_click=lambda _, item_id=request["id"]: (
-                                store_ops.set_order_request_completed(item_id, True),
-                                ui.navigate.to("/store-ops/order-requests")
-                            )).props("unelevated dense no-caps color=positive")
+                            ui.checkbox("対応済み", value=False, on_change=lambda e, item_id=request["id"]:
+                                        store_ops.set_order_request_completed(item_id, e.value)).props("dense color=positive")
                         else:
                             ui.label("管理者対応").classes("request-manager-badge")
         if completed_requests:
-            with ui.expansion(f"対応済み　{len(completed_requests)}件", icon="task_alt",
+            with ui.expansion(f"表示時点の対応済み　{len(completed_requests)}件", icon="task_alt",
                               value=False).classes("request-completed w-full q-mt-lg"):
                 for request in completed_requests:
                     with ui.row().classes("w-full items-center no-wrap q-py-sm"):
@@ -167,10 +165,8 @@ def order_requests_page():
                         ui.button(icon="edit", on_click=lambda _, item=request: open_edit(item)).props(
                             "flat round dense color=primary aria-label='発注依頼を修正'")
                         if can_manage:
-                            ui.button("戻す", icon="undo", on_click=lambda _, item_id=request["id"]: (
-                                store_ops.set_order_request_completed(item_id, False),
-                                ui.navigate.to("/store-ops/order-requests")
-                            )).props("flat dense no-caps")
+                            ui.checkbox("対応済み", value=True, on_change=lambda e, item_id=request["id"]:
+                                        store_ops.set_order_request_completed(item_id, e.value)).props("dense color=positive")
                         if current_role() == "owner":
                             ui.button(icon="delete_outline", on_click=lambda _, item_id=request["id"]: (
                                 store_ops.delete_order_request(item_id),

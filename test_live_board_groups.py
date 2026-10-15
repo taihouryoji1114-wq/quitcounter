@@ -81,6 +81,38 @@ class LiveBoardGroupsTest(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+class UnselectedStatusTest(unittest.TestCase):
+    def test_unreviewed_is_unselected_then_explicit_cross_is_selected(self):
+        from pages.store_live_board import selected_live_status
+        item = {'id': 'one', 'item_type': 'status', 'status': 'incomplete', 'reviewed': False}
+        self.assertIsNone(selected_live_status(item))
+        checked, total, groups = live_board_summary([item])
+        self.assertEqual((checked, total), (0, 1))
+        self.assertEqual(groups['未完了'], [item])
+        self.assertEqual(groups['×'], [])
+        item['reviewed'] = True
+        self.assertEqual(selected_live_status(item), 'incomplete')
+        self.assertEqual(live_board_summary([item])[2]['×'], [item])
+        item['status'] = 'attention'
+        self.assertEqual(live_board_summary([item])[2]['△'], [item])
+
+
+class HandoverAcknowledgementTest(unittest.TestCase):
+    def test_check_preserves_status_and_persists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'data.json'
+            manager = StoreOperationsManager(DataManager(path))
+            template = manager.add_prep_template('出汁', '厨房')
+            manager.set_service_prep_status('2026-10-15', 'lunch', template['id'], 'attention')
+            manager.set_handover_acknowledged('2026-10-15', 'lunch', template['id'], True)
+            restored = StoreOperationsManager(DataManager(path))
+            item = next(v for v in restored.service_prep_items('2026-10-15', 'lunch') if v['id'] == template['id'])
+            self.assertEqual(item['status'], 'attention')
+            self.assertTrue(restored.handover_acknowledged('2026-10-15', 'lunch', item))
+            restored.set_handover_acknowledged('2026-10-15', 'lunch', template['id'], False)
+            self.assertFalse(restored.handover_acknowledged('2026-10-15', 'lunch', item))
+
+
 class HandoverDateLabelTest(unittest.TestCase):
     def test_original_saved_update_date_is_shown_in_japan_time(self):
         from pages.store_live_board import handover_date_label

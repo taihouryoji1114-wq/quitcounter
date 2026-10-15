@@ -34,7 +34,7 @@ def purchase_list_page():
 
         def set_completed(item_id, completed):
             store_ops.set_purchase_item_completed(item_id, completed, record_date)
-            ui.navigate.to("/store-ops/purchase-list")
+            ui.notify("保存しました", type="positive")
 
         if not purchase_items:
             with ui.card().classes("surface-card w-full q-pa-xl text-center"):
@@ -62,8 +62,8 @@ def purchase_list_page():
                         if isinstance(quantity, float) and quantity.is_integer():
                             quantity = int(quantity)
                         with ui.row().classes("purchase-row w-full items-center no-wrap"):
-                            ui.checkbox(value=False, on_change=lambda _, selected=item:
-                                        set_completed(selected["id"], True)).props(
+                            ui.checkbox(value=False, on_change=lambda e, selected=item:
+                                        set_completed(selected["id"], e.value)).props(
                                             "dense color=positive aria-label='仕入れ完了'")
                             with ui.column().classes("gap-0 grow min-w-0"):
                                 ui.label(item["name"]).classes("text-sm font-black")
@@ -79,9 +79,9 @@ def purchase_list_page():
             ui.label("在庫数が最低在庫数を上回ると、自動でリストから外れます").classes(
                 "text-[9px] text-grey-6 text-center w-full q-mt-sm")
         if completed_items:
-            with ui.expansion(f"今日の完了済み　{len(completed_items)}品", icon="undo",
+            with ui.expansion(f"表示時点の完了済み　{len(completed_items)}品", icon="undo",
                               value=False).classes("purchase-completed w-full q-mt-md"):
-                ui.label("間違えてチェックした商品は「戻す」で再表示できます").classes(
+                ui.label("チェックを外すと未完了に戻せます。表示位置は移動しません").classes(
                     "text-[9px] text-grey-6 q-mb-xs")
                 for item in completed_items:
                     with ui.row().classes("purchase-row w-full items-center no-wrap"):
@@ -89,9 +89,8 @@ def purchase_list_page():
                         with ui.column().classes("grow gap-0"):
                             ui.label(item["name"]).classes("text-sm font-black")
                             ui.label(inventory_check_label(item)).classes("text-xs text-grey-7")
-                        ui.button("戻す", icon="undo", on_click=lambda _, selected=item:
-                                  set_completed(selected["id"], False)).props(
-                                      "flat dense no-caps color=primary")
+                        ui.checkbox("完了", value=True, on_change=lambda e, selected=item:
+                                    set_completed(selected["id"], e.value)).props("dense color=positive")
         ui.add_css("""
         .purchase-card{border-radius:22px!important;border:1px solid #E1E9E4!important;box-shadow:0 8px 24px rgba(39,55,45,.05)!important}.purchase-category-icon{color:#47745F}.purchase-category-title{font-size:15px;font-weight:950;color:#17382C}.purchase-category-count{padding:3px 8px;border-radius:999px;background:#E8F1EC;color:#315E49;font-size:9px;font-weight:900}.purchase-subcategory{display:inline-flex;width:max-content;margin:2px 0;padding:1px 6px;border-radius:999px;background:#F0F3F1;color:#64736B;font-size:8px;font-weight:900}.purchase-row{padding:12px 0;border-bottom:1px solid #EDF1EE}.purchase-row:last-child{border-bottom:0}.purchase-completed{border:1px solid #E1E9E4!important;border-radius:18px!important;background:#fff!important}.purchase-completed .q-expansion-item__content{padding:5px 14px 12px}
         """)

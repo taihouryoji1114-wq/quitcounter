@@ -42,6 +42,10 @@ def confirmation_items(items):
             and (item.get("item_type") != "quantity" or item.get("progress_enabled"))]
 
 
+def selected_live_status(item):
+    return None if item.get("reviewed") is False else item.get("status")
+
+
 def live_board_summary(items):
     eligible = confirmation_items(items)
     groups = {"△": [], "×": [], "未完了": []}
@@ -50,7 +54,10 @@ def live_board_summary(items):
         if item.get("id") in seen:
             continue
         seen.add(item.get("id"))
-        status = item.get("status")
+        status = selected_live_status(item) if item.get("item_type") == "status" else item.get("status")
+        if status is None:
+            groups["未完了"].append(item)
+            continue
         if status == "attention":
             groups["△"].append(item)
         elif status != "done":
@@ -101,7 +108,8 @@ def render_live_board(business_date, period, period_label):
 
     @ui.refreshable
     def handover_list():
-        _, _, groups = live_board_summary(items)
+        _, _, all_groups = live_board_summary(items)
+        groups = all_groups
         with ui.card().classes("live-handover-top w-full gap-1"):
             with ui.row().classes("w-full items-center justify-between gap-2"):
                 ui.label("引き継ぎリスト").classes("text-sm font-bold")
@@ -115,8 +123,14 @@ def render_live_board(business_date, period, period_label):
                         if not values:
                             ui.label("該当なし").classes("text-xs text-grey-6")
                         for value in values:
-                            ui.label(value["name"]).classes("live-handover-name")
-                            ui.label(handover_date_label(value)).classes("text-xs text-grey-7")
+                            with ui.row().classes("w-full items-center no-wrap"):
+                                if symbol in ("△", "×"):
+                                    ui.checkbox(value=store_ops.handover_acknowledged(business_date, period, value),
+                                                on_change=lambda e, item_id=value["id"]:
+                                                store_ops.set_handover_acknowledged(business_date, period, item_id, e.value)).props("dense aria-label='引き継ぎ確認'")
+                                with ui.column().classes("gap-0"):
+                                    ui.label(value["name"]).classes("live-handover-name")
+                                    ui.label(handover_date_label(value)).classes("text-xs text-grey-7")
     handover_list()
 
     def actor_text(value):
@@ -126,6 +140,7 @@ def render_live_board(business_date, period, period_label):
         return f"{update.get('updated_by', '')} · {format_live_board_update_time(update.get('updated_at')).replace('最終更新 ', '')}"
 
     actor_labels = {}
+    status_buttons = {}
     board_expansion = ui.expansion(
         f"LIVE BOARD　{confirmation_label(complete, total)}", icon="dashboard", value=False,
     ).props("duration=160").classes("live-board-collapsed w-full")
@@ -161,6 +176,10 @@ def render_live_board(business_date, period, period_label):
                     value.update(saved[value["id"]])
                     if value["id"] in actor_labels:
                         actor_labels[value["id"]].set_text(actor_text(value))
+                    for status, button in status_buttons.get(value["id"], {}).items():
+                        button.classes(remove="is-selected")
+                        if selected_live_status(value) == status:
+                            button.classes(add="is-selected")
             done, all_items = counts()
             progress_label.set_text(confirmation_label(done, all_items))
             board_expansion.set_text(f"LIVE BOARD　{confirmation_label(done, all_items)}")
@@ -207,6 +226,7 @@ def render_live_board(business_date, period, period_label):
                             item_type = item.get("item_type", "completion")
                             if item_type == "status":
                                 buttons = {}
+                                status_buttons[item["id"]] = buttons
 
                                 def choose_status(status, selected=item, button_map=buttons):
                                     store_ops.set_service_prep_status(
@@ -227,7 +247,7 @@ def render_live_board(business_date, period, period_label):
                                                 fn=choose_status: fn(value)
                                             ).props("flat dense round no-caps").classes(
                                                 f"live-status-button status-{css_name}")
-                                            if item.get("status") == status:
+                                            if selected_live_status(item) == status:
                                                 button.classes(add="is-selected")
                                             buttons[status] = button
                                             if item.get("show_status_labels") and label:

@@ -1233,6 +1233,21 @@ class StoreOperationsManager:
         self._data_manager.save()
         return text
 
+    def handover_acknowledged(self, record_date, period, item):
+        record = self._data_manager.data.get('store_handover_acknowledged', {}).get(record_date, {}).get(period, {}).get(item['id'], {})
+        signature = [item.get('status'), item.get('last_update', {}).get('updated_at', '')]
+        return bool(record.get('checked') and record.get('signature') == signature)
+
+    def set_handover_acknowledged(self, record_date, period, item_id, checked):
+        self._date(record_date)
+        period = self._service_period(period)
+        item = next((v for v in self.service_prep_items(record_date, period) if v['id'] == item_id), None)
+        if not item:
+            raise ValueError('引き継ぎ項目が見つかりません')
+        self._data_manager.data.setdefault('store_handover_acknowledged', {}).setdefault(record_date, {}).setdefault(period, {})[item_id] = {
+            'checked': bool(checked), 'signature': [item.get('status'), item.get('last_update', {}).get('updated_at', '')]}
+        self._data_manager.save()
+
     def confirm_service_prep_item(self, record_date, period, item_id):
         """Confirm an unchanged value, including zero stock or unfinished work."""
         self._date(record_date)
