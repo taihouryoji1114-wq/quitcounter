@@ -21,7 +21,7 @@ def monthly_forecast(records, month, as_of, closed_weekdays=(), closed_dates=())
     future = [d for d in open_days if d >= as_of]
     recent = [(d,r) for d,r in history.items() if 0 < (as_of-d).days <= 84]
     estimates = []
-    for target in future:
+    for target in [date.fromisoformat(d) for d in missing] + future:
         seasonal = [(d,r) for d,r in history.items() if d.year == year-1 and d.month == number and d.weekday() == target.weekday()]
         weekday = [(d,r) for d,r in recent if d.weekday() == target.weekday()]
         pool = seasonal if len(seasonal) >= 2 else weekday if len(weekday) >= 2 else recent
@@ -36,17 +36,20 @@ def monthly_forecast(records, month, as_of, closed_weekdays=(), closed_dates=())
         spread=mean(abs(v-value) for v in amounts) if len(amounts)>1 else value*.3
         estimates.append({'date':target.isoformat(),'sales':round(value),'customers':round(mean(customers),1) if customers else None,
                           'basis':method,'samples':len(pool),'low':round(max(0,value-spread)), 'high':round(value+spread)})
+    missing_estimates = estimates[:len(missing)]
+    estimates = estimates[len(missing):]
+    imputed = sum(e['sales'] for e in missing_estimates) if all(e['sales'] is not None for e in missing_estimates) else None
     total=sum(float(r['amount']) for r in actual.values())
     known=all(e['sales'] is not None for e in estimates)
     remaining=sum(e['sales'] for e in estimates) if known else None
     return {'month':month,'as_of':as_of.isoformat(),'actual':round(total),'actual_days':len(actual),
             'daily_average':round(total/len(actual)) if actual else None,'missing':missing,
             'remaining_days':len(future),'remaining':remaining,
-            'landing':round(total+remaining) if known and not missing else None,
-            'low':round(total+sum(e.get('low',0) for e in estimates)) if known and not missing else None,
-            'high':round(total+sum(e.get('high',0) for e in estimates)) if known and not missing else None,
+            'landing':round(total+imputed+remaining) if known and imputed is not None else None,
+            'low':round(total+sum(e.get('low',0) for e in estimates+missing_estimates)) if known and imputed is not None else None,
+            'high':round(total+sum(e.get('high',0) for e in estimates+missing_estimates)) if known and imputed is not None else None,
             'customers':round(sum(e['customers'] for e in estimates)) if all(e['customers'] is not None for e in estimates) else None,
-            'estimates':estimates}
+            'estimates':estimates,'missing_estimates':missing_estimates,'imputed':imputed}
 
 
 def simulate(forecast, sales_percent=0, price_change=0, variable_cost_percent=0, hourly_change=0, remaining_hours=0, salary_change=0, officer_change=0):

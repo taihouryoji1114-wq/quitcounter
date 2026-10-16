@@ -22,8 +22,8 @@ def render_landing_forecast(month, price_change=0):
                         ui.label(title).classes('text-xs text-grey-8');ui.label(value).classes('text-xl font-bold')
             if not config:
                 ui.label('営業日未設定：全曜日営業と仮定しています。下の設定を確認してください。').classes('text-orange-9 text-sm')
-            if result['missing']:
-                ui.label('売上未入力の営業日：'+', '.join(result['missing'])+'。着地の合計は保留しています。').classes('text-orange-9 text-sm')
+            if result['missing'] and result['landing'] is not None:
+                ui.label('売上未入力の営業日：'+', '.join(result['missing'])+'。記録がある日の傾向から補完した暫定予測です。').classes('text-orange-9 text-sm')
             ui.label('日平均は売上記録がある日で計算します。登録済みの0円の日も含みます。').classes('text-xs text-grey-7')
             if result['landing'] is not None:
                 ui.label('過去のばらつきによる参考幅：'+money(result['low'])+'〜'+money(result['high'])+'（確率を保証する区間ではありません）').classes('text-xs text-grey-7')

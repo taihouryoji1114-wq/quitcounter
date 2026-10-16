@@ -8,7 +8,10 @@ class ForecastTest(unittest.TestCase):
         records=[{'date':'2026-10-01','amount':100},{'date':'2026-10-03','amount':999}]
         r=monthly_forecast(records,'2026-10',date(2026,10,3))
         self.assertEqual(r['actual'],100);self.assertEqual(r['daily_average'],100)
-        self.assertEqual(r['missing'],['2026-10-02']);self.assertIsNone(r['landing'])
+        self.assertEqual(r['missing'],['2026-10-02']);self.assertEqual(r['landing'],3100)
+        self.assertEqual(r['imputed'],100)
+        self.assertEqual(r['remaining'],2900)
+        self.assertEqual(simulate(r,sales_percent=10)['sales'],3390)
         r=monthly_forecast(records,'2026-10',date(2026,10,3),closed_dates=['2026-10-02'])
         self.assertEqual(r['landing'],3000)
     def test_seasonal_and_simulation(self):
