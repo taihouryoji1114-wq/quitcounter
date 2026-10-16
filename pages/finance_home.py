@@ -6,6 +6,7 @@ from core.financials import financials
 from core.landing_forecast import monthly_forecast
 from core.purchases import purchases
 from core.staffing import staffing
+from core.financial_report_data import build_financial_report
 
 
 def compact_finance_home(month):
@@ -60,11 +61,12 @@ def compact_finance_home(month):
                 ui.label(label).classes('text-xs');ui.label(value).classes('finance-mini-number')
     # Match the existing detailed dashboard's accounting basis, including
     # today's entries; the landing forecast above uses completed days only.
-    sales = financials.monthly_sales_total(month)
-    cost = purchases.monthly_total(month, kind='cost')
-    personnel = (staffing.month_cost_summary(month, today)['company_cost']
-                 or financials.get_monthly_operations(month)['personnel'])
-    gross = sales - cost
+    period_end = today.isoformat() if month == today.strftime('%Y-%m') else f'{month}-{monthrange(y, m)[1]:02d}'
+    report = build_financial_report(f'{month}-01', period_end)
+    sales = report['sales_total']
+    cost = report['cost_total']
+    personnel = report['personnel']
+    gross = report['gross_profit']
     with ui.card().classes('surface-card w-full finance-ratios q-mb-sm'):
         ui.label('現在の経営指標').classes('finance-gold')
         with ui.element('div').classes('finance-ratio-grid w-full'):
@@ -78,19 +80,7 @@ def compact_finance_home(month):
                     ui.label(f'{value:.1%}' if value is not None else '—').classes('finance-ratio-value')
 
     operations = financials.get_monthly_operations(month)
-    length = monthrange(y, m)[1]
-    elapsed = length if month < today.strftime('%Y-%m') else min(today.day, length) if month == today.strftime('%Y-%m') else 0
-    ratio = elapsed / length
-    operating_costs = (
-        personnel + round(operations.get('rent', 0) * ratio)
-        + round(operations.get('utilities', 0) * ratio)
-        + round(financials.get_monthly_advertising(month)['total'] * ratio)
-        + operations.get('other_admin', 0)
-        + purchases.monthly_total(month, kind='operating_supply')
-        + purchases.monthly_total(month, kind='expense')
-        + financials.monthly_payment_summary(month)['total_fees']
-    )
-    operating_profit = gross - operating_costs
+    operating_profit = report['operating_profit']
     tax_summary = purchases.monthly_tax_summary(month)
     advertising = financials.get_monthly_advertising(month)
     consumption_tax = max(0, sales * 10 // 110 - tax_summary['input_tax'] - advertising.get('input_tax', 0))

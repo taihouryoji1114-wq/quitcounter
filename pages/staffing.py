@@ -61,7 +61,7 @@ def staffing_page(request: Request):
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
             ui.label("3人とも出勤入力は不要。月10日休みを月内に均等配分し、月給×経過日数÷月の日数で自動計上します。過去月は満額です。").classes(
-                "text-[9px] text-grey-6 q-mb-xs")
+                "text-[9px] finance-readable q-mb-xs")
             salary_inputs = {
                 name: ui.number(f"{staff_display_name(name)}の額面給与", value=salaries[name] or None,
                                 min=0, step=1).props("outlined dense prefix=¥ inputmode=numeric").classes("w-full q-mt-xs")
@@ -101,7 +101,7 @@ def staffing_page(request: Request):
         settings = staffing.dependent_settings()
         with ui.expansion("扶養アラート設定", icon="notifications_active", value=False).classes(
             "staff-panel w-full q-mt-sm"):
-            ui.label("実名は使わず、本人が希望する管理基準を確認して設定してください。").classes("text-[9px] text-grey-6 q-mb-sm")
+            ui.label("実名は使わず、本人が希望する管理基準を確認して設定してください。").classes("text-[9px] finance-readable q-mb-sm")
             dependent_inputs = {}
             options = {key: label for key, (label, _) in staffing.DEPENDENT_LIMITS.items()}
             for name in staffing.STAFF:
@@ -141,7 +141,7 @@ def staffing_page(request: Request):
         insurance = staffing.insurance_settings()
         rates = staffing.insurance_rates()
         with ui.expansion("会社負担の社会保険設定", icon="health_and_safety", value=False).classes("staff-panel w-full q-mt-sm"):
-            ui.label("保険料額表の会社負担率を入力してください").classes("text-[9px] text-grey-6")
+            ui.label("保険料額表の会社負担率を入力してください").classes("text-[9px] finance-readable")
             rate_inputs = {key: ui.number(label, value=rates[key], min=0, step=.001).props("outlined dense suffix=% inputmode=decimal").classes("w-full q-mt-xs") for key, label in (("health","健康保険"),("pension","厚生年金"),("care","介護保険"),("employment","雇用保険・会社負担"),("workers_comp","労災保険"),("other","子ども・子育て拠出金等"))}
             insurance_inputs = {}
             for name in staffing.STAFF:
@@ -161,7 +161,7 @@ def staffing_page(request: Request):
         with ui.expansion("明日以降のシフトを簡単入力", icon="event_available", value=False).classes(
             "staff-panel w-full q-mt-sm"):
             ui.label("着地予想専用です。過去の実績から予定時間を見積もりますが、勤務実績には入力しません。").classes(
-                "text-xs text-grey-8 q-mb-sm")
+                "text-xs finance-readable q-mb-sm")
             plan_date = ui.input("予定日", value=tomorrow).props(
                 f"outlined dense type=date min={tomorrow}").classes("w-full")
             plan_area = ui.column().classes("w-full gap-1")
@@ -201,5 +201,5 @@ def staffing_page(request: Request):
         plan_date.on("change", lambda: render_simple_plan(plan_date.value))
         render_simple_plan(tomorrow)
 
-        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}.checked-date-chip{padding:6px 2px;border-radius:9px;font-size:9px;font-weight:900;text-align:center}.checked-date-chip.attended{background:#DDF1E5;color:#28704A;border:1px solid #B9DEC8}.checked-date-chip.unchecked{background:#F1F3F2;color:#9AA39E;border:1px solid #E4E8E5}.staff-panel,.staff-shift{border-radius:18px!important;background:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.65);font-size:8px;font-weight:900}")
-        ui.add_css(".staff-total-card *,.staff-group-card *,.attendance-progress-card *,.staff-panel *{min-width:0;box-sizing:border-box}.staff-total-card .text-2xl,.staff-total-card .text-xl,.staff-total-card .text-lg{max-width:100%;font-size:clamp(13px,5vw,22px)!important;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:clip;font-variant-numeric:tabular-nums}.timecard-progress{border-radius:15px!important;background:#F8FAF8!important;border:1px solid #E1E9E4!important}.timecard-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 10px 12px}.timecard-progress-person{min-width:0;padding:9px;border-radius:13px;background:#F1F3F2;border:1px solid #E4E8E5}.timecard-progress-person.entered{background:#E9F5ED;border-color:#C9E3D2}.timecard-progress-name{font-size:10px;font-weight:950}.timecard-progress-latest{font-size:11px;font-weight:950;color:#286B49}.timecard-progress-count{font-size:8px;color:#7A8780}.timecard-clear-shift{align-self:flex-end!important;margin-top:-2px!important;font-size:9px!important}@media(max-width:520px){.staff-total-card,.staff-panel,.attendance-progress-card{padding-left:13px!important;padding-right:13px!important}.staff-group-card{padding:8px 6px}}")
+        ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}.checked-date-chip{padding:6px 2px;border-radius:9px;font-size:9px;font-weight:900;text-align:center}.checked-date-chip.attended{background:#DDF1E5;color:#28704A;border:1px solid #B9DEC8}.checked-date-chip.unchecked{background:#252525;color:#fff;color:#9AA39E;border:1px solid #E4E8E5}.staff-panel,.staff-shift{border-radius:18px!important;background:#202020!important;color:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:#303030;color:#fff;font-size:8px;font-weight:900}")
+        ui.add_css(".staff-total-card *,.staff-group-card *,.attendance-progress-card *,.staff-panel *{min-width:0;box-sizing:border-box}.staff-total-card .text-2xl,.staff-total-card .text-xl,.staff-total-card .text-lg{max-width:100%;font-size:clamp(13px,5vw,22px)!important;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:clip;font-variant-numeric:tabular-nums}.timecard-progress{border-radius:15px!important;background:#202020!important;color:#fff!important;border:1px solid #E1E9E4!important}.timecard-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 10px 12px}.timecard-progress-person{min-width:0;padding:9px;border-radius:13px;background:#252525;color:#fff;border:1px solid #E4E8E5}.timecard-progress-person.entered{background:#26382c;border-color:#C9E3D2}.timecard-progress-name{font-size:10px;font-weight:950}.timecard-progress-latest{font-size:11px;font-weight:950;color:#c6efcf}.timecard-progress-count{font-size:8px;color:#eee}.timecard-clear-shift{align-self:flex-end!important;margin-top:-2px!important;font-size:9px!important}@media(max-width:520px){.staff-total-card,.staff-panel,.attendance-progress-card{padding-left:13px!important;padding-right:13px!important}.staff-group-card{padding:8px 6px}}")
