@@ -56,7 +56,7 @@ class Theme:
         </style>
         """
         ui.add_head_html(app_head + shared_styles)
-        if app_name in ("mirai-kessan", "store-ops"):
+        if app_name == "mirai-kessan":
             from pages.app_navigation import bottom_navigation
             bottom_navigation(app_name)
 

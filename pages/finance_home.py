@@ -41,12 +41,15 @@ def compact_finance_home(month):
                 actual.append(None)
                 running+=predictions.get(day) or 0
                 forecast.append(round(running) if r['landing'] is not None else None)
-        ui.echart({'backgroundColor':'transparent','grid':{'left':58,'right':12,'top':18,'bottom':35},'tooltip':{'trigger':'axis'},
-            'legend':{'bottom':0,'textStyle':{'color':'#e8edf5'}},
+        ui.echart({'backgroundColor':'transparent','grid':{'left':58,'right':12,'top':18,'bottom':25},'tooltip':{'trigger':'axis'},
+            'legend':{'show':False},
             'xAxis':{'type':'category','data':[f'{m}/{d}' for d in range(1,length+1)],'axisLabel':{'color':'#d2dceb','interval':6},'axisLine':{'lineStyle':{'color':'#56647a'}}},
             'yAxis':{'type':'value','axisLabel':{'color':'#d2dceb'},'splitLine':{'lineStyle':{'color':'#34445a'}}},
             'series':[{'name':'実績（円）','type':'line','data':actual,'connectNulls':False,'symbolSize':4,'itemStyle':{'color':'#f5f5f5'}},
                       {'name':'予測（円）','type':'line','data':forecast,'showSymbol':False,'itemStyle':{'color':'#e4bd6b'},'lineStyle':{'type':'dashed','color':'#e4bd6b'}}]}).classes('w-full finance-chart').style('height:clamp(115px,22dvh,220px)')
+        with ui.row().classes('finance-chart-legend w-full justify-center'):
+            ui.label('━ 実績').style('color:#ffffff')
+            ui.label('┄ 予測').style('color:#f5cf80')
         if r['missing'] and r['landing'] is not None:
             ui.label(f"未入力 {len(r['missing'])}日分は推定で補完").classes('finance-notice')
         elif r['landing'] is None:

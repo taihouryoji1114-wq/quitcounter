@@ -1,0 +1,86 @@
+diff --git b/core/theme.py a/core/theme.py
+index 4f3c1d9..adbcb9a 100644
+--- b/core/theme.py
++++ a/core/theme.py
+@@ -56,7 +56,7 @@ class Theme:
+         </style>
+         """
+         ui.add_head_html(app_head + shared_styles)
+-        if app_name == "mirai-kessan":
++        if app_name in ("mirai-kessan", "store-ops"):
+             from pages.app_navigation import bottom_navigation
+             bottom_navigation(app_name)
+ 
+diff --git b/pages/store_dashboard.py a/pages/store_dashboard.py
+index d0a9d50..32ab6a4 100644
+--- b/pages/store_dashboard.py
++++ a/pages/store_dashboard.py
+@@ -144,7 +144,6 @@ def store_dashboard_page():
+         ui.label(f"{month}月{day}日　TODAY'S OPERATION").classes(
+             "today-ribbon w-full")
+         render_live_board(business_date, period, period_label)
+-        render_store_navigation()
+         return
+         with ui.card().classes("store-board w-full q-pa-lg text-white"):
+             with ui.row().classes("w-full items-start justify-between no-wrap"):
+@@ -730,3 +729,25 @@ def placeholder_page(title, subtitle, icon):
+         with ui.card().classes("surface-card w-full q-pa-xl text-center"):
+             ui.icon(icon).classes("text-6xl text-primary")
+             ui.label("このページを次に作り込みます").classes("text-base font-black q-mt-md")
++
++
++@ui.page('/store-ops/more')
++def store_more_page():
++    if not require_app_access('store_ops'):
++        return
++    Theme.page('その他｜店舗運営', app_name='store-ops')
++    content=Theme.shell('その他', '必要な機能を選択', action=store_header_actions, brand='店舗運営')
++    with content:
++        render_store_navigation()
++
++
++@ui.page('/store-ops/orders')
++def store_orders_hub():
++    if not require_app_access('store_ops'):
++        return
++    Theme.page('仕入れ・発注｜店舗運営', app_name='store-ops')
++    content=Theme.shell('仕入れ・発注', '依頼と買うものを分けて確認', action=store_header_actions, brand='店舗運営')
++    with content:
++        app_card('発注依頼', '依頼を追加・対応を確認', 'add_shopping_cart', '/store-ops/order-requests', 'text-green-8')
++        if current_role() == 'owner':
++            app_card('仕入れリスト', '在庫不足と確認日時を確認', 'shopping_basket', '/store-ops/purchase-list', 'text-orange-8')
+diff --git b/pages/store_live_board.py a/pages/store_live_board.py
+index d8a2a6d..3daba57 100644
+--- b/pages/store_live_board.py
++++ a/pages/store_live_board.py
+@@ -205,11 +205,20 @@ def render_live_board(business_date, period, period_label):
+                         ui.button("この状態で確認", on_click=confirm).props("outline dense no-caps")
+         unconfirmed_list()
+ 
++        visible_categories = [c for c in category_names if any(i.get("area", "厨房") == c for i in items)]
++        category_sections = {}
++        def select_category(event):
++            for name, section in category_sections.items():
++                section.set_visibility(name == event.value)
++        if visible_categories:
++            ui.select(visible_categories, value=visible_categories[0], label="表示カテゴリー", on_change=select_category).props("outlined dense").classes("w-full q-mb-md")
+         for category in category_names:
+             grouped = [item for item in items if item.get("area", "厨房") == category]
+             if not grouped:
+                 continue
+-            with ui.column().classes("live-board-section w-full gap-0"):
++            with ui.column().classes("live-board-section w-full gap-0") as category_section:
++                category_sections[category] = category_section
++                category_section.set_visibility(category == visible_categories[0])
+                 ui.label(category).classes("live-board-category").style(
+                     f"--category-color:{category_colors.get(category, '#527A68')}")
+                 for item in grouped:
+@@ -335,7 +344,7 @@ def render_live_board(business_date, period, period_label):
+                                                 "unelevated dense no-caps").classes("w-full")
+ 
+         if order_category.get("visible", True):
+-            with ui.column().classes("live-orders w-full gap-2"):
++            with ui.expansion("発注状況", icon="shopping_cart", value=False).classes("live-orders w-full gap-2"):
+                 ui.label("発注状況").classes("text-base font-bold")
+                 ui.label("確認件数・引き継ぎリストには含めません。").classes("text-xs text-grey-7")
+                 order_checks = store_ops.daily_order_checks(business_date)

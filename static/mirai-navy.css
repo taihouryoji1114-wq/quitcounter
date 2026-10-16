@@ -24,12 +24,26 @@
   .finance-gold {color:#f1d397;font-size:12px}
   .forecast-home-number {color:#fff7e5!important;font:clamp(27px,7vw,36px) Georgia,serif!important}
   .finance-notice {font-size:10px;color:#ffda9d;line-height:1.3}
-  .finance-stat-grid {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
-  .finance-mini {padding:10px!important;gap:4px!important;border-radius:12px!important}
-  .finance-mini-number {font:clamp(18px,5vw,25px) Georgia,serif;color:#fff5da}
-  .finance-ratios {padding:10px!important;gap:7px!important;border-radius:12px!important}
-  .finance-ratio-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-  .finance-ratio-value {font:clamp(21px,6vw,28px) Georgia,serif;color:#fff5da}
+  .finance-stat-grid {display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px;margin:6px 0}
+  .finance-mini {min-width:0;padding:6px 8px!important;gap:1px!important;border-radius:12px!important}
+  .finance-mini-number {font:clamp(17px,4.8vw,23px) Georgia,serif;color:#fff5da}
+  .finance-ratios {padding:7px 8px!important;gap:4px!important;border-radius:12px!important}
+  .finance-ratio-grid {display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .finance-ratio-value {font:clamp(20px,5.5vw,25px) Georgia,serif;color:#fff5da}
+  .finance-chart-legend {gap:20px!important;font-size:11px;line-height:18px;margin:2px 0 3px}
+  body:has(.finance-hero) .nicegui-content {padding:6px!important;gap:0!important}
+  body:has(.finance-hero) .app-shell {padding-left:8px!important;padding-right:8px!important}
+  body .forecast-metric,body .report-link-card {background:#202020!important;color:#fff!important}
+  body .text-grey-8,body .text-grey-7,body .text-grey-6,body .text-grey-5,body .q-field__label,body .q-field__native,body .q-field__input,body .q-item__label {color:#fff!important;opacity:1!important}
+  body .report-link-card .nicegui-label {color:#fff!important}
+  body .q-expansion-item .q-item {color:#fff!important}
+  :root body .app-shell [class*="text-grey-"] {color:#f2f2f2!important;opacity:1!important}
+  :root body .app-shell .text-orange-9 {color:#ffce88!important}
+  :root body .app-shell .text-primary {color:#ffe1a6!important}
+  :root body .app-shell .q-btn--outline {color:#ffe1a6!important}
+  :root body .app-shell .q-field__label {color:#fff!important;opacity:1!important}
+  .finance-readable {color:#f2f2f2!important;opacity:1!important}
+  .finance-warning,.finance-accent {color:#ffda96!important}
   /* On-screen reports use the dark palette; the print stylesheet stays white. */
   .print-report,.report-metric,.ratio-card,.management-metric,.management-lead,.consulting-verdict,.action-card,.action-next,.knowledge-card,.analysis-message,.attendance-card {background:#191919!important;color:#f5f5f5!important;border-color:#666!important}
   .report-title,.report-period,.report-metric-label,.report-metric-value,.report-section-title,.ratio-value,.management-metric-label,.action-title,.action-reason,.action-next-label,.action-target,.action-rank {color:#f0f0f0!important;opacity:1!important}

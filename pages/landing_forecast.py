@@ -11,22 +11,22 @@ def render_landing_forecast(month, price_change=0):
         return '算出待ち' if value is None else f'¥{value:,.0f}'
     with ui.card().classes('surface-card w-full q-pa-lg q-mb-md'):
         ui.label('実績から見る、今月の着地').classes('text-xl font-bold')
-        ui.label('前日までの入力済み売上で計算。今日の途中入力は予測の基準に含めません。').classes('text-xs text-grey-7')
+        ui.label('前日までの入力済み売上で計算。今日の途中入力は予測の基準に含めません。').classes('text-xs finance-readable')
         @ui.refreshable
         def content():
             config=data.data.get('landing_forecast_settings',{})
             result=monthly_forecast(financials.sales_records(),month,today_jst(),config.get('closed_weekdays',[]),config.get('closed_dates',[]))
             with ui.element('div').classes('grid grid-cols-2 gap-3 w-full'):
                 for title,value in [('前日までの売上',money(result['actual'])),('記録済み1日平均',money(result['daily_average'])),('今月の着地予測',money(result['landing'])),('残りの予測売上',money(result['remaining']))]:
-                    with ui.column().classes('p-3 rounded-xl bg-green-1 gap-1'):
-                        ui.label(title).classes('text-xs text-grey-8');ui.label(value).classes('text-xl font-bold')
+                    with ui.column().classes('p-3 rounded-xl forecast-metric gap-1'):
+                        ui.label(title).classes('text-xs finance-readable');ui.label(value).classes('text-xl font-bold')
             if not config:
-                ui.label('営業日未設定：全曜日営業と仮定しています。下の設定を確認してください。').classes('text-orange-9 text-sm')
+                ui.label('営業日未設定：全曜日営業と仮定しています。下の設定を確認してください。').classes('finance-warning text-sm')
             if result['missing'] and result['landing'] is not None:
-                ui.label('売上未入力の営業日：'+', '.join(result['missing'])+'。記録がある日の傾向から補完した暫定予測です。').classes('text-orange-9 text-sm')
-            ui.label('日平均は売上記録がある日で計算します。登録済みの0円の日も含みます。').classes('text-xs text-grey-7')
+                ui.label('売上未入力の営業日：'+', '.join(result['missing'])+'。記録がある日の傾向から補完した暫定予測です。').classes('finance-warning text-sm')
+            ui.label('日平均は売上記録がある日で計算します。登録済みの0円の日も含みます。').classes('text-xs finance-readable')
             if result['landing'] is not None:
-                ui.label('過去のばらつきによる参考幅：'+money(result['low'])+'〜'+money(result['high'])+'（確率を保証する区間ではありません）').classes('text-xs text-grey-7')
+                ui.label('過去のばらつきによる参考幅：'+money(result['low'])+'〜'+money(result['high'])+'（確率を保証する区間ではありません）').classes('text-xs finance-readable')
             with ui.expansion('根拠・日別予測を見る',icon='query_stats').classes('w-full'):
                 ui.label('前年同月・同曜日が2日以上あれば優先。それ以外は直近12週の同曜日、さらに不足なら全曜日平均。祝日・予約・天候は未反映です。').classes('text-sm')
                 for e in result['estimates']:
@@ -42,7 +42,7 @@ def render_landing_forecast(month, price_change=0):
                 hours=ui.number('その従業員の今月残りの勤務時間合計',value=0,min=0)
                 salary=ui.number('社員給与の今月増減額合計（円）',value=0)
                 officer=ui.number('役員報酬の今月増減額合計（円）',value=0)
-                ui.label('客単価変更時の客数は一定。売上率変更と客単価変更は加算。会社負担保険料・税・返済の変動は含みません。利益総額ではなく変更による差額です。').classes('text-xs text-grey-7')
+                ui.label('客単価変更時の客数は一定。売上率変更と客単価変更は加算。会社負担保険料・税・返済の変動は含みません。利益総額ではなく変更による差額です。').classes('text-xs finance-readable')
                 output=ui.label().classes('font-bold')
                 def run():
                     try:

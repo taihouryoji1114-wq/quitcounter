@@ -66,7 +66,7 @@ def financial_reports_page():
 
         with ui.card().classes("surface-card report-controls w-full q-pa-md q-mb-md"):
             ui.label("経営資料セット").classes("text-base font-black")
-            ui.label("用途の違う資料は分けて、必要なものだけ確認・印刷します").classes("text-[10px] text-grey-6 q-mb-sm")
+            ui.label("用途の違う資料は分けて、必要なものだけ確認・印刷します").classes("text-[10px] finance-readable q-mb-sm")
             with ui.element("div").classes("report-links"):
                 for title, caption, icon, path in (
                     ("期間実績", "売上・利益・決済・仕入", "summarize", "/mirai-kessan/reports"),
@@ -76,9 +76,9 @@ def financial_reports_page():
                 ):
                     with ui.card().classes("report-link-card q-pa-sm cursor-pointer").on(
                         "click", lambda _, target=path: ui.navigate.to(target)):
-                        ui.icon(icon).classes("text-primary text-lg")
+                        ui.icon(icon).classes("finance-accent text-lg")
                         ui.label(title).classes("text-xs font-black")
-                        ui.label(caption).classes("text-[8px] text-grey-6")
+                        ui.label(caption).classes("text-[8px] finance-readable")
 
         @ui.refreshable
         def report_view():
@@ -339,7 +339,7 @@ def render_two_column_table(rows, first, second, total):
 def render_profit_block(values):
     sales = max(int(values["sales_total"]), 0)
     if not sales:
-        ui.label("売上を入力すると表示されます").classes("text-xs text-grey-6 q-pa-md")
+        ui.label("売上を入力すると表示されます").classes("text-xs finance-readable q-pa-md")
         return
     cost = max(int(values["cost_total"]), 0)
     gross = max(int(values["gross_profit"]), 0)
