@@ -14,3 +14,29 @@ body{background:#0d192a!important;color:#f0eadc!important}
 .q-expansion-item{border-radius:16px}.forecast-home-number{font-size:clamp(27px,7vw,42px);font-weight:750;color:#edd49c;letter-spacing:-.03em}
 }
 @media print{body{background:white!important;color:#111!important}.surface-card,.q-card{background:white!important;color:#111!important;box-shadow:none!important}.app-bottom-nav{display:none!important}}
+@media screen{
+body{background:linear-gradient(145deg,#081828,#10233a)!important;color:#f5f2e9!important}
+.app-shell{max-width:580px!important;padding:18px 16px 100px!important}
+.app-shell>.q-mb-lg{margin-bottom:8px!important}.app-shell>.metric-value{font-family:Georgia,'Noto Serif JP',serif;color:#e6c581!important;font-weight:500!important;margin-bottom:8px!important}
+.app-shell>.text-grey-7.q-mb-xl{display:none}.text-grey-8,.text-grey-7,.text-grey-6,.text-grey-5{color:#d5deeb!important}
+.opacity-70,.opacity-60{opacity:1!important}.q-placeholder::placeholder{color:#c0cede!important;opacity:1}
+.q-field__label,.q-field__native,.q-field__input,.q-field__marginal,.q-item__label{color:#f0f3f8!important}
+.q-field--disabled,.q-btn--disabled{opacity:.65!important}
+.finance-period{text-align:right;width:100%;font-size:11px;color:#e0e7f0}.finance-month{font:20px Georgia,serif}
+.finance-hero{padding:16px!important;gap:7px!important;border-radius:15px!important;background:linear-gradient(140deg,#0c1c2e,#13283f)!important}
+.finance-gold{color:#f0cf83;font-size:15px}.forecast-home-number{color:#fff7e5!important;font:clamp(32px,9vw,47px) Georgia,serif!important}
+.finance-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}.finance-mini{padding:12px!important;gap:5px!important;border-radius:12px!important}.finance-mini-number{font:clamp(18px,5vw,25px) Georgia,serif;color:#fff5da}
+.finance-scenario{padding:14px!important;gap:10px!important;border-radius:14px!important}.finance-impact{font:22px Georgia,serif;color:#f0ce85}.finance-compare{background:linear-gradient(90deg,#e3c985,#b89b5b)!important;color:#101b2b!important}.finance-notice{font-size:12px;color:#ffdda0}
+.app-bottom-link{color:#d9e2ee!important}.app-bottom-link.active{color:#f4cf79!important}.q-expansion-item__content{padding:8px}
+}
+
+@media screen{
+.q-btn--flat{color:#edcf8c}
+.finance-ratios{padding:14px!important;gap:12px!important;border-radius:14px!important}
+.finance-ratio-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.finance-ratio-value{font:clamp(22px,6vw,30px) Georgia,serif;color:#fff5da}
+.finance-ratio-formula{font-size:10px;color:#d5deeb}
+.text-orange-9,.text-warning{color:#ffcf83!important}
+.finance-hero .echarts{max-height:195px}
+@media(max-width:440px){.finance-hero .echarts{max-height:155px}}
+}

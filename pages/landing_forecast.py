@@ -5,7 +5,7 @@ from core.financials import financials
 from core.landing_forecast import monthly_forecast, simulate, save_snapshot
 
 
-def render_landing_forecast(month):
+def render_landing_forecast(month, price_change=0):
     settings=data.data.get('landing_forecast_settings',{})
     def money(value):
         return '算出待ち' if value is None else f'¥{value:,.0f}'
@@ -31,11 +31,11 @@ def render_landing_forecast(month):
                 ui.label('前年同月・同曜日が2日以上あれば優先。それ以外は直近12週の同曜日、さらに不足なら全曜日平均。祝日・予約・天候は未反映です。').classes('text-sm')
                 for e in result['estimates']:
                     ui.label(f"{e['date']}　{money(e['sales'])}　{e['basis']}／{e['samples']}日参考").classes('text-xs')
-            with ui.expansion('もしこう変えたら？',icon='tune').classes('w-full'):
+            with ui.expansion('もしこう変えたら？',icon='tune',value=bool(price_change)).classes('w-full'):
                 ui.label('変更するのは今日以降だけ。実際の売上・給与の記録は変わりません。')
                 percent=ui.number('残りの予測売上から増減（%）',value=0,min=-100)
                 ui.label('基準：'+money(result['remaining'])).classes('text-xs')
-                price=ui.number('客単価の増減（円）',value=0)
+                price=ui.number('客単価の増減（円）',value=price_change)
                 ui.label('残りの予測客数：'+(str(result['customers'])+'人' if result['customers'] is not None else '客数不足')).classes('text-xs')
                 variable=ui.number('増減した売上に対する変動費率（%・仮定）',value=30,min=0,max=100)
                 hourly=ui.number('対象従業員の時給増減（円）',value=0)

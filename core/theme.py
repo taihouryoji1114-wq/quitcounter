@@ -1,6 +1,5 @@
 from nicegui import ui
 
-from core.future_theme import theme_controls_html, theme_head_html
 
 
 class Theme:
@@ -38,8 +37,6 @@ class Theme:
         <link rel="icon" href="{icon}">
         <meta name="theme-color" content="{theme_color}">
         """
-        if app_name == "mirai-kessan":
-            app_head += theme_head_html()
         shared_styles = """
         <style>
           body { background: #F7F7F5; color: #1D2822; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
@@ -71,7 +68,7 @@ class Theme:
                     ui.button(icon="arrow_back", on_click=ui.navigate.back).props(
                         "flat round aria-label='1つ前へ戻る'"
                     ).classes("text-grey-8").tooltip("1つ前へ戻る")
-                else:
+                elif brand != title:
                     ui.label(brand).classes("text-xl font-bold")
                 if action:
                     action()
