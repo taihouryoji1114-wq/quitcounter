@@ -69,6 +69,8 @@ def financial_reports_page():
             ui.label("用途の違う資料は分けて、必要なものだけ確認・印刷します").classes("text-[10px] finance-readable q-mb-sm")
             with ui.element("div").classes("report-links"):
                 for title, caption, icon, path in (
+                    ("月次経営評価", "月ごとの振り返り・評価", "verified", "/mirai-kessan/evaluation"),
+                    ("入力チェック", "入力漏れや数字を確認", "fact_check", "/mirai-kessan/audit"),
                     ("期間実績", "売上・利益・決済・仕入", "summarize", "/mirai-kessan/reports"),
                     ("経営コンサル", "問題の優先順位と次の行動", "psychology", "/mirai-kessan/reports/consulting"),
                     ("決算分析", "会社の収益性と安全性", "assessment", "/mirai-kessan/reports/financial-analysis"),

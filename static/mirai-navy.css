@@ -53,7 +53,7 @@
   .q-field__native[type=date] {color:#fff!important;-webkit-text-fill-color:#fff!important;min-height:24px}
   .q-field__native[type=date]::-webkit-date-and-time-value {text-align:left}
   .finance-profit-grid {margin-top:0}
-  @media(max-height:700px){.finance-chart{height:105px!important}.finance-hero{padding:8px!important}}
+  @media(max-height:700px){.finance-chart{height:85px!important}body:has(.finance-hero) .q-btn--round{min-height:32px!important;height:32px!important;min-width:32px!important}.finance-hero{padding:8px!important}}
   .section-kicker {color:#ddd!important}
   /* On-screen reports use the dark palette; the print stylesheet stays white. */
   .print-report,.report-metric,.ratio-card,.management-metric,.management-lead,.consulting-verdict,.action-card,.action-next,.knowledge-card,.analysis-message,.attendance-card {background:#191919!important;color:#f5f5f5!important;border-color:#666!important}

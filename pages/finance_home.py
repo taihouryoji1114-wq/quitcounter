@@ -16,7 +16,7 @@ def compact_finance_home(month):
     money=lambda value:'—' if value is None else f'¥{value:,.0f}'
     y,m=map(int,month.split('-'))
     fiscal=y if m>=10 else y-1
-    ui.add_css('body:has(.finance-hero) .app-shell{padding-top:8px!important;padding-bottom:76px!important} body:has(.finance-hero) .app-shell>.metric-value{font-size:22px!important} body:has(.finance-hero) .app-shell>.q-mb-lg{display:none}')
+    ui.add_css('body:has(.finance-hero) .app-shell{padding-top:8px!important;padding-bottom:66px!important} body:has(.finance-hero) .app-shell>.metric-value{font-size:22px!important} body:has(.finance-hero) .app-shell>.q-mb-lg{display:none}')
     with ui.row().classes('w-full justify-between items-center q-mb-sm'):
         index=y*12+m-1
         ui.button(icon='chevron_left',on_click=lambda:ui.navigate.to(f'/mirai-kessan/month/{(index-1)//12:04d}-{(index-1)%12+1:02d}')).props('flat round aria-label=前月')
@@ -44,7 +44,7 @@ def compact_finance_home(month):
         ui.echart({'backgroundColor':'transparent','grid':{'left':58,'right':12,'top':18,'bottom':25},'tooltip':{'trigger':'axis'},
             'legend':{'show':False},
             'xAxis':{'type':'category','data':[f'{m}/{d}' for d in range(1,length+1)],'axisLabel':{'color':'#d2dceb','interval':6},'axisLine':{'lineStyle':{'color':'#56647a'}}},
-            'yAxis':{'type':'value','axisLabel':{'color':'#d2dceb'},'splitLine':{'lineStyle':{'color':'#34445a'}}},
+            'yAxis':{'type':'value','splitNumber':2,'axisLabel':{'color':'#d2dceb'},'splitLine':{'lineStyle':{'color':'#34445a'}}},
             'series':[{'name':'実績（円）','type':'line','data':actual,'connectNulls':False,'symbolSize':4,'itemStyle':{'color':'#f5f5f5'}},
                       {'name':'予測（円）','type':'line','data':forecast,'showSymbol':False,'itemStyle':{'color':'#e4bd6b'},'lineStyle':{'type':'dashed','color':'#e4bd6b'}}]}).classes('w-full finance-chart').style('height:clamp(115px,22dvh,220px)')
         with ui.row().classes('finance-chart-legend w-full justify-center'):
@@ -90,9 +90,13 @@ def compact_finance_home(month):
         + purchases.monthly_total(month, kind='expense')
         + financials.monthly_payment_summary(month)['total_fees']
     )
+    operating_profit = gross - operating_costs
+    tax_summary = purchases.monthly_tax_summary(month)
+    advertising = financials.get_monthly_advertising(month)
+    consumption_tax = max(0, sales * 10 // 110 - tax_summary['input_tax'] - advertising.get('input_tax', 0))
+    after_tax_and_loan = operating_profit - consumption_tax - operations.get('loan_payment', 0)
     with ui.element('div').classes('finance-stat-grid finance-profit-grid w-full'):
-        for label, value in [('現在の粗利益', gross), ('暫定営業利益', gross - operating_costs)]:
+        for label, value in [('原価', cost), ('粗利益', gross), ('営業利益', operating_profit), ('税・返済後の残額', after_tax_and_loan)]:
             with ui.card().classes('surface-card finance-mini'):
                 ui.label(label).classes('text-xs')
                 ui.label(money(value)).classes('finance-mini-number')
-    ui.label('入力済み・家賃等は日割り').classes('finance-notice')
