@@ -36,7 +36,7 @@ def purchase_page(request: Request):
                 "日付", value=initial_day
             ).props("type=date outlined").classes("w-full q-mb-sm")
             supplier = ui.input(
-                "仕入れ先", placeholder="例：○○市場"
+                "仕入れ先"
             ).props("outlined autocomplete=organization").classes("w-full q-mb-xs")
 
             @ui.refreshable
@@ -52,7 +52,7 @@ def purchase_page(request: Request):
                     )
                     ui.label(
                         "削除しても過去の仕入れ記録と金額は残ります。"
-                    ).classes("text-xs text-grey-6 q-mb-md")
+                    ).classes("text-xs finance-readable q-mb-md")
 
                     def hide_selected(selected):
                         purchases.hide_supplier(selected)
@@ -77,7 +77,7 @@ def purchase_page(request: Request):
                 with ui.row().classes(
                     "w-full items-center justify-between q-mt-xs"
                 ):
-                    ui.label("最近の仕入れ先").classes("text-xs text-grey-6")
+                    ui.label("最近の仕入れ先").classes("text-xs finance-readable")
                     ui.button(
                         "候補を編集", icon="edit", on_click=editor_dialog.open
                     ).props("flat dense no-caps").classes("text-xs")
@@ -170,7 +170,7 @@ def purchase_page(request: Request):
                 ):
                     ui.label(
                         "小計が書かれていない時に、同じ税率の商品を＋でつないでください。"
-                    ).classes("text-xs text-grey-6 q-mb-sm")
+                    ).classes("text-xs finance-readable q-mb-sm")
                     calc_8 = ui.input(
                         "8％の税抜金額", placeholder="例：1,200+350+980"
                     ).props("outlined autocorrect=off id=calc-8").classes("w-full q-mb-sm")
@@ -225,7 +225,7 @@ def purchase_page(request: Request):
                 ).props("outlined").classes("w-full")
                 with ui.expansion("納品書記載の税額と合わない場合").classes("w-full"):
                     ui.label("空欄なら自動計算します。記載額が違う時だけ入力してください。").classes(
-                        "text-xs text-grey-6 q-mb-sm"
+                        "text-xs finance-readable q-mb-sm"
                     )
                     stated_tax_8 = ui.number("記載されている8％税額", min=0, step=1).props(
                         "outlined prefix=¥ inputmode=numeric"
@@ -292,7 +292,7 @@ def purchase_page(request: Request):
             ).props("spread no-caps").classes("w-full q-mb-xs")
             ui.label(
                 "ガスボンベ・袋・容器などは営業用消耗品、接待交際費・会議費・交通費などは一般経費"
-            ).classes("text-[10px] text-grey-6 q-mb-sm")
+            ).classes("text-[10px] finance-readable q-mb-sm")
 
             def save_purchase():
                 try:
@@ -342,28 +342,28 @@ def purchase_page(request: Request):
             with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
                 ui.label(
                     f"選択日 {day.replace('-', '/')} の合計"
-                ).classes("text-xs text-grey-6")
+                ).classes("text-xs finance-readable")
                 ui.label(f"¥{purchases.daily_total(day):,}").classes(
                     "text-2xl font-bold metric-value q-mt-xs"
                 )
             with ui.element("div").classes("purchase-total-grid w-full q-mb-md"):
                 with ui.card().classes("surface-card purchase-total-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・原価").classes(
-                        "text-xs text-grey-6"
+                        "text-xs finance-readable"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='cost'):,}"
                     ).classes("purchase-total-value metric-value q-mt-xs")
                 with ui.card().classes("surface-card purchase-total-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・営業用消耗品").classes(
-                        "text-xs text-grey-6"
+                        "text-xs finance-readable"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='operating_supply'):,}"
                     ).classes("purchase-total-value metric-value q-mt-xs")
                 with ui.card().classes("surface-card purchase-total-card q-pa-md"):
                     ui.label(f"{month.replace('-', '年')}月累計・一般経費").classes(
-                        "text-xs text-grey-6"
+                        "text-xs finance-readable"
                     )
                     ui.label(
                         f"¥{purchases.monthly_total(month, kind='expense'):,}"
@@ -392,7 +392,7 @@ def purchase_page(request: Request):
             ).classes("text-xl font-bold q-mt-md q-mb-sm")
             records = purchases.records(record_date=day)
             if not records:
-                ui.label("この日の仕入れ記録はありません。").classes("text-grey-7")
+                ui.label("この日の仕入れ記録はありません。").classes("finance-readable")
                 return
             for record in records:
                 with ui.card().classes("surface-card w-full q-pa-md q-mb-sm"):
@@ -415,7 +415,7 @@ def purchase_page(request: Request):
                             if breakdown:
                                 mode = "税込" if breakdown["price_mode"] == "included" else "税抜"
                                 ui.label(f"{mode}・消費税の内訳").classes(
-                                    "text-[10px] font-bold text-grey-7 q-mt-xs"
+                                    "text-[10px] font-bold finance-readable q-mt-xs"
                                 )
                                 tax_lines = []
                                 for rate in (1, 8, 10):
@@ -430,11 +430,11 @@ def purchase_page(request: Request):
                                         f"非課税・対象外 ¥{int(breakdown['exempt']):,}"
                                     )
                                 ui.label(" ／ ".join(tax_lines)).classes(
-                                    "text-xs text-grey-7"
+                                    "text-xs finance-readable"
                                 )
                         ui.space()
                         with ui.column().classes("items-end gap-0"):
-                            ui.label("支払合計").classes("text-[9px] text-grey-6")
+                            ui.label("支払合計").classes("text-[9px] finance-readable")
                             ui.label(f"¥{record['total']:,}").classes("text-lg font-bold")
 
                         def open_edit(_, selected=record):
@@ -539,7 +539,7 @@ def purchase_page(request: Request):
                                     ).props("outlined prefix=¥ inputmode=numeric").classes("w-full")
                                     ui.label(
                                         "税額欄は空欄のままで自動計算します。納品書の税額が1円違う時だけ入力してください。"
-                                    ).classes("text-[10px] text-grey-6")
+                                    ).classes("text-[10px] finance-readable")
                                 edit_invoice = ui.select(
                                     {
                                         "registered": "インボイスあり",
@@ -617,7 +617,7 @@ def purchase_page(request: Request):
                                 )
                                 ui.label(
                                     f"{selected['supplier']}　¥{selected['total']:,}"
-                                ).classes("text-grey-7 q-mb-md")
+                                ).classes("finance-readable q-mb-md")
 
                                 def delete_selected():
                                     purchases.delete(selected["id"])

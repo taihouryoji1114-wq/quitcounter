@@ -76,3 +76,23 @@ def compact_finance_home(month):
                 with ui.column().classes('gap-1 items-center min-w-0'):
                     ui.label(label).classes('text-xs')
                     ui.label(f'{value:.1%}' if value is not None else '—').classes('finance-ratio-value')
+
+    operations = financials.get_monthly_operations(month)
+    length = monthrange(y, m)[1]
+    elapsed = length if month < today.strftime('%Y-%m') else min(today.day, length) if month == today.strftime('%Y-%m') else 0
+    ratio = elapsed / length
+    operating_costs = (
+        personnel + round(operations.get('rent', 0) * ratio)
+        + round(operations.get('utilities', 0) * ratio)
+        + round(financials.get_monthly_advertising(month)['total'] * ratio)
+        + operations.get('other_admin', 0)
+        + purchases.monthly_total(month, kind='operating_supply')
+        + purchases.monthly_total(month, kind='expense')
+        + financials.monthly_payment_summary(month)['total_fees']
+    )
+    with ui.element('div').classes('finance-stat-grid finance-profit-grid w-full'):
+        for label, value in [('現在の粗利益', gross), ('暫定営業利益', gross - operating_costs)]:
+            with ui.card().classes('surface-card finance-mini'):
+                ui.label(label).classes('text-xs')
+                ui.label(money(value)).classes('finance-mini-number')
+    ui.label('入力済み・家賃等は日割り').classes('finance-notice')

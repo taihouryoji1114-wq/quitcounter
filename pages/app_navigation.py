@@ -16,7 +16,7 @@ def bottom_navigation(app_name):
         if not has_permission('future_dashboard'):
             entries = [entries[1]]
         section = 2 if any(x in path for x in ('forecast','block-map')) else 3 if '/reports' in path else 1 if any(x in path for x in ('input','sales','shiire','staffing','advances')) else 0
-        ui.add_head_html('<link rel="stylesheet" href="/static/mirai-navy.css?v=compact-20261017b">')
+        ui.add_head_html('<link rel="stylesheet" href="/static/mirai-navy.css?v=inputs-20261017c">')
     else:
         entries = [('ホーム','home','/store-ops'),('在庫','inventory_2','/store-ops/inventory'),
                    ('仕入れ','shopping_basket','/store-ops/orders'),('シフト','calendar_month','/store-ops/shift-board'),
