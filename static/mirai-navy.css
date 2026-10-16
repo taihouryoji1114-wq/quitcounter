@@ -1,0 +1,16 @@
+@media screen{
+body{background:#0d192a!important;color:#f0eadc!important}
+.app-shell{max-width:800px!important}
+.surface-card,.habit-card,.q-card,.future-menu{background:#14243a!important;color:#f0eadc!important;border:1px solid #52607866!important;box-shadow:0 12px 30px #0002!important}
+.text-grey-8,.text-grey-7,.text-grey-6,.text-grey-5{color:#b4bdc8!important}
+.text-primary,.text-positive{color:#e0c487!important}
+.q-field__native,.q-field__input,.q-field__label,.q-field__marginal{color:#e8e5df!important}
+.q-field--outlined .q-field__control:before{border-color:#71809888!important}
+.q-menu,.q-dialog .q-card{background:#172940!important;color:#eee6d7!important}
+.bg-green-1{background:#1b3048!important;color:#f1e5cc!important}
+.app-bottom-nav{background:#0d1b2df5!important;border-color:#556079!important}
+.app-bottom-link{color:#aab6c5!important}.app-bottom-link.active{color:#e3c687!important;background:#d3b36d14!important}
+.q-btn.bg-primary{background:#c6aa6f!important;color:#132138!important}
+.q-expansion-item{border-radius:16px}.forecast-home-number{font-size:clamp(27px,7vw,42px);font-weight:750;color:#edd49c;letter-spacing:-.03em}
+}
+@media print{body{background:white!important;color:#111!important}.surface-card,.q-card{background:white!important;color:#111!important;box-shadow:none!important}.app-bottom-nav{display:none!important}}

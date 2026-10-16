@@ -27,7 +27,7 @@ def _shift_month(month, amount):
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
 
 
-def _render_future_financials_home(selected_month=None):
+def _render_future_financials_home(selected_month=None, detailed=False):
     if not require_app_access("future_financials"):
         return
     if not require_permission("future_dashboard", "/mirai-kessan/input"):
@@ -68,6 +68,11 @@ def _render_future_financials_home(selected_month=None):
     )
     actual_current_month = today_jst().strftime("%Y-%m")
     current_month = _valid_month(selected_month) or actual_current_month
+    if not detailed:
+        from pages.finance_home import compact_finance_home
+        with content:
+            compact_finance_home(current_month)
+        return
     evaluator = MonthlyEvaluationService(financials, purchases, staffing)
     dashboard_path = (
         "/mirai-kessan/dashboard" if current_month == actual_current_month
@@ -724,6 +729,23 @@ def _render_future_financials_home(selected_month=None):
         .quick-menu-icon{width:52px;height:52px;min-width:52px;max-width:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;box-shadow:0 7px 15px color-mix(in srgb,var(--icon-color) 28%,transparent);border:1px solid rgba(255,255,255,.28)}
         .quick-menu-glyph{font-size:25px!important;line-height:1!important;width:28px;height:28px;display:flex!important;align-items:center;justify-content:center;overflow:hidden;text-shadow:0 1px 3px rgba(0,0,0,.14)}
         """)
+
+
+@ui.page("/mirai-kessan/details")
+def financial_details():
+    _render_future_financials_home(detailed=True)
+
+
+@ui.page("/mirai-kessan/forecast")
+def financial_forecast_page():
+    if not require_app_access("future_financials") or not require_permission("future_dashboard", "/mirai-kessan/input"):
+        return
+    Theme.page("着地予測・比較｜未来決算", app_name="mirai-kessan")
+    content = Theme.shell("未来を試す", "実績を残したまま、これからの条件を比較", brand="未来決算")
+    from pages.landing_forecast import render_landing_forecast
+    with content:
+        render_landing_forecast(today_jst().strftime("%Y-%m"))
+        ui.button("従来の利益シミュレーション", on_click=lambda:ui.navigate.to("/mirai-kessan/block-map")).props("outline")
 
 
 @ui.page("/mirai-kessan/input")

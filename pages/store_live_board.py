@@ -205,11 +205,20 @@ def render_live_board(business_date, period, period_label):
                         ui.button("この状態で確認", on_click=confirm).props("outline dense no-caps")
         unconfirmed_list()
 
+        visible_categories = [c for c in category_names if any(i.get("area", "厨房") == c for i in items)]
+        category_sections = {}
+        def select_category(event):
+            for name, section in category_sections.items():
+                section.set_visibility(name == event.value)
+        if visible_categories:
+            ui.select(visible_categories, value=visible_categories[0], label="表示カテゴリー", on_change=select_category).props("outlined dense").classes("w-full q-mb-md")
         for category in category_names:
             grouped = [item for item in items if item.get("area", "厨房") == category]
             if not grouped:
                 continue
-            with ui.column().classes("live-board-section w-full gap-0"):
+            with ui.column().classes("live-board-section w-full gap-0") as category_section:
+                category_sections[category] = category_section
+                category_section.set_visibility(category == visible_categories[0])
                 ui.label(category).classes("live-board-category").style(
                     f"--category-color:{category_colors.get(category, '#527A68')}")
                 for item in grouped:
@@ -335,7 +344,7 @@ def render_live_board(business_date, period, period_label):
                                                 "unelevated dense no-caps").classes("w-full")
 
         if order_category.get("visible", True):
-            with ui.column().classes("live-orders w-full gap-2"):
+            with ui.expansion("発注状況", icon="shopping_cart", value=False).classes("live-orders w-full gap-2"):
                 ui.label("発注状況").classes("text-base font-bold")
                 ui.label("確認件数・引き継ぎリストには含めません。").classes("text-xs text-grey-7")
                 order_checks = store_ops.daily_order_checks(business_date)

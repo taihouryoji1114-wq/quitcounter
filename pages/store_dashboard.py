@@ -144,7 +144,6 @@ def store_dashboard_page():
         ui.label(f"{month}月{day}日　TODAY'S OPERATION").classes(
             "today-ribbon w-full")
         render_live_board(business_date, period, period_label)
-        render_store_navigation()
         return
         with ui.card().classes("store-board w-full q-pa-lg text-white"):
             with ui.row().classes("w-full items-start justify-between no-wrap"):
@@ -730,3 +729,25 @@ def placeholder_page(title, subtitle, icon):
         with ui.card().classes("surface-card w-full q-pa-xl text-center"):
             ui.icon(icon).classes("text-6xl text-primary")
             ui.label("このページを次に作り込みます").classes("text-base font-black q-mt-md")
+
+
+@ui.page('/store-ops/more')
+def store_more_page():
+    if not require_app_access('store_ops'):
+        return
+    Theme.page('その他｜店舗運営', app_name='store-ops')
+    content=Theme.shell('その他', '必要な機能を選択', action=store_header_actions, brand='店舗運営')
+    with content:
+        render_store_navigation()
+
+
+@ui.page('/store-ops/orders')
+def store_orders_hub():
+    if not require_app_access('store_ops'):
+        return
+    Theme.page('仕入れ・発注｜店舗運営', app_name='store-ops')
+    content=Theme.shell('仕入れ・発注', '依頼と買うものを分けて確認', action=store_header_actions, brand='店舗運営')
+    with content:
+        app_card('発注依頼', '依頼を追加・対応を確認', 'add_shopping_cart', '/store-ops/order-requests', 'text-green-8')
+        if current_role() == 'owner':
+            app_card('仕入れリスト', '在庫不足と確認日時を確認', 'shopping_basket', '/store-ops/purchase-list', 'text-orange-8')

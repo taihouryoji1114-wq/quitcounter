@@ -59,8 +59,9 @@ class Theme:
         </style>
         """
         ui.add_head_html(app_head + shared_styles)
-        if app_name == "mirai-kessan":
-            ui.add_body_html(theme_controls_html())
+        if app_name in ("mirai-kessan", "store-ops"):
+            from pages.app_navigation import bottom_navigation
+            bottom_navigation(app_name)
 
     @staticmethod
     def shell(title, subtitle, back_to=None, action=None, brand="Habitory"):
