@@ -68,3 +68,47 @@
   .surface-card,.q-card {background:white!important;color:#111!important;box-shadow:none!important}
   .app-bottom-nav {display:none!important}
 }
+/* NiceGUI puts Quasar's utility colors in a CSS cascade layer. Important
+   overrides must also be layered; unlayered !important rules lose to them. */
+@layer theme {
+  @media screen {
+    body [class*="text-grey-"],body .finance-readable {color:#ededed!important;opacity:1!important}
+    body .text-primary,body .text-positive,body .text-green-8 {color:#f4d393!important}
+    body .text-negative,body .text-red-8,body .text-red-9 {color:#ffb4ad!important}
+    body .text-warning,body .text-orange-8,body .text-orange-9 {color:#ffda96!important}
+    body .q-field__label,body .q-field__native,body .q-field__input,body .q-field__marginal,body .q-item__label {color:#f5f5f5!important}
+    body .q-btn--flat,body .q-btn--outline {color:#f4d393!important}
+    body .q-btn.bg-primary {background:#e8ca8d!important;color:#151515!important}
+    body .q-btn.bg-negative {background:#9b2929!important;color:#fff!important}
+    body .opacity-50,body .opacity-60,body .opacity-70,body .opacity-75,body .opacity-80,body .opacity-85 {opacity:1!important}
+    body .bg-green-1,body .bg-grey-1,body .bg-grey-2 {background:#242424!important;color:#f5f5f5!important}
+    body .detail-drawer,body .decision-card,body .decision-verification,body .attack-conditions,
+    body .action-card,body .audit-summary,body .audit-count,body .subtotal-row,
+    body .asset-side,body .funding-side,body .report-kpi,body .health-card {
+      background:#202020!important;color:#f5f5f5!important;border-color:#616161!important;
+    }
+    body .health-card.good,body .balance-ok {background:#183427!important;color:#c8f5d7!important}
+    body .health-card.caution,body .decision-verification,body .audit-count.warning {background:#382b16!important;color:#ffe0a0!important}
+    body .health-card.danger,body .balance-warning,body .audit-count.danger {background:#3c2020!important;color:#ffc2bb!important}
+    body .health-card.unknown,body .audit-count.missing {background:#23303b!important;color:#e2efff!important}
+    body .health-guide,body .statement-head {color:#e0e0e0!important;opacity:1!important}
+    body .negative-toggle {background:#3c2020!important;color:#ffc2bb!important}
+    body .q-expansion-item__toggle-icon {color:#eee!important}
+    body .q-field__bottom {color:#ddd!important}
+    body .q-field--disabled,body .q-btn.disabled {opacity:.7!important}
+  }
+}
+@layer theme {
+  @media screen {
+    body .q-field__prefix,body .q-field__suffix {color:#f5f5f5!important}
+    body .consult-fold,body .answer-fold,body .consult-group,body .consult-topic,
+    body .consult-answer,body .unlock-card,body .status-item {background:#202020!important;color:#f5f5f5!important;border-color:#616161!important}
+    body .answer-kicker {color:#d6eddd!important}
+    body .answer-target {background:#183427!important;color:#c8f5d7!important}
+    body .sales-calendar-cell .text-red-7 {color:#ab2525!important}
+    body .sales-calendar-cell .text-orange-8 {color:#714600!important}
+    body .sales-calendar-cell .text-positive {color:#165c38!important}
+  }
+}
+
+@media screen{.finance-outlook-label{font-size:10px;line-height:12px;color:#fff0bf}body:has(.finance-hero) .finance-ratios{gap:2px!important}body:has(.finance-hero) .finance-ratio-value{font-size:22px}.finance-chart-legend{gap:12px!important}}

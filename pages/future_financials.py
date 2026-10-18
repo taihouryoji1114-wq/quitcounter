@@ -11,6 +11,8 @@ from core.monthly_evaluation import MonthlyEvaluationService
 from core.purchases import purchases
 from core.staffing import staffing
 from core.theme import Theme
+from pages.sales_targets import render_sales_targets
+from pages import finance_graphs, wealth_forecast
 
 
 def _valid_month(value):
@@ -342,10 +344,13 @@ def financial_forecast_page(month: str = "", price_change: int = 0):
     if not require_app_access("future_financials") or not require_permission("future_dashboard", "/mirai-kessan/input"):
         return
     Theme.page("着地予測・比較｜未来決算", app_name="mirai-kessan")
-    content = Theme.shell("未来を試す", "実績を残したまま、これからの条件を比較", brand="未来決算")
+    content = Theme.shell("予測と売上目標", "", brand="未来決算")
     from pages.landing_forecast import render_landing_forecast
     with content:
-        render_landing_forecast(_valid_month(month) or today_jst().strftime("%Y-%m"), price_change=price_change)
+        selected = _valid_month(month) or today_jst().strftime("%Y-%m")
+        month_input = ui.input("対象月", value=selected).props("type=month outlined").classes("w-full q-mb-md")
+        month_input.on("change", lambda: ui.navigate.to("/mirai-kessan/forecast?month=" + str(month_input.value)))
+        render_landing_forecast(selected, price_change=price_change)
         with ui.expansion("経営分析・コンサル", icon="analytics").classes("w-full"):
             for label,path in [("経営コンサル","/mirai-kessan/consulting"),("決算分析","/mirai-kessan/financial-analysis")]:
                 ui.button(label,on_click=lambda _,url=path:ui.navigate.to(url)).props("flat").classes("w-full")
