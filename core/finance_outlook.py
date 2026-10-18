@@ -51,19 +51,40 @@ def month_outlook(month, as_of=None):
     fees=report['payment_fees'] if past else report['payment_fees']+remaining*fee_rate if remaining is not None and fee_rate is not None else None
     staff=staffing.month_cost_summary(month,today)
     payroll=staff['company_cost'] if past else staff['forecast_company_cost']
-    # Scheduled dates (including an explicit zero-shift day) are not extrapolated.
-    plans=data.data.get('business_staff_shift_plans',{})
-    unplanned=[date(y,m,d) for d in range(1,days+1) if date(y,m,d)>today and
-               f'{month}-{d:02d}' not in plans and f'{month}-{d:02d}' not in closures]
-    if unplanned:
-        elapsed=0 if future else today.day
-        hourly=staff['groups']['hourly']['company_cost']
-        if elapsed and hourly>0:
-            payroll+=round(hourly/elapsed*len(unplanned))
-            messages.append(f'予定シフト未登録 {len(unplanned)}日分のアルバイト費用を今月の1日平均で補完。')
-        else:
-            payroll=None
-            messages.append('予定シフトとアルバイト実績が不足しています。人件費見込・損益分岐点は保留。')
+    coverage = staff['plan_coverage']
+    if coverage['board_cells']:
+        messages.append(f"公開済みシフトボード {coverage['board_cells']}件を人件費予測に反映。")
+    if coverage['learned_cells']:
+        messages.append(f"時刻のない勤務 {coverage['learned_cells']}件は過去の勤務時間で推定。休憩時間も過去実績を使用。")
+    elif coverage['board_cells']:
+        messages.append('シフトボードの時刻を使用。休憩時間は過去実績から推定。')
+    missing = coverage['missing_by_staff']
+    missing_count = sum(len(v) for v in missing.values())
+    unestimated = bool(coverage['unknown_wages'])
+    if missing_count:
+        # Estimate only uncovered PERSON-days; don't add a full-day average on
+        # top of another person's confirmed shift. Fixed social insurance is
+        # already in forecast_company_cost, so only variable payroll is added.
+        elapsed = 0 if future else today.day
+        wages, commute = staffing.wages(), staffing.commute_rates()
+        insurance, rates = staffing.insurance_settings(), staffing.insurance_rates()
+        records = data.data.get('business_staff_hours', {})
+        for name, dates in missing.items():
+            if not dates:
+                continue
+            recorded = [d for d,v in records.items() if d.startswith(month) and d<=today.isoformat() and name in v]
+            if not elapsed or not recorded:
+                unestimated = True
+                continue
+            paid = sum(staffing._shift_pay(wages[name], staffing.day(d)[name]) +
+                       (commute[name] if staffing._worked(staffing.day(d)[name]) else 0)
+                       for d in recorded)
+            variable_rate = rates['workers_comp'] + (rates['employment'] if insurance[name]['employment'] else 0)
+            payroll += round(paid/elapsed*len(dates)*(1+variable_rate/100))
+        messages.append(f'勤務予定が不明な {missing_count}人日分は、本人の今月実績の日平均で補完（休業日は除外）。')
+    if unestimated:
+        payroll = None
+        messages.append('未登録の時給または勤務実績があり、人件費見込は保留。公開済みシフトの時間・時給を確認してください。')
     operations=financials.get_monthly_operations(month)
     advertising=financials.get_monthly_advertising(month)['total']
     overhead=operations['rent']+operations['utilities']+operations['other_admin']+advertising

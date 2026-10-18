@@ -99,7 +99,7 @@ def finance_graphs(month: str = ''):
                 with ui.expansion('計算の前提・設定',icon='settings').classes('w-full'):
                     ui.label('損益分岐点は営業利益ゼロの見込。税・返済は含めません。今月の予定人件費を固定の費用見込として扱います。')
                     ui.label('原価見込：入力済み仕入れ＋残り予測売上×想定原価率。'+outlook['basis'])
-                    ui.label('人件費見込：月額給与＋実績＋予定シフト。未登録日は今月のアルバイト日平均で補完。')
+                    ui.label('人件費見込：月額給与＋実績＋公開済みシフトボード（優先）＋人件費管理の予定。未登録分は本人の日平均で補完。')
                     config=data.data.get('finance_outlook_settings',{})
                     rate=ui.number('想定原価率（％・空欄は直近12週）',value=config.get('cost_rate'),min=0,max=100).props('outlined').classes('w-full')
                     fees=ui.checkbox('決済手数料も変動費に含める',value=config.get('fees_variable',True))

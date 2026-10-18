@@ -473,9 +473,10 @@ class StaffingManager:
 
     def month_cost_summary(self, month, as_of=None):
         records = self._data_manager.data.get("business_staff_hours", {})
-        plan_records = self._data_manager.data.get("business_staff_shift_plans", {})
         wages, settings, rates = self.wages(), self.insurance_settings(), self.insurance_rates()
         as_of = as_of or date.today()
+        from core.shift_payroll_forecast import effective_plans
+        plan_records, plan_coverage = effective_plans(self, month, as_of)
         actual_cutoff = as_of.isoformat()
         year, month_number = int(month[:4]), int(month[5:7])
         days_in_month = monthrange(year, month_number)[1]
@@ -552,18 +553,18 @@ class StaffingManager:
                 group = "salaried" if name in self.SALARIED_STAFF else "hourly"
                 forecast_social_by_group[group] += setting["standard_monthly"] * rate / 100
         planned_hourly_gross = sum(
-            self._shift_pay(wages[name], self.planned_day(record_date)[name])
+            self._shift_pay(wages[name], plan_records[record_date][name])
             for record_date in plan_records if record_date.startswith(month) and record_date > actual_cutoff
             for name in self.HOURLY_STAFF)
         planned_hourly_transport = sum(
             self.commute_rates()[name]
             for record_date in plan_records if record_date.startswith(month) and record_date > actual_cutoff
-            for name in self.HOURLY_STAFF if self._worked(self.planned_day(record_date)[name]))
+            for name in self.HOURLY_STAFF if self._worked(plan_records[record_date][name]))
         forecast_gross = sum(salaries.values()) + hourly_gross + planned_hourly_gross
         forecast_transportation = transportation + planned_hourly_transport
         planned_employment = sum(
-            (self._shift_pay(wages[name], self.planned_day(record_date)[name])
-             + (self.commute_rates()[name] if self._worked(self.planned_day(record_date)[name]) else 0))
+            (self._shift_pay(wages[name], plan_records[record_date][name])
+             + (self.commute_rates()[name] if self._worked(plan_records[record_date][name]) else 0))
             * rates["employment"] / 100
             for record_date in plan_records if record_date.startswith(month) and record_date > actual_cutoff
             for name in self.HOURLY_STAFF if settings[name]["employment"])
@@ -591,6 +592,7 @@ class StaffingManager:
                 "forecast_transportation": round(forecast_transportation),
                 "planned_hourly_gross": round(planned_hourly_gross),
                 "forecast_company_cost": round(forecast_gross + forecast_transportation + forecast_insurance),
+                "plan_coverage": plan_coverage,
                 "groups": groups}
 
     def year_staff_total(self, year, name):

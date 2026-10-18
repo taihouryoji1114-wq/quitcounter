@@ -1,5 +1,5 @@
 from core.staff_identity import staff_display_name
-from datetime import date, timedelta
+from datetime import date
 
 from fastapi import Request
 from nicegui import ui
@@ -35,6 +35,8 @@ def staffing_page(request: Request):
         salaries = staffing.monthly_salaries()
         current_month = today_jst().strftime("%Y-%m")
         current_summary = staffing.month_cost_summary(current_month, today_jst())
+        from core.finance_outlook import month_outlook
+        payroll_outlook = month_outlook(current_month)
         with ui.card().classes("staff-total-card w-full q-pa-lg q-mb-sm text-white"):
             ui.label("現時点の会社総負担").classes("text-[10px] opacity-70")
             ui.label(f"¥{current_summary['company_cost']:,}").classes(
@@ -44,8 +46,15 @@ def staffing_page(request: Request):
             ).classes("text-[9px] opacity-75 q-mt-sm")
             with ui.row().classes("w-full justify-between items-center q-mt-sm no-wrap"):
                 ui.label("月末着地予測").classes("text-[9px] opacity-70")
-                ui.label(f"¥{current_summary['forecast_company_cost']:,}").classes(
+                ui.label("確認待ち" if payroll_outlook["projected_personnel"] is None else f"¥{payroll_outlook['projected_personnel']:,}").classes(
                     "text-base font-black")
+            coverage = current_summary['plan_coverage']
+            if coverage['board_cells']:
+                ui.label(f"公開済みシフトボード {coverage['board_cells']}件を反映").classes('text-xs')
+            if coverage['learned_cells']:
+                ui.label('時刻のない勤務は過去実績の時間・休憩で推定しています。').classes('text-xs')
+            if coverage['unknown_wages'] or any(coverage['missing_by_staff'].values()):
+                ui.label('未確定分は本人の実績で補完。実績・時給が不足する場合は確認待ちになります。').classes('text-xs')
             if current_summary["planned_hourly_gross"]:
                 ui.label(
                     f"予定シフト分を含む（バイト予定給与 ¥{current_summary['planned_hourly_gross']:,}）"
@@ -157,49 +166,7 @@ def staffing_page(request: Request):
                 ui.notify("社会保険設定を保存しました", type="positive")
             ui.button("保険設定を保存", on_click=save_insurance).classes("w-full q-mt-sm")
 
-        tomorrow = (today_jst() + timedelta(days=1)).isoformat()
-        with ui.expansion("明日以降のシフトを簡単入力", icon="event_available", value=False).classes(
-            "staff-panel w-full q-mt-sm"):
-            ui.label("着地予想専用です。過去の実績から予定時間を見積もりますが、勤務実績には入力しません。").classes(
-                "text-xs finance-readable q-mb-sm")
-            plan_date = ui.input("予定日", value=tomorrow).props(
-                f"outlined dense type=date min={tomorrow}").classes("w-full")
-            plan_area = ui.column().classes("w-full gap-1")
-
-        def render_simple_plan(record_date):
-            plan_area.clear()
-            templates = staffing.shift_templates(today_jst())
-            existing = staffing.planned_day(record_date)
-            with plan_area:
-                selections = {}
-                for name in staffing.HOURLY_STAFF:
-                    selections[name] = {}
-                    with ui.row().classes("simple-shift-row w-full items-center no-wrap"):
-                        ui.label(staff_display_name(name)).classes("simple-shift-name")
-                        for label, prefix in (("ランチ", "lunch"), ("ディナー", "dinner")):
-                            template = templates[name].get(prefix)
-                            checked = bool(existing[name].get(f"{prefix}_start"))
-                            text = label
-                            text += f" {template['start']}〜{template['end']}"
-                            selections[name][prefix] = ui.checkbox(text, value=checked).props(
-                                "dense")
-
-                def save_simple():
-                    try:
-                        staffing.save_simple_plan(record_date, {
-                            name: {prefix: field.value for prefix, field in fields.items()}
-                            for name, fields in selections.items()
-                        }, today_jst())
-                    except ValueError as error:
-                        ui.notify(str(error), type="negative")
-                        return
-                    summary = staffing.month_cost_summary(record_date[:7], today_jst())
-                    ui.notify(f"予定を保存しました。月末予測 ¥{summary['forecast_company_cost']:,}", type="positive")
-                    ui.navigate.to("/mirai-kessan/staffing")
-                ui.button("予定シフトを保存", icon="save", on_click=save_simple).classes("w-full q-mt-sm")
-
-        plan_date.on("change", lambda: render_simple_plan(plan_date.value))
-        render_simple_plan(tomorrow)
+        ui.label('勤務予定は店舗管理の公開済みシフトボードから自動反映します。ここでは実際に働いた時間を入力してください。').classes('text-xs finance-readable q-mt-sm')
 
         ui.add_css(".staff-total-card{border:0!important;border-radius:24px!important;background:linear-gradient(145deg,#173D30,#52795D)!important;box-shadow:0 12px 30px rgba(24,61,45,.16)!important}.staff-group-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.staff-group-card{min-width:0;padding:9px;border-radius:13px;background:rgba(255,255,255,.12);overflow:hidden}.staff-group-card .q-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attendance-progress-card{border-radius:19px!important;border:1px solid #E1E9E4!important;box-shadow:none!important}.checked-date-list{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}.checked-date-chip{padding:6px 2px;border-radius:9px;font-size:9px;font-weight:900;text-align:center}.checked-date-chip.attended{background:#DDF1E5;color:#28704A;border:1px solid #B9DEC8}.checked-date-chip.unchecked{background:#252525;color:#fff;color:#9AA39E;border:1px solid #E4E8E5}.staff-panel,.staff-shift{border-radius:18px!important;background:#202020!important;color:#fff!important;border:1px solid #E1E9E4!important}.staff-shift .q-item{min-height:46px!important}.simple-shift-row{padding:6px 4px;border-bottom:1px solid #edf1ee;overflow-x:auto}.simple-shift-name{min-width:58px;font-size:10px;font-weight:900}.simple-shift-row .q-checkbox__label{font-size:9px;white-space:nowrap}.dependent-card{border:0!important;border-radius:17px!important;box-shadow:none!important}.dependent-badge{padding:4px 8px;border-radius:999px;background:#303030;color:#fff;font-size:8px;font-weight:900}")
         ui.add_css(".staff-total-card *,.staff-group-card *,.attendance-progress-card *,.staff-panel *{min-width:0;box-sizing:border-box}.staff-total-card .text-2xl,.staff-total-card .text-xl,.staff-total-card .text-lg{max-width:100%;font-size:clamp(13px,5vw,22px)!important;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:clip;font-variant-numeric:tabular-nums}.timecard-progress{border-radius:15px!important;background:#202020!important;color:#fff!important;border:1px solid #E1E9E4!important}.timecard-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:5px 10px 12px}.timecard-progress-person{min-width:0;padding:9px;border-radius:13px;background:#252525;color:#fff;border:1px solid #E4E8E5}.timecard-progress-person.entered{background:#26382c;border-color:#C9E3D2}.timecard-progress-name{font-size:10px;font-weight:950}.timecard-progress-latest{font-size:11px;font-weight:950;color:#c6efcf}.timecard-progress-count{font-size:8px;color:#eee}.timecard-clear-shift{align-self:flex-end!important;margin-top:-2px!important;font-size:9px!important}@media(max-width:520px){.staff-total-card,.staff-panel,.attendance-progress-card{padding-left:13px!important;padding-right:13px!important}.staff-group-card{padding:8px 6px}}")
