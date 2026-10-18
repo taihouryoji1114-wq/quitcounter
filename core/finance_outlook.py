@@ -60,31 +60,12 @@ def month_outlook(month, as_of=None):
         messages.append('シフトボードの時刻を使用。休憩時間は過去実績から推定。')
     missing = coverage['missing_by_staff']
     missing_count = sum(len(v) for v in missing.values())
-    unestimated = bool(coverage['unknown_wages'])
+    payroll_provisional = bool(coverage['unknown_wages'] or missing_count or coverage['learned_cells'])
     if missing_count:
-        # Estimate only uncovered PERSON-days; don't add a full-day average on
-        # top of another person's confirmed shift. Fixed social insurance is
-        # already in forecast_company_cost, so only variable payroll is added.
-        elapsed = 0 if future else today.day
-        wages, commute = staffing.wages(), staffing.commute_rates()
-        insurance, rates = staffing.insurance_settings(), staffing.insurance_rates()
-        records = data.data.get('business_staff_hours', {})
-        for name, dates in missing.items():
-            if not dates:
-                continue
-            recorded = [d for d,v in records.items() if d.startswith(month) and d<=today.isoformat() and name in v]
-            if not elapsed or not recorded:
-                unestimated = True
-                continue
-            paid = sum(staffing._shift_pay(wages[name], staffing.day(d)[name]) +
-                       (commute[name] if staffing._worked(staffing.day(d)[name]) else 0)
-                       for d in recorded)
-            variable_rate = rates['workers_comp'] + (rates['employment'] if insurance[name]['employment'] else 0)
-            payroll += round(paid/elapsed*len(dates)*(1+variable_rate/100))
-        messages.append(f'勤務予定が不明な {missing_count}人日分は、本人の今月実績の日平均で補完（休業日は除外）。')
-    if unestimated:
-        payroll = None
-        messages.append('未登録の時給または勤務実績があり、人件費見込は保留。公開済みシフトの時間・時給を確認してください。')
+        messages.append(f'未公開・未入力・時間不明の勤務枠が {missing_count}人日あります。将来分は公開済みの読み取れる勤務のみを集計した参考値です。')
+    if coverage['unknown_wages']:
+        messages.append(f"時給未登録の勤務 {coverage['unknown_wages']}件は金額未反映です。時給を登録すると再計算します。")
+    messages.append('人件費＝今日までの入力済みバイト実績＋社員等の登録月給全額＋明日以降の公開済みシフト。交通費・会社負担保険を含みます。')
     operations=financials.get_monthly_operations(month)
     advertising=financials.get_monthly_advertising(month)['total']
     overhead=operations['rent']+operations['utilities']+operations['other_admin']+advertising
@@ -114,7 +95,12 @@ def month_outlook(month, as_of=None):
         cover=tax_and_repayment_threshold(landing,cost,fees,payroll,overhead,
                 operations['loan_payment'],input_fraction,fixed_input_tax,config.get('fees_variable',True))
     messages.append('税・返済目安は売上10％、仕入控除は直近3か月の入力税額比率＋登録広告費で概算。家賃等の未登録控除・法人税・利息別入力は含みません。')
-    return dict(values, tax_repayment_line=cover, month=month, forecast=forecast, report=report, sales=landing,
+    return dict(values, payroll_issues=coverage['issues'], payroll_estimated=coverage['estimated'],
+                payroll_breakdown={'入力済みバイト給与':staff['groups']['hourly']['gross_wages'],
+                                   '社員等の月給':sum(staffing.monthly_salaries().values()),
+                                   '明日以降のバイト給与':staff['planned_hourly_gross'],
+                                   '交通費・会社負担保険':staff['forecast_transportation']+staff['forecast_employer_insurance']},
+                payroll_provisional=payroll_provisional, tax_repayment_line=cover, month=month, forecast=forecast, report=report, sales=landing,
                 projected_cost=round(cost) if cost is not None else None,
                 projected_personnel=round(payroll) if payroll is not None else None,
                 projected_fees=round(fees) if fees is not None else None,

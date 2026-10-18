@@ -45,7 +45,7 @@ def staffing_page(request: Request):
                 f"額面 ¥{current_summary['gross_wages']:,}・交通費 ¥{current_summary['transportation']:,}・会社負担保険 ¥{current_summary['employer_insurance']:,}"
             ).classes("text-[9px] opacity-75 q-mt-sm")
             with ui.row().classes("w-full justify-between items-center q-mt-sm no-wrap"):
-                ui.label("月末着地予測").classes("text-[9px] opacity-70")
+                ui.label("月末着地予測（参考）" if payroll_outlook.get("payroll_provisional") else "月末着地予測").classes("text-[9px] opacity-70")
                 ui.label("確認待ち" if payroll_outlook["projected_personnel"] is None else f"¥{payroll_outlook['projected_personnel']:,}").classes(
                     "text-base font-black")
             coverage = current_summary['plan_coverage']
@@ -54,7 +54,7 @@ def staffing_page(request: Request):
             if coverage['learned_cells']:
                 ui.label('時刻のない勤務は過去実績の時間・休憩で推定しています。').classes('text-xs')
             if coverage['unknown_wages'] or any(coverage['missing_by_staff'].values()):
-                ui.label('未確定分は本人の実績で補完。実績・時給が不足する場合は確認待ちになります。').classes('text-xs')
+                ui.label('未確定分・時給未登録分は含まない参考値です。公開済みの勤務を集計しています。').classes('text-xs')
             if current_summary["planned_hourly_gross"]:
                 ui.label(
                     f"予定シフト分を含む（バイト予定給与 ¥{current_summary['planned_hourly_gross']:,}）"
@@ -67,6 +67,9 @@ def staffing_page(request: Request):
                         ui.label(f"¥{group['company_cost']:,}").classes("text-base font-black")
                         ui.label(f"給与 {group['gross_wages']:,}・交通 {group['transportation']:,}・保険 {group['employer_insurance']:,}").classes("text-[7px] opacity-70")
         ui.label("社員3人の給与は日割りで自動反映されます。勤務時間の入力はアルバイトだけです。").classes("text-sm font-bold q-my-sm")
+        from pages.payroll_forecast_details import render_payroll_details
+        render_payroll_details(payroll_outlook)
+
         with ui.expansion("副社長・店長・社員の月額給与", icon="badge", value=False).classes(
             "staff-panel w-full"):
             ui.label("3人とも出勤入力は不要。月10日休みを月内に均等配分し、月給×経過日数÷月の日数で自動計上します。過去月は満額です。").classes(

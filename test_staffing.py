@@ -150,7 +150,7 @@ class StaffingManagerTest(unittest.TestCase):
             self.assertEqual(templates[name]["dinner"]["start"], "17:00")
             self.assertEqual(templates[name]["dinner"]["end"], "23:00")
 
-    def test_future_plan_affects_forecast_but_not_current_actual(self):
+    def test_retired_simple_plan_does_not_feed_board_forecast(self):
         self.staffing.save_wages({"スタッフA": 1200})
         self.staffing.save_day("2026-08-01", {"スタッフA": {
             "lunch_start": "10:00", "lunch_end": "15:00",
@@ -160,8 +160,8 @@ class StaffingManagerTest(unittest.TestCase):
         }, date(2026, 8, 14))
         summary = self.staffing.month_cost_summary("2026-08", date(2026, 8, 14))
         self.assertEqual(summary["gross_wages"], 6000)
-        self.assertEqual(summary["planned_hourly_gross"], 6000)
-        self.assertEqual(summary["forecast_gross_wages"], 12000)
+        self.assertEqual(summary["planned_hourly_gross"], 0)
+        self.assertEqual(summary["forecast_gross_wages"], 6000)
 
     def test_legacy_future_plan_is_removed_from_actual_timecard(self):
         self.staffing.save_day("2026-08-20", {"スタッフA": {

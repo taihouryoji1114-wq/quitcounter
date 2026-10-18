@@ -1,6 +1,5 @@
 """Read published shift-board snapshots without changing timecards or drafts."""
 from calendar import monthrange
-from copy import deepcopy
 from datetime import date
 import re
 
@@ -38,18 +37,22 @@ def board_shift(cell, template):
 
 
 def effective_plans(manager, month, as_of):
-    """Published board cells override legacy plans per person, including explicit off.
-
-    Missing board entries retain legacy plans; unresolved published work NEVER
-    silently falls back to a stale legacy shift. No writes/backfill on this path.
-    """
+    """Read only published board work; legacy simple plans stay stored but unused."""
     raw = manager._data_manager.data
-    plans = {d: deepcopy(v) for d,v in raw.get('business_staff_shift_plans', {}).items()
-             if d.startswith(month) and d > as_of.isoformat()}
+    plans = {}
     published = raw.get('store_manual_shift_board', {}).get(month, {}).get('published') or {}
     templates = manager.shift_templates(as_of)
     cells = published.get('cells', {})
     board_count = learned = unknown_wages = 0
+    issues = {}
+    estimated = []
+    for target in raw.get('business_staff_hours', {}):
+        if target.startswith(month) and target <= as_of.isoformat():
+            actual = manager.day(target)
+            for name in manager.HOURLY_STAFF:
+                if manager._worked(actual[name]) and manager.wages()[name] <= 0:
+                    issues[(name,target)] = ['実績の時給が未登録']
+                    unknown_wages += 1
     y,m = map(int, month.split('-'))
     for name, entries in published.get('entries', {}).items():
         if name not in manager.HOURLY_STAFF:
@@ -68,12 +71,17 @@ def effective_plans(manager, month, as_of):
                 cell = {'text': text, 'kind': kind}
             shift, inferred = board_shift(cell, templates[name])
             plans.setdefault(target, {}).pop(name, None)
+            if shift is None:
+                issues.setdefault((name,target), []).append('勤務時間を特定できない')
+            if inferred:
+                estimated.append(dict(staff=name, date=target, reason='勤務時間を過去実績から推定'))
             if shift is not None:
                 plans[target][name] = shift
                 board_count += 1
                 learned += int(inferred)
             if (shift is None or manager._worked(shift)) and manager.wages()[name] <= 0:
                 unknown_wages += 1
+                issues.setdefault((name,target), []).append('時給が未登録')
     active = [name for name in manager.HOURLY_STAFF if manager.wages()[name] > 0]
     missing = {name: [] for name in active}
     closures = raw.get('landing_forecast_settings', {}).get('closed_dates', [])
@@ -84,9 +92,15 @@ def effective_plans(manager, month, as_of):
         for name in active:
             if name not in plans.get(target, {}):
                 missing[name].append(target)
+                if (name,target) not in issues:
+                    half = 'first' if d<=15 else 'second'
+                    unpublished = not published or (published.get('periods') and half not in published['periods'])
+                    issues[(name,target)] = ['シフトが未公開' if unpublished else 'シフトが未入力']
     # Normalise sparse plans for all existing payroll loops.
     for shifts in plans.values():
         for name in manager.HOURLY_STAFF:
             shifts.setdefault(name, {})
     return plans, dict(board_cells=board_count, learned_cells=learned,
-                       unknown_wages=unknown_wages, missing_by_staff=missing)
+                       unknown_wages=unknown_wages, missing_by_staff=missing,
+                       issues=[dict(staff=n,date=d,reason='・'.join(reasons)) for (n,d),reasons in sorted(issues.items())],
+                       estimated=estimated)

@@ -28,7 +28,7 @@ class ShiftPayrollTests(unittest.TestCase):
             'スタッフB':dict(lunch_start='10:00',lunch_end='12:00')}}
         before = deepcopy(self.data.data)
         s = self.staff.month_cost_summary('2026-10',self.today)
-        self.assertEqual(s['planned_hourly_gross'],6000)
+        self.assertEqual(s['planned_hourly_gross'],4000)
         self.assertEqual(s['plan_coverage']['board_cells'],1)
         self.assertEqual(s['company_cost'],0)
         self.assertEqual(before,self.data.data)
@@ -66,3 +66,43 @@ class ShiftPayrollTests(unittest.TestCase):
         self.assertEqual(self.staff.month_cost_summary('2026-10',self.today)['planned_hourly_gross'],1250)
         self.data.data['business_staff_wages']['スタッフA']=0
         self.assertEqual(self.staff.month_cost_summary('2026-10',self.today)['plan_coverage']['unknown_wages'],1)
+
+    def test_issue_details_distinguish_unpublished_time_and_wage(self):
+        self.board('ディナー 18:00〜','ディナー')
+        self.data.data['business_staff_wages']['スタッフA'] = 0
+        self.data.data['store_manual_shift_board']['2026-10']['published']['periods']={'first':'published'}
+        _, info = effective_plans(self.staff,'2026-10',self.today)
+        issue = next(v for v in info['issues'] if v['staff']=='スタッフA' and v['date']=='2026-10-19')
+        self.assertIn('勤務時間',issue['reason'])
+        self.assertIn('時給',issue['reason'])
+        self.assertTrue(any(v['reason']=='シフトが未公開' for v in info['issues']))
+
+    def test_actual_salary_and_board_sum_keep_metrics_visible(self):
+        from unittest.mock import patch
+        from core.finance_outlook import month_outlook
+        from core.financials import FinancialManager
+        from core.purchases import PurchaseManager
+        self.board('ディナー 18:00〜22:00')
+        self.staff.save_person('2026-10-01','スタッフA',dict(lunch_start='10:00',lunch_end='14:00'))
+        self.data.data['business_staff_monthly_salaries']={'店長':300000}
+        summary = self.staff.month_cost_summary('2026-10',self.today)
+        self.assertEqual(summary['forecast_gross_wages'],308000)
+        # Staff B has a wage, but no timecard and no published future shift.
+        # This used to blank the whole forecast; confirmed amounts must survive.
+        report = dict(sales_total=1000000,cost_total=300000,payment_fees=0,
+                      supply_total=0,expense_total=0)
+        forecast = dict(landing=2000000,missing=[])
+        with patch('core.finance_outlook.data',self.data), \
+             patch('core.finance_outlook.staffing',self.staff), \
+             patch('core.finance_outlook.financials',FinancialManager(self.data)), \
+             patch('core.finance_outlook.purchases',PurchaseManager(self.data)), \
+             patch('core.finance_outlook.build_financial_report',return_value=report), \
+             patch('core.finance_outlook.monthly_forecast',return_value=forecast):
+            result = month_outlook('2026-10',self.today)
+        self.assertEqual(result['projected_personnel'],summary['forecast_company_cost'])
+        self.assertIsNotNone(result['break_even'])
+        self.assertIsNotNone(result['personnel_rate'])
+        self.assertIsNotNone(result['labor_rate'])
+        self.assertTrue(result['payroll_provisional'])
+        self.assertTrue(any(v['staff']=='スタッフB' for v in result['payroll_issues']))
+        self.assertEqual(sum(result['payroll_breakdown'].values()),result['projected_personnel'])

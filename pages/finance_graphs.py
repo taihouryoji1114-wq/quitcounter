@@ -35,7 +35,7 @@ def progress_chart(month, outlook, compact=False, tax_line=False):
             {'name':'予測（円）','type':'line','data':future,'showSymbol':False,'lineStyle':{'type':'dashed'},'itemStyle':{'color':'#f6d390'}}]
     threshold=outlook.get('tax_repayment_line') if tax_line else outlook['break_even']
     if threshold is not None:
-        series.append({'name':'税・返済確保目安' if tax_line else '損益分岐点（見込）','type':'line','data':[threshold]*days,'showSymbol':False,'lineStyle':{'type':'dotted'},'itemStyle':{'color':'#ffb1aa'}})
+        series.append({'name':'税・返済確保目安' if tax_line else ('損益分岐点（参考）' if outlook.get('payroll_provisional') else '損益分岐点（見込）'),'type':'line','data':[threshold]*days,'showSymbol':False,'lineStyle':{'type':'dotted'},'itemStyle':{'color':'#ffb1aa'}})
     if not compact:
         plans=sorted((p for p in data.data.get('sales_target_plans',{}).values() if p['month']==month),key=lambda p:p['created_at'])
         if plans:series.append({'name':'月間売上目標','type':'line','data':[plans[-1]['monthly_target']]*days,'showSymbol':False,'itemStyle':{'color':'#8bc9ff'}})
@@ -95,11 +95,13 @@ def finance_graphs(month: str = ''):
                 threshold=outlook['tax_repayment_line'] if tax.value else outlook['break_even']
                 if threshold is not None and outlook['sales'] is not None:
                     ui.label(f"着地予測との差：{outlook['sales']-threshold:+,}円").classes('font-bold')
+                from pages.payroll_forecast_details import render_payroll_details
+                render_payroll_details(outlook)
                 for note in outlook['messages']:ui.label(note).classes('finance-warning text-xs')
                 with ui.expansion('計算の前提・設定',icon='settings').classes('w-full'):
                     ui.label('損益分岐点は営業利益ゼロの見込。税・返済は含めません。今月の予定人件費を固定の費用見込として扱います。')
                     ui.label('原価見込：入力済み仕入れ＋残り予測売上×想定原価率。'+outlook['basis'])
-                    ui.label('人件費見込：月額給与＋実績＋公開済みシフトボード（優先）＋人件費管理の予定。未登録分は本人の日平均で補完。')
+                    ui.label('人件費見込：登録月給全額＋今日までの入力済み実績＋明日以降の公開済みシフトボード。未確定分がある場合は登録済みの範囲で参考値を表示。')
                     config=data.data.get('finance_outlook_settings',{})
                     rate=ui.number('想定原価率（％・空欄は直近12週）',value=config.get('cost_rate'),min=0,max=100).props('outlined').classes('w-full')
                     fees=ui.checkbox('決済手数料も変動費に含める',value=config.get('fees_variable',True))

@@ -52,7 +52,10 @@ def compact_finance_home(month):
     personnel = report['personnel']
     gross = report['gross_profit']
     with ui.card().classes('surface-card w-full finance-ratios q-mb-sm'):
-        ui.label('現在の経営指標').classes('finance-gold')
+        with ui.row().classes('w-full justify-between items-center'):
+            ui.label('現在の経営指標').classes('finance-gold')
+            if outlook.get('payroll_issues'):
+                ui.link(f"未反映 {len(outlook['payroll_issues'])}件", '/mirai-kessan/graphs?month='+month).classes('text-xs').style('color:#ffb1aa')
         with ui.element('div').classes('finance-ratio-grid w-full'):
             for label, value, predicted in (
                 ('原価率', cost / sales if sales > 0 else None, outlook['cost_rate']),
@@ -62,7 +65,7 @@ def compact_finance_home(month):
                 with ui.column().classes('gap-1 items-center min-w-0'):
                     ui.label(label).classes('text-xs')
                     ui.label(f'{value:.1%}' if value is not None else '—').classes('finance-ratio-value')
-                    ui.label('着地 '+(f'{predicted:.1%}' if predicted is not None else '—')).classes('finance-outlook-label')
+                    ui.label(('着地(参考) ' if outlook.get('payroll_provisional') and label != '原価率' else '着地 ')+(f'{predicted:.1%}' if predicted is not None else '—')).classes('finance-outlook-label')
 
     operations = financials.get_monthly_operations(month)
     operating_profit = report['operating_profit']
