@@ -80,7 +80,7 @@ def create_financial_report_pdf(path, report):
         tax_section.append(tax_table)
         tax_section.append(Paragraph('税込経理の管理概算。営業利益から消費税・法人税等を調整。返済後残額は銀行残高ではありません。',normal))
         if settled['provisional']:
-            tax_section.append(Paragraph('税設定に未確認項目があります。未確認控除を除外し、法人税未設定の場合は法人税前の額です。',normal))
+            tax_section.append(Paragraph('月次経費の税区分に未設定項目があります。仕入の税額は全額控除、法人税等は30％固定の概算です。',normal))
 
         story.append(KeepTogether(tax_section))
 

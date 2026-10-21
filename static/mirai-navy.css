@@ -118,3 +118,42 @@
 /* finance release: payroll-details-20261018b */
 
 /* finance release: finance-tax-shift-20261021 */
+
+/* Consistent screen contrast, including popups mounted outside the app shell. */
+@layer theme {
+  @media screen {
+    body .q-field__control, body .q-field--filled .q-field__control,
+    body .q-menu, body .q-select__dialog, body .q-date, body .q-time,
+    body .q-table__container, body .q-table__top, body .q-table__bottom,
+    body .nicegui-error-popup,
+    body .diagnostic-metric, body .finance-summary-tile {
+      background:#202020!important;color:#f5f5f5!important;border-color:#666!important;
+    }
+    body .q-field__native, body .q-field__input {color:#f5f5f5!important;-webkit-text-fill-color:#f5f5f5!important}
+    body .q-menu .q-item, body .q-select__dialog .q-item,
+    body .q-date, body .q-time, body .q-table th, body .q-table td {
+      color:#f5f5f5!important;
+    }
+    body .q-menu .q-item--active {background:#393127!important;color:#ffe1a6!important}
+    body .bg-white,body .bg-green-50,body .bg-grey-50,body .bg-gray-50,
+    body .bg-blue-50,body .bg-orange-50,body .bg-yellow-50 {
+      background:#242424!important;color:#f5f5f5!important;
+    }
+    body .finance-summary-tile .overview-number,body .diagnostic-metric .text-xl {color:#fff!important}
+    body .finance-balance-title {color:#ffda96!important}
+    body .report-breakdown .report-money-box {background:#294354!important;color:#fff!important;border-bottom:1px solid #728694}
+  }
+}
+@layer theme {
+  @media screen {
+    body .report-cost {background:#3b5145!important;color:#fff!important}
+    body .report-gross {background:#28513e!important;color:#fff!important}
+  }
+}
+@media screen {
+  .report-breakdown .report-money-box {min-height:44px;flex-shrink:0}
+  .report-breakdown .report-block-title {line-height:1.2}
+  .report-breakdown .report-block-value {line-height:1.2;margin-top:3px}
+}
+
+/* finance release: finance-auto-tax-20261021 */

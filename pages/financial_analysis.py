@@ -325,7 +325,7 @@ def _render_analysis(period=None):
                         ("純資産", current_result["equity"], "#EEF1FF" if current_result["equity"] >= 0 else "#FDECEA"),
                         ("貸借差額", current_result["balance_gap"], "#F3F5F3" if not current_result["balance_gap"] else "#FFF6DC"),
                     ):
-                        with ui.element("div").classes("rounded-xl q-pa-md").style(f"background:{color}"):
+                        with ui.element("div").classes("rounded-xl q-pa-md finance-summary-tile").style(f"background:{color}"):
                             ui.label(title).classes("text-[9px] text-grey-7")
                             ui.label(_money(value)).classes(
                                 "overview-number text-negative" if value < 0 else "overview-number"
@@ -342,7 +342,7 @@ def _render_analysis(period=None):
                 with ui.card().classes("w-full q-pa-md q-mb-sm").style(
                     "border-radius:18px;background:#FFF9EB;box-shadow:none"
                 ):
-                    ui.label("貸借チェックの内訳").classes("text-sm font-black").style("color:#805817")
+                    ui.label("貸借チェックの内訳").classes("text-sm font-black finance-balance-title").style("color:#805817")
                     for label, value in (
                         ("流動資産", current_result["current_assets"]),
                         ("固定資産", current_result["fixed_assets"]),

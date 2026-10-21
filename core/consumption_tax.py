@@ -3,6 +3,8 @@ from calendar import monthrange
 from datetime import date, timedelta
 from math import isfinite
 
+CORPORATE_TAX_RATE = 30
+
 EXPENSE_KEYS = ('rent', 'utilities', 'other_admin', 'tabelog', 'hotpepper', 'other', 'payment_fees')
 
 
@@ -17,21 +19,17 @@ def transition_rate(day):
 
 
 def purchase_credit(record):
-    """Unconfirmed invoice/legacy tax breakdown never silently counts as confirmed."""
+    """Management assumption: all recorded purchase tax is credited automatically.
+
+    Preserve invoice metadata; this is not an assertion of filing eligibility.
+    """
     breakdown = record.get('tax_breakdown')
     if breakdown:
         tax = sum(int(breakdown.get(k,0)) for k in ('tax_1','tax_8','tax_10'))
     else:
         rate = 8 if record.get('kind','cost') == 'cost' else 10
         tax = int(record.get('total',0))*rate//(100+rate)
-    status = record.get('invoice_status','unknown')
-    if status == 'registered':
-        return dict(credit=tax, potential=0, estimated=not bool(breakdown))
-    if status == 'unregistered' and record.get('transition_eligible'):
-        return dict(credit=int(tax*transition_rate(record['date'])), potential=0, estimated=not bool(breakdown))
-    if status == 'unregistered' and record.get('credit_reviewed'):
-        return dict(credit=0,potential=0,estimated=False)
-    return dict(credit=0,potential=tax,estimated=not bool(breakdown))
+    return dict(credit=tax, potential=0, estimated=not bool(breakdown))
 
 
 def expense_credit(amount, spec, day):
@@ -56,8 +54,7 @@ def period_tax(financials, purchases, start, end):
         if not start<=r['date']<=end: continue
         info = purchase_credit(r)
         credit += info['credit']; potential += info['potential']
-        if info['potential'] or info['estimated']:
-            issues.append(dict(date=r['date'],label=r.get('supplier','仕入'),reason='税額・控除条件の確認',amount=info['potential']))
+
     cursor = start_day.replace(day=1)
     raw = financials._data_manager.data
     expenses_credit = 0
@@ -93,9 +90,7 @@ def settlement(financials, purchases, report):
     raw=financials._data_manager.data
     start=date.fromisoformat(report['start']);end=date.fromisoformat(report['end'])
     cursor=start.replace(day=1)
-    principal=interest=depreciation=adjustment=corporate_actual=0
-    all_corporate=True
-    confirmed_pretax=0
+    principal=interest=depreciation=adjustment=0
     while cursor<=end:
         month=cursor.strftime('%Y-%m');last=monthrange(cursor.year,cursor.month)[1]
         ratio=((min(end,cursor.replace(day=last))-max(start,cursor)).days+1)/last
@@ -104,28 +99,20 @@ def settlement(financials, purchases, report):
         interest+=settings.get('interest',0)*ratio
         depreciation+=settings.get('depreciation',0)*ratio
         adjustment+=settings.get('tax_payments_in_expenses',0)*ratio
-        amount=settings.get('corporate_tax_amount')
-        if amount is None: all_corporate=False
-        else:
-            corporate_actual+=amount*ratio
-            part=next((r for r in report.get('month_reports',[]) if r['start'][:7]==month),report)
-            part_tax=period_tax(financials,purchases,part['start'],part['end'])['net_tax']
-            confirmed_pretax+=part['operating_profit']-part_tax+(settings.get('tax_payments_in_expenses',0)-settings.get('interest',0)-settings.get('depreciation',0))*ratio
         cursor=(cursor.replace(day=28)+timedelta(days=4)).replace(day=1)
     pretax=round(report['operating_profit']+adjustment-tax['net_tax']-interest-depreciation)
-    rate=raw.get('finance_tax_policy',{}).get('corporate_rate')
-    corporate=round(corporate_actual) if all_corporate else round(corporate_actual+max(0,pretax-confirmed_pretax)*rate/100) if rate is not None else None
-    net=pretax-(corporate or 0)
+    corporate=round(max(0,pretax)*CORPORATE_TAX_RATE/100)
+    net=pretax-corporate
     # A tax credit balance is not money in the bank: don't count it as spendable.
     surplus=round(net+depreciation-principal-tax['credit_balance'])
     return dict(tax=tax,pretax_profit=pretax,corporate_tax=corporate,
-                corporate_estimated=not all_corporate,net_profit=net,
-                corporate_basis='期間内の登録税額' if all_corporate else '登録税額＋未登録月の利益×概算税率' if rate is not None else '未設定',
-                net_label='税引後利益（概算）' if corporate is not None else '法人税前利益',
-                surplus_label='税・返済後（概算）' if corporate is not None else '返済後（法人税前）',
+                corporate_estimated=True,net_profit=net,
+                corporate_basis='税引前利益のプラス分×30％（概算固定）',
+                net_label='税引後利益（概算）',
+                surplus_label='税・返済後（概算）',
                 post_repayment_profit=surplus,loan_payment=round(principal),
                 interest=round(interest),depreciation=round(depreciation),tax_expense_adjustment=round(adjustment),
-                provisional=corporate is None or bool(tax['issues']))
+                provisional=bool(tax['issues']))
 
 
 def validate_tax_settings(settings, rate):

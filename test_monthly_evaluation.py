@@ -45,7 +45,7 @@ class MonthlyEvaluationTest(unittest.TestCase):
         result = self.service.snapshot("2026-08", date(2026, 9, 1))
         self.assertEqual(result["gross_profit"], 1_050_000)
         self.assertEqual(result["operating_profit"], 550_000)
-        self.assertEqual(result["post_repayment_profit"], 396_970)
+        self.assertEqual(result["post_repayment_profit"], 262_879)
         self.assertEqual(self.data.data, before)
 
     def test_formal_evaluation_is_blocked_before_month_end(self):

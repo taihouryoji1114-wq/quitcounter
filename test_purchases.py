@@ -160,16 +160,16 @@ class PurchaseManagerTest(unittest.TestCase):
         )
         self.assertEqual(self.purchases.monthly_tax_summary("2026-08")["input_tax"], 98)
 
-    def test_monthly_tax_summary_estimates_legacy_and_excludes_unregistered(self):
+    def test_monthly_tax_summary_automatically_credits_legacy_and_unregistered(self):
         self.purchases.add("2026-08-10", "食品", 1080, "cost", invoice_status="registered")
         self.purchases.add(
             "2026-08-10", "対象外", 1100, "expense",
             invoice_status="unregistered",
         )
         summary = self.purchases.monthly_tax_summary("2026-08")
-        self.assertEqual(summary["input_tax"], 80)
+        self.assertEqual(summary["input_tax"], 180)
         self.assertEqual(summary["estimated_records"], 2)
-        self.assertEqual(summary["excluded_unregistered_records"], 1)
+        self.assertEqual(summary["excluded_unregistered_records"], 0)
 
     def test_suppliers_are_reused_without_duplicates(self):
         self.purchases.add("2026-08-10", "市場A", 12000)

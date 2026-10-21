@@ -80,8 +80,8 @@ def wealth_forecast_page():
                 ui.label('原価・決済手数料は売上連動。人件費・その他営業経費は今月見込を継続し、設定した年間変化率を反映。将来の個別月の費用やシフトは未反映です。')
                 ui.label('税込収支から消費税納税見込を一度控除し、追加利息・減価償却・法人税等を引いて利益を試算。利益剰余金は配当を引いて累積します。')
                 ui.label('返済後は利益に減価償却を戻し、元金返済・設備投資・配当を反映。売掛・買掛・在庫の増減、新規借入は含みません。')
-                ui.label('税設定に共通税率がある場合は優先します。法人税等は各期の対象期間の黒字×設定税率。今月より前の今期損益、繰越欠損金・均等割・税制変更は未反映です。')
-                ui.label('原価・営業用品・一般経費・月次経費の控除を分けて推計。税設定で確認済みの控除だけを使用し、月ごとのマイナスも同じ期内で通算します。還付見込は返済後の残額に含めません。')
+                ui.label('法人税等は各期の対象期間の黒字×30％固定。今月より前の今期損益、繰越欠損金・均等割・税制変更は未反映です。')
+                ui.label('原価・営業用品・一般経費・月次経費の控除を分けて推計。仕入の税額は全額自動控除し、月次経費は設定を使用。月ごとのマイナスも同じ期内で通算します。還付見込は返済後の残額に含めません。')
                 for note in forecast.get('basis_messages', []):
                     ui.label(note).classes('text-xs finance-readable')
         horizon.on_value_change(result.refresh)
@@ -94,7 +94,6 @@ def wealth_forecast_page():
             definitions = [
                 ('opening_retained', '今月初の利益剰余金（円・任意）', None),
                 ('opening_surplus', '今月初の資金残高（円・任意）', None),
-                ('corporate_tax_rate', '法人税等の概算実効税率（％・必須）', None),
                 ('sales_growth', '売上の年間変化率（％）', 0),
                 ('cost_growth', '人件費・固定費の年間変化率（％）', 0),
                 ('payroll', '人件費／月（円・空欄は自動）', None),
@@ -108,16 +107,12 @@ def wealth_forecast_page():
             ]
             for key, label, default in definitions:
                 fields[key] = ui.number(label, value=saved.get(key, default)).props('outlined').classes('w-full')
-            common_rate=data.data.get('finance_tax_policy',{}).get('corporate_rate')
-            if common_rate is not None:
-                fields['corporate_tax_rate'].set_value(common_rate)
-                fields['corporate_tax_rate'].disable()
-                ui.label('法人税率は共通の税設定を使用中です。変更は税設定から行えます。').classes('text-xs')
+            ui.label('法人税等は30％固定で自動計算します。').classes('text-sm finance-gold')
             extra_review=ui.checkbox('追加控除が税設定と重複していないことを確認',value=saved.get('extra_credit_reviewed',False))
             ui.link('共通の税設定を確認', '/mirai-kessan/taxes').style('color:#ffda92')
             repayment = ui.input('返済終了月（空欄は同額で継続）', value=saved.get('repayment_end', '')).props('type=month outlined').classes('w-full')
             ui.label('登録返済額が利息込みなら、上の元金と追加利息に分けて入力してください。追加利息・減価償却・税額控除には、既存経費に含まれる分を重ねて入れないでください。').classes('text-xs finance-warning')
-            ui.label('返済終了月の翌月から元金返済と追加利息を0円にします。法人税等の税率は税理士等に確認した想定値を入力してください。').classes('text-xs')
+            ui.label('返済終了月の翌月から元金返済と追加利息を0円にします。法人税等は30％固定の管理用概算です。').classes('text-xs')
             def save():
                 try:
                     settings = validate_settings(dict({key: field.value for key, field in fields.items()}, repayment_end=repayment.value))

@@ -86,7 +86,7 @@ def month_outlook(month, as_of=None):
     credits=forecast_credits(financials,purchases,month,today,cost,fees)
     cover=tax_and_repayment_threshold(landing,cost,fees,payroll,overhead,
             operations['loan_payment'],credits['cost_fraction'],credits['fixed_credit'],config.get('fees_variable',True),credits['fee_fraction'])
-    messages.append('税・返済線は法人税前の目安。原価・決済手数料・その他経費の控除を別々に計算し、確認済みの税額だけを使用します。')
+    messages.append('税・返済線は法人税前の目安。原価・決済手数料・その他経費の控除を別々に計算し、仕入の消費税は自動控除し、月次経費は税設定を使用します。')
     if credits['issues']: messages.append('控除未確認の経費があります。税設定で確認すると予測に反映します。')
     return dict(values, payroll_issues=coverage['issues'], payroll_estimated=coverage['estimated'],
                 payroll_breakdown={'入力済みバイト給与':staff['groups']['hourly']['gross_wages'],

@@ -36,28 +36,28 @@ class TaxCalculationTests(unittest.TestCase):
         self.assertEqual(r['operating_profit'],378000)
         self.assertEqual(r['settlement']['tax']['net_tax'],58000)
         self.assertEqual(r['settlement']['pretax_profit'],320000)
-        self.assertEqual(r['settlement']['net_profit'],290000)
-    def test_unknown_credit_and_missing_corporate_never_look_final(self):
+        self.assertEqual(r['settlement']['net_profit'],224000)
+    def test_purchases_automatically_credit_all_statuses_without_mutation(self):
         self.f.set_daily_sales('2026-10-01',110000)
-        r=self.purchase(11000,10,status='unknown')
+        rows=[self.purchase(11000,10,status=status) for status in ('unknown','registered','unregistered')]
+        rows[-1]['credit_reviewed']=True
+        before=deepcopy(self.store.data)
         tax=period_tax(self.f,self.p,'2026-10-01','2026-10-31')
-        self.assertEqual(tax['net_tax'],10000);self.assertEqual(tax['unconfirmed_credit'],1000)
-        settled=settlement(self.f,self.p,dict(start='2026-10-01',end='2026-10-31',operating_profit=99000))
-        self.assertIsNone(settled['corporate_tax']);self.assertIn('法人税前',settled['surplus_label'])
-        self.p.review_credit(r['id'],'registered')
-        self.assertEqual(period_tax(self.f,self.p,'2026-10-01','2026-10-31')['net_tax'],9000)
-    def test_transition_requires_review_and_follows_purchase_date(self):
-        self.assertEqual(transition_rate('2026-09-30'),.8)
-        self.assertEqual(transition_rate('2026-10-01'),.7)
-        self.assertEqual(transition_rate('2028-10-01'),.5)
-        self.assertEqual(transition_rate('2030-10-01'),.3)
-        self.assertEqual(transition_rate('2031-10-01'),0)
-        r=self.purchase(11000,10,status='unregistered')
-        self.assertEqual(self.p.monthly_tax_summary('2026-10')['input_tax'],0)
-        self.p.review_credit(r['id'],'transition')
-        self.assertEqual(self.p.monthly_tax_summary('2026-10')['input_tax'],700)
-        self.p.update(r['id'],r['date'],r['supplier'],r['total'],invoice_status='unregistered')
-        self.assertFalse(r.get('transition_eligible'))
+        self.assertEqual(tax['net_tax'],7000)
+        self.assertEqual(tax['unconfirmed_credit'],0)
+        self.assertEqual(tax['issues'],[])
+        self.assertEqual(before,self.store.data)
+        settled=settlement(self.f,self.p,dict(start='2026-10-01',end='2026-10-31',operating_profit=77000))
+        self.assertEqual(settled['corporate_tax'],21000)
+        self.assertEqual(settled['net_profit'],49000)
+
+    def test_legacy_purchase_estimates_tax_without_confirmation_task(self):
+        self.p.add('2026-10-01','food',10800)
+        self.p.add('2026-10-01','supply',11000,'operating_supply')
+        tax=period_tax(self.f,self.p,'2026-10-01','2026-10-31')
+        self.assertEqual(tax['input_tax'],1800)
+        self.assertEqual(tax['issues'],[])
+
     def test_same_dates_for_report_evaluation_and_tax(self):
         self.f.set_daily_sales('2026-10-01',110000)
         self.purchase(11000,10,day='2026-10-25')
@@ -75,8 +75,8 @@ class TaxCalculationTests(unittest.TestCase):
         self.f.save_monthly_operations('2026-10',loan_payment=400000)
         self.settings(tax_payments_in_expenses=100000,corporate_tax_amount=0,interest=20000,depreciation=30000)
         r=settlement(self.f,self.p,dict(start='2026-10-01',end='2026-10-31',operating_profit=1000000))
-        self.assertEqual(r['net_profit'],950000)
-        self.assertEqual(r['post_repayment_profit'],580000)
+        self.assertEqual(r['net_profit'],665000)
+        self.assertEqual(r['post_repayment_profit'],295000)
     def test_forecast_keeps_food_and_supplies_credit_separate(self):
         self.purchase(108000,8);self.purchase(110000,10,'operating_supply')
         result=forecast_credits(self.f,self.p,'2026-10',date(2026,10,31),108000,0)
@@ -99,14 +99,14 @@ class TaxCalculationTests(unittest.TestCase):
         for value in (-1,float('nan'),float('inf')):
             with self.assertRaises(ValueError):validate_tax_settings({'interest':value},30)
 
-    def test_mixed_month_tax_keeps_registered_amount(self):
+    def test_fixed_rate_ignores_legacy_month_amount_and_saved_rate(self):
         self.f.set_daily_sales('2026-09-01',110000)
         self.f.set_daily_sales('2026-10-01',110000)
         self.store.data['business_tax_settings']={'2026-09':dict(corporate_tax_amount=50000)}
-        self.store.data['finance_tax_policy']={'corporate_rate':30}
+        self.store.data['finance_tax_policy']={'corporate_rate':10}
         r=build_financial_report('2026-09-01','2026-10-31',self.f,self.p,NoStaff(),date(2026,11,1))
-        self.assertEqual(r['settlement']['corporate_tax'],80000)
-        self.assertEqual(r['settlement']['net_profit'],120000)
+        self.assertEqual(r['settlement']['corporate_tax'],60000)
+        self.assertEqual(r['settlement']['net_profit'],140000)
 
     def test_payment_fee_credit_uses_dated_sales_not_day_proration(self):
         self.f.save_payment_fee_rates({"credit":3})
@@ -116,3 +116,8 @@ class TaxCalculationTests(unittest.TestCase):
         full=period_tax(self.f,self.p,'2026-10-01','2026-10-31')
         self.assertGreater(full['input_tax'],0)
         self.assertAlmostEqual(first['input_tax'],full['input_tax']/2,delta=1)
+
+    def test_negative_profit_does_not_create_corporate_tax_refund(self):
+        r=settlement(self.f,self.p,dict(start='2026-10-01',end='2026-10-31',operating_profit=-100000))
+        self.assertEqual(r['corporate_tax'],0)
+        self.assertEqual(r['net_profit'],-100000)

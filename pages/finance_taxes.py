@@ -7,7 +7,7 @@ from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.financials import financials
 from core.purchases import purchases
-from core.consumption_tax import EXPENSE_KEYS, period_tax, validate_tax_settings
+from core.consumption_tax import CORPORATE_TAX_RATE, EXPENSE_KEYS, period_tax, validate_tax_settings
 from core.theme import Theme
 
 LABELS = dict(rent='家賃',utilities='水道光熱費',other_admin='その他管理費',tabelog='食べログ',hotpepper='ホットペッパー',other='その他広告費',payment_fees='決済手数料')
@@ -27,17 +27,20 @@ def finance_taxes_page(month: str = ''):
         ui.link('ホームへ戻る','/mirai-kessan/month/'+month).style('color:#ffda92')
         ui.label(month+' の設定').classes('font-bold')
         ui.label('売上・仕入・経費は税込のまま。ここでは登録済み経費の税区分を指定します。金額を経費へもう一度入力する必要はありません。').classes('text-sm')
-        ui.label('未確認の控除は差し引かず、消費税を多めに見積もります。法人税が未設定なら「法人税前」と表示します。').classes('text-sm')
+        ui.label('仕入・営業用品・一般経費の消費税は全額を自動控除します。1件ずつの確認は不要です。').classes('text-sm')
         y,m=map(int,month.split('-'))
         summary=period_tax(financials,purchases,month+'-01',f'{month}-{monthrange(y,m)[1]:02d}')
         with ui.card().classes('surface-card w-full'):
-            ui.label(f"消費税見込 ¥{summary['net_tax']:,} ／ 未確認控除 ¥{summary['unconfirmed_credit']:,}")
+            ui.label(f"消費税見込 ¥{summary['net_tax']:,} ／ 月次経費の未設定控除 ¥{summary['unconfirmed_credit']:,}")
             ui.label('月全体の概算。ホームは今日までの同じ期間で計算。マイナスは還付見込で、残額には入れません。').classes('text-xs')
         with ui.card().classes('surface-card w-full'):
             ui.label('法人税等').classes('font-bold')
-            rate=ui.number('概算税率（全月・将来予測共通）',value=raw.get('finance_tax_policy',{}).get('corporate_rate'),min=0,max=100,suffix='%').classes('w-full').props('outlined clearable')
-            actual=ui.number('この月の法人税等（空欄は概算税率）',value=saved.get('corporate_tax_amount'),min=0).classes('w-full').props('outlined clearable')
-            ui.label('法人税・住民税・事業税の当月負担分。納付した日ではなく対象月へ登録します。0円が確定していれば0を入力。年額をそのまま各月へ入力しないでください。').classes('text-xs')
+            ui.label('概算30％で固定').classes('text-xl font-bold finance-gold')
+            ui.label('売上ではなく、税引前利益のプラス分に30％を掛けます。ホーム・記録・将来予測で共通です。').classes('text-sm')
+        with ui.card().classes('surface-card w-full'):
+            ui.label('仕入の消費税は自動控除').classes('font-bold')
+            ui.label('入力済みの税額をそのまま反映。税額内訳がない古い記録は、食材8％・営業用品と一般経費10％で推計します。').classes('text-sm')
+            ui.label('管理上は全額控除を前提にした概算です。申告時の控除可否とは別です。').classes('text-xs')
         specs={}
         ops=financials.get_monthly_operations(month); ads=financials.get_monthly_advertising(month)
         with ui.expansion('経費に含まれる消費税',icon='receipt_long').classes('w-full'):
@@ -52,18 +55,6 @@ def finance_taxes_page(month: str = ''):
                     tax=ui.number('対象税額（空欄は税込額から計算）',value=spec.get('tax_amount'),min=0,max=amount).classes('w-full').props('outlined clearable')
                     specs[key]=(r,status,tax,amount)
             ui.label('経過措置は日付に応じ80％→70％→50％→30％を適用。適用条件・上限等は請求書と申告内容で確認し、対象外分は対象税額に含めません。').classes('text-xs')
-        with ui.expansion('仕入・営業用品・一般経費の控除確認',icon='fact_check').classes('w-full'):
-            ui.label('登録番号だけでなく、請求書・帳簿など控除条件を確認してください。税額の修正は仕入入力から行えます。').classes('text-sm')
-            for record in purchases.records(month=month):
-                with ui.row().classes('w-full items-center'):
-                    ui.label(f"{record['date'][5:]} {record['supplier']} ¥{record['total']:,}").classes('text-sm')
-                    current='registered' if record.get('invoice_status')=='registered' else 'transition' if record.get('transition_eligible') else 'none' if record.get('credit_reviewed') else 'unknown'
-                    choice=ui.select({'unknown':'未確認','registered':'全額控除を確認','transition':'経過措置を確認','none':'対象外を確認'},value=current).props('outlined').classes('w-full')
-                    def review(e, rid=record['id']):
-                        if not require_permission('future_dashboard','/mirai-kessan/input'): return
-                        purchases.review_credit(rid,e.value)
-                        ui.notify('控除区分を保存しました')
-                    choice.on_value_change(review)
         extra={}
         with ui.expansion('重複を避ける調整',icon='tune').classes('w-full'):
             ui.label('既に経費に入っている利息・減価償却は追加しません。元金返済は月次費用の借入返済へ。').classes('text-sm')
@@ -73,8 +64,8 @@ def finance_taxes_page(month: str = ''):
         def save():
             if not require_permission('future_dashboard','/mirai-kessan/input'): return
             try:
-                proposed=dict(saved,corporate_tax_amount=actual.value,expenses={k:dict(rate=r.value,status=s.value,tax_amount=t.value) for k,(r,s,t,a) in specs.items()},**{k:v.value for k,v in extra.items()})
-                cleaned, tax_rate=validate_tax_settings(proposed,rate.value)
+                proposed=dict(saved,expenses={k:dict(rate=r.value,status=s.value,tax_amount=t.value) for k,(r,s,t,a) in specs.items()},**{k:v.value for k,v in extra.items()})
+                cleaned, tax_rate=validate_tax_settings(proposed,CORPORATE_TAX_RATE)
                 for key,(r,s,t,amount) in specs.items():
                     if t.value is not None and t.value>amount: raise ValueError(LABELS[key]+'の税額が経費額を超えています')
                 raw.setdefault('business_tax_settings',{})[month]=cleaned

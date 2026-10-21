@@ -3,6 +3,7 @@ from calendar import monthrange
 from datetime import date
 from math import isfinite
 from statistics import mean
+from core.consumption_tax import CORPORATE_TAX_RATE
 
 
 def fiscal_year(day):
@@ -10,7 +11,7 @@ def fiscal_year(day):
 
 
 def validate_settings(settings):
-    result = dict(settings)
+    result = dict(settings, corporate_tax_rate=CORPORATE_TAX_RATE)
     for key in ('corporate_tax_rate', 'sales_growth', 'cost_growth', 'interest',
                 'depreciation', 'investment', 'dividend', 'extra_input_tax',
                 'opening_retained', 'opening_surplus', 'payroll', 'fixed', 'principal'):
@@ -80,7 +81,7 @@ def project(base, records, settings, as_of, end_year, input_fraction):
     fixed = config.get('fixed') if config.get('fixed') is not None else base['other_fixed']
     required = (base['sales'], base['projected_cost'], base['projected_fees'], payroll, fixed, input_fraction, config.get('corporate_tax_rate'))
     if any(v is None for v in required) or base['sales'] <= 0:
-        return {'years': [], 'rows': [], 'seasonal_missing': [], 'message': '売上・原価・人件費・仕入税額の実績と、法人税等の概算税率を確認してください。人件費は設定で補えます。'}
+        return {'years': [], 'rows': [], 'seasonal_missing': [], 'message': '売上・原価・人件費の実績を確認してください。人件費は設定で補えます。法人税等は30％固定です。'}
     cost_ratio = base['projected_cost'] / base['sales']
     fee_ratio = base['projected_fees'] / base['sales']
     start = as_of.year * 12 + as_of.month - 1
@@ -146,9 +147,7 @@ def load_projection(settings, as_of, end_year):
     if extra_unreviewed:
         effective_settings["extra_input_tax"]=0
     raw=financials._data_manager.data
-    common=raw.get('finance_tax_policy',{}).get('corporate_rate')
-    if common is not None:
-        effective_settings['corporate_tax_rate']=common
+    effective_settings['corporate_tax_rate']=CORPORATE_TAX_RATE
     month_settings=raw.get('business_tax_settings',{}).get(month,{})
     for key in ('interest','depreciation'):
         if effective_settings.get(key) is None:
@@ -163,6 +162,6 @@ def load_projection(settings, as_of, end_year):
     if extra_unreviewed:
         result['basis_messages'].append('以前の追加控除は税設定との重複確認が必要です。予測の前提で確認するまで加算しません。')
     if credits['issues']:
-        result['basis_messages'].append('税控除に未確認項目があります。確認できた税額だけを差し引いた暫定予測です。')
-    result['basis_messages'].append('税設定の共通税率を優先。月別法人税実額は将来試算では使わず、各期の利益×概算税率です。')
+        result['basis_messages'].append('月次経費の税区分に未設定項目があります。仕入の消費税は自動控除済みです。')
+    result['basis_messages'].append('法人税等は各期の利益のプラス分×30％固定です。')
     return result

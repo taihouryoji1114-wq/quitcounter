@@ -67,12 +67,14 @@ class WealthForecastTests(unittest.TestCase):
         settings['payroll'] = 500000
         self.assertTrue(project(base, records, settings, date(2026,10,18), 2028, 8/108)['years'])
         settings['corporate_tax_rate'] = None
-        self.assertFalse(project(base, records, settings, date(2026,10,18), 2028, 8/108)['years'])
+        self.assertTrue(project(base, records, settings, date(2026,10,18), 2028, 8/108)['years'])
 
     def test_invalid_inputs_and_explicit_zero(self):
-        for settings in [dict(corporate_tax_rate=101),dict(payroll=-1),dict(sales_growth=-100),dict(interest=float('nan')),dict(repayment_end='2026-99')]:
+        for settings in [dict(payroll=-1),dict(sales_growth=-100),dict(interest=float('nan')),dict(repayment_end='2026-99')]:
             with self.assertRaises(ValueError):validate_settings(settings)
         self.assertEqual(validate_settings(dict(corporate_tax_rate=0, opening_retained=-100))['opening_retained'], -100)
+        for rate in (None,0,10,101):
+            self.assertEqual(validate_settings(dict(corporate_tax_rate=rate))['corporate_tax_rate'],30)
         base, settings, records = self.fixture()
         settings['payroll'] = 0
         self.assertTrue(project(base, records, settings, date(2026,10,18), 2027, 0)['years'])
