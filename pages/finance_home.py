@@ -67,14 +67,14 @@ def compact_finance_home(month):
                     ui.label(f'{value:.1%}' if value is not None else '—').classes('finance-ratio-value')
                     ui.label(('着地(参考) ' if outlook.get('payroll_provisional') and label != '原価率' else '着地 ')+(f'{predicted:.1%}' if predicted is not None else '—')).classes('finance-outlook-label')
 
-    operations = financials.get_monthly_operations(month)
+    settled = report['settlement']
     operating_profit = report['operating_profit']
-    tax_summary = purchases.monthly_tax_summary(month)
-    advertising = financials.get_monthly_advertising(month)
-    consumption_tax = max(0, sales * 10 // 110 - tax_summary['input_tax'] - advertising.get('input_tax', 0))
-    after_tax_and_loan = operating_profit - consumption_tax - operations.get('loan_payment', 0)
+    after_tax_and_loan = settled['post_repayment_profit']
     with ui.element('div').classes('finance-stat-grid finance-profit-grid w-full'):
-        for label, value in [('原価', cost), ('粗利益', gross), ('営業利益', operating_profit), ('税・返済後の残額', after_tax_and_loan)]:
+        for label, value in [('原価', cost), ('粗利益', gross), ('営業利益', operating_profit), (settled['surplus_label'], after_tax_and_loan)]:
             with ui.card().classes('surface-card finance-mini'):
-                ui.label(label).classes('text-xs')
+                if label == settled['surplus_label']:
+                    ui.link(label + (' ※' if settled['provisional'] else ''), '/mirai-kessan/taxes?month='+month).classes('text-xs').style('color:#ffda92').tooltip('税設定を確認')
+                else:
+                    ui.label(label).classes('text-xs')
                 ui.label(money(value)).classes('finance-mini-number')

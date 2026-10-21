@@ -36,7 +36,7 @@ PL_INPUT_FIELDS = (
     "sales", "opening_inventory", "purchases", "closing_inventory",
     *SGA_FIELDS, "interest_income", "dividend_income", "miscellaneous_income",
     "interest_expense", "guarantee_amortization", "miscellaneous_loss",
-    "extraordinary_income", "fixed_asset_disposal_loss",
+    "extraordinary_income", "fixed_asset_disposal_loss", "corporate_taxes",
 )
 # Values entered in the early summarized screen remain stored for recovery, but
 # are intentionally excluded from totals because they are not on the statement.
@@ -44,7 +44,7 @@ HIDDEN_LEGACY_FIELDS = (
     "other_current_assets", "other_fixed_assets",
     "other_current_liabilities", "other_equity",
     "recruitment_fees", "depreciation", "other_sga",
-    "extraordinary_loss", "corporate_taxes",
+    "extraordinary_loss",
 )
 ALL_FIELDS = (
     *ASSET_FIELDS, *LIABILITY_FIELDS, *EQUITY_FIELDS, *PL_INPUT_FIELDS,
@@ -103,6 +103,7 @@ class AnnualReportManager:
         for target, old_keys in legacy.items():
             if not result[target]:
                 result[target] = sum(self._amount(source.get(key, 0)) for key in old_keys)
+        result["corporate_tax_confirmed"] = bool(source.get("corporate_tax_confirmed") or source.get("corporate_taxes"))
         return result
 
     def get_report(self, period):
@@ -138,12 +139,15 @@ class AnnualReportManager:
             "current": {key: self._amount(merged_current.get(key, 0)) for key in ALL_FIELDS},
             "previous": {key: self._amount((previous or {}).get(key, 0)) for key in ALL_FIELDS},
         }
+        for key, source in (("current", merged_current), ("previous", previous or {})):
+            cleaned[key]["corporate_tax_confirmed"] = bool(source.get("corporate_tax_confirmed") or source.get("corporate_taxes"))
         reports[period] = cleaned
         self._data_manager.save()
         return self.get_report(period)
 
     @staticmethod
     def calculate(values):
+        confirmed = bool(values.get("corporate_tax_confirmed") or values.get("corporate_taxes"))
         values = {key: int(values.get(key, 0) or 0) for key in ALL_FIELDS}
         current_assets = sum(values[key] for key in CURRENT_ASSET_FIELDS)
         fixed_assets = sum(values[key] for key in FIXED_ASSET_FIELDS)
@@ -161,7 +165,7 @@ class AnnualReportManager:
         # 特別損失 as its subtotal, so they must not be added together.
         extraordinary_loss = values["fixed_asset_disposal_loss"]
         pretax_profit = ordinary_profit + values["extraordinary_income"] - extraordinary_loss
-        net_income = pretax_profit
+        net_income = pretax_profit - values["corporate_taxes"]
         assets = current_assets + fixed_assets
         liabilities = current_liabilities + fixed_liabilities
         return {
@@ -180,6 +184,8 @@ class AnnualReportManager:
             "ordinary_profit": ordinary_profit,
             "pretax_profit": pretax_profit,
             "net_income": net_income,
+            "net_label": "当期純利益" if confirmed else "法人税前利益（税額未確認）",
+            "corporate_tax_confirmed": confirmed,
             "current_ratio": current_assets / current_liabilities if current_liabilities else None,
             "quick_ratio": (values["cash_on_hand"] + values["checking_deposit"] + values["ordinary_deposit"] + values["receivables"]) / current_liabilities if current_liabilities else None,
             "equity_ratio": equity / assets if assets else None,

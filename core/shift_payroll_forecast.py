@@ -8,7 +8,7 @@ def board_shift(cell, template):
     text = str(cell.get('text', '')).strip()
     kind = cell.get('kind', '')
     empty = dict(lunch_start='', lunch_end='', dinner_start='', dinner_end='', break_minutes=0)
-    if kind == 'off' or text in ('休み', '絶対休み', '—'):
+    if kind == 'off' or text in ('', '休み', '絶対休み', '—'):
         return empty, False
     # A request for a whole day must not become a dinner-only working interval.
     if '希望時間は' in cell.get('warning', '') and '\n希望' in text:
@@ -90,6 +90,10 @@ def effective_plans(manager, month, as_of):
         if target <= as_of.isoformat() or target in closures:
             continue
         for name in active:
+            half = 'first' if d<=15 else 'second'
+            is_published = bool(published) and (not published.get('periods') or half in published['periods'])
+            if is_published and (name,target) not in issues and name not in plans.get(target, {}):
+                plans.setdefault(target, {})[name] = {}  # Published blank = off.
             if name not in plans.get(target, {}):
                 missing[name].append(target)
                 if (name,target) not in issues:

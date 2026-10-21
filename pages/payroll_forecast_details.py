@@ -14,7 +14,7 @@ def render_payroll_details(outlook):
                 ui.label(label).classes('text-xs')
                 ui.label(f'¥{amount:,}').classes('font-bold text-sm')
         if issues:
-            ui.label('次の勤務枠は金額に含まれていません。休みの場合はシフトボードに「休み」と入力して公開してください。').classes('finance-warning text-sm')
+            ui.label('次の勤務枠は金額に含まれていません。公開済み期間の空欄は休みとして反映済みです。').classes('finance-warning text-sm')
         else:
             ui.label('未反映の勤務枠はありません。').classes('text-sm')
         grouped = defaultdict(list)

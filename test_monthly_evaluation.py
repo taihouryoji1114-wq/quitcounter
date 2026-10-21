@@ -33,7 +33,7 @@ class MonthlyEvaluationTest(unittest.TestCase):
 
     def enter_month(self, month="2026-08", sales=1_500_000, cost=450_000):
         self.financials.set_daily_sales(f"{month}-01", sales)
-        self.purchases.add(f"{month}-02", "市場", cost, "cost")
+        self.purchases.add(f"{month}-02", "市場", cost, "cost", invoice_status="registered")
         self.financials.save_monthly_operations(
             month, rent=120000, utilities=50000, other_admin=30000,
             loan_payment=50000,

@@ -9,7 +9,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core.financial_report_data import PAYMENT_COLUMNS
 
@@ -67,8 +67,24 @@ def create_financial_report_pdf(path, report):
     expense_table = Table(expense_rows, colWidths=[58 * mm, 42 * mm], hAlign="LEFT", repeatRows=1)
     expense_table.setStyle(_table_style(total_row=True))
     story.extend([profit_table, Spacer(1, 4 * mm), Paragraph("営業経費の内訳", heading),
-                  expense_table, Spacer(1, 4 * mm), Paragraph("決済方法別集計", heading)])
+                  expense_table, Spacer(1, 4 * mm)])
 
+    if 'settlement' in report:
+        settled=report['settlement']
+        tax_section=[Paragraph('税金・返済の調整（同じ集計期間）', heading)]
+        tax_rows=[]
+        for label, amount in [('消費税見込（マイナスは還付見込）',settled['tax']['net_tax']), ('法人税等',settled['corporate_tax']), (settled['net_label'],settled['net_profit']), ('借入元金返済',settled['loan_payment']), (settled['surplus_label'],settled['post_repayment_profit'])]:
+            tax_rows.append([Paragraph(label,normal),Paragraph('未設定' if amount is None else f'¥{amount:,}',right)])
+        tax_table=Table(tax_rows,colWidths=[115*mm,65*mm])
+        tax_table.setStyle(_table_style(header=False))
+        tax_section.append(tax_table)
+        tax_section.append(Paragraph('税込経理の管理概算。営業利益から消費税・法人税等を調整。返済後残額は銀行残高ではありません。',normal))
+        if settled['provisional']:
+            tax_section.append(Paragraph('税設定に未確認項目があります。未確認控除を除外し、法人税未設定の場合は法人税前の額です。',normal))
+
+        story.append(KeepTogether(tax_section))
+
+    story.append(Paragraph("決済方法別集計", heading))
     payment_rows = [[Paragraph("決済方法", center), Paragraph("期間合計", center)]]
     for label, field in (*PAYMENT_COLUMNS, ("ポイント", "points_sales"), ("未分類", "unclassified_sales")):
         payment_rows.append([Paragraph(label, normal), Paragraph(f"¥{report['payment_totals'][field]:,}", right)])

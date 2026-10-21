@@ -36,6 +36,7 @@ BS_SECTIONS = (
 )
 
 PL_SECTIONS = (
+    ("法人税等", (("corporate_taxes", "法人税・住民税・事業税（当期分）"),)),
     ("売上・売上原価", (
         ("sales", "売上高"), ("opening_inventory", "期首棚卸高"),
         ("purchases", "仕入高"), ("closing_inventory", "期末棚卸高"),
@@ -197,6 +198,7 @@ def _render_analysis(period=None):
 
         statement_section("貸借対照表", BS_SECTIONS)
         statement_section("損益計算書", PL_SECTIONS)
+        corporate_confirmed = ui.checkbox("法人税等の当期分を確認済み（0円の場合もチェック）", value=report["current"].get("corporate_tax_confirmed",False))
 
         section_fields = {
             title: tuple(key for key, _ in fields)
@@ -237,7 +239,7 @@ def _render_analysis(period=None):
                 year = int(period_year.value)
                 saved = annual_reports.save_report(
                     f"{year:04d}-09",
-                    {key: field.value for key, field in inputs.items()},
+                    dict({key: field.value for key, field in inputs.items()}, corporate_tax_confirmed=corporate_confirmed.value),
                 )
             except (TypeError, ValueError) as error:
                 ui.notify(str(error), type="negative")
@@ -379,7 +381,7 @@ def _render_analysis(period=None):
                 comparisons = (
                     ("売上高", report["current"]["sales"], report["previous"]["sales"]),
                     ("営業利益", current_result["operating_profit"], previous_result["operating_profit"]),
-                    ("当期純利益", current_result["net_income"], previous_result["net_income"]),
+                    (current_result["net_label"], current_result["net_income"], previous_result["net_income"]),
                     ("現金・預金", report["current"]["cash_on_hand"] + report["current"]["checking_deposit"] + report["current"]["ordinary_deposit"], report["previous"]["cash_on_hand"] + report["previous"]["checking_deposit"] + report["previous"]["ordinary_deposit"]),
                     ("純資産", current_result["equity"], previous_result["equity"]),
                 )
@@ -543,7 +545,7 @@ def financial_analysis_report_page(period: str):
             for title, now, before in (
                 ("売上高", report["current"]["sales"], report["previous"]["sales"]),
                 ("営業利益", current["operating_profit"], previous["operating_profit"]),
-                ("当期純利益", current["net_income"], previous["net_income"]),
+                (current["net_label"], current["net_income"], previous["net_income"]),
                 ("現金・預金", report["current"]["cash_on_hand"] + report["current"]["checking_deposit"] + report["current"]["ordinary_deposit"], report["previous"]["cash_on_hand"] + report["previous"]["checking_deposit"] + report["previous"]["ordinary_deposit"]),
                 ("純資産", current["equity"], previous["equity"]),
             ):

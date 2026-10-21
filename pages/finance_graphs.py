@@ -35,7 +35,7 @@ def progress_chart(month, outlook, compact=False, tax_line=False):
             {'name':'予測（円）','type':'line','data':future,'showSymbol':False,'lineStyle':{'type':'dashed'},'itemStyle':{'color':'#f6d390'}}]
     threshold=outlook.get('tax_repayment_line') if tax_line else outlook['break_even']
     if threshold is not None:
-        series.append({'name':'税・返済確保目安' if tax_line else ('損益分岐点（参考）' if outlook.get('payroll_provisional') else '損益分岐点（見込）'),'type':'line','data':[threshold]*days,'showSymbol':False,'lineStyle':{'type':'dotted'},'itemStyle':{'color':'#ffb1aa'}})
+        series.append({'name':'税・返済目安（法人税前）' if tax_line else ('損益分岐点（参考）' if outlook.get('payroll_provisional') else '損益分岐点（見込）'),'type':'line','data':[threshold]*days,'showSymbol':False,'lineStyle':{'type':'dotted'},'itemStyle':{'color':'#ffb1aa'}})
     if not compact:
         plans=sorted((p for p in data.data.get('sales_target_plans',{}).values() if p['month']==month),key=lambda p:p['created_at'])
         if plans:series.append({'name':'月間売上目標','type':'line','data':[plans[-1]['monthly_target']]*days,'showSymbol':False,'itemStyle':{'color':'#8bc9ff'}})
@@ -91,7 +91,7 @@ def finance_graphs(month: str = ''):
             ui.echart(options).classes('w-full').style('height:clamp(240px,43dvh,420px)')
             if kind.value=='売上':
                 yen=lambda v:'算出保留' if v is None else f'¥{v:,}'
-                ui.label(('税・返済確保目安：' if tax.value else '損益分岐点：')+yen(outlook['tax_repayment_line'] if tax.value else outlook['break_even'])).classes('font-bold')
+                ui.label(('税・返済目安（法人税前）：' if tax.value else '損益分岐点：')+yen(outlook['tax_repayment_line'] if tax.value else outlook['break_even'])).classes('font-bold')
                 threshold=outlook['tax_repayment_line'] if tax.value else outlook['break_even']
                 if threshold is not None and outlook['sales'] is not None:
                     ui.label(f"着地予測との差：{outlook['sales']-threshold:+,}円").classes('font-bold')

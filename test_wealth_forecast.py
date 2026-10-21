@@ -85,9 +85,11 @@ class WealthForecastTests(unittest.TestCase):
                         opening_surplus=4000000)
         base['messages'] = []
         with patch('core.finance_outlook.month_outlook', return_value=base), \
+                patch('core.consumption_tax.forecast_credits', return_value=dict(fixed_credit=0,fee_fraction=0,current_credit=68889,cost_fraction=8/108,issues=[])), \
                 patch('core.financials.financials') as finances, \
                 patch('core.purchases.purchases') as purchases:
             finances.get_monthly_operations.return_value = {'loan_payment': 100000}
+            finances._data_manager.data = {}
             finances.get_monthly_advertising.return_value = {'input_tax': 0}
             finances.sales_records.return_value = records
             purchases.monthly_total.return_value = 108000

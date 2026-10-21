@@ -99,6 +99,15 @@ def financial_reports_page():
                         with ui.element("div").classes(f"report-metric {style}"):
                             ui.label(title).classes("report-metric-label"); ui.label(f"¥{value:,}").classes("report-metric-value")
 
+                settled = values['settlement']
+                with ui.column().classes('w-full gap-1 q-my-md'):
+                    ui.label('税金・返済の調整（同じ集計期間）').classes('font-bold')
+                    for label, amount in [('消費税見込（マイナスは還付見込）', settled['tax']['net_tax']), ('法人税等', settled['corporate_tax']), (settled['net_label'], settled['net_profit']), (settled['surplus_label'], settled['post_repayment_profit'])]:
+                        ui.label(f'{label}：' + ('未設定' if amount is None else f'¥{amount:,}'))
+                    if settled['provisional']:
+                        ui.label('税設定に未確認項目があります。残額は暫定です。')
+                    ui.link('税設定を確認', '/mirai-kessan/taxes?month='+values['start'][:7]).classes('no-print')
+
                 ui.label("重要な経営比率").classes("report-section-title")
                 with ui.element("div").classes("ratio-grid"):
                     for label, key in (("原価率", "cost_rate"), ("粗利率", "gross_margin"),
@@ -242,7 +251,7 @@ def financial_analysis_report_page():
             management_metric("売上", money(values.get("sales", 0)))
             management_metric("粗利", money(result["gross_profit"]), "good")
             management_metric("営業利益", money(result["operating_profit"]), "good" if result["operating_profit"] >= 0 else "danger")
-            management_metric("純利益", money(result["net_income"]), "good" if result["net_income"] >= 0 else "danger")
+            management_metric(result["net_label"], money(result["net_income"]), "good" if result["net_income"] >= 0 else "danger")
         ui.label("会社の安全性").classes("report-section-title")
         working_capital = result["current_assets"] - result["current_liabilities"]
         with ui.element("div").classes("management-metrics"):

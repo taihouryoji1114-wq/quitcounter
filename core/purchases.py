@@ -163,6 +163,8 @@ class PurchaseManager:
             raise ValueError("支出の区分を選択してください。")
         if invoice_status not in {"registered", "unregistered", "unknown"}:
             raise ValueError("インボイスの区分を選択してください。")
+        record.pop('transition_eligible', None)
+        record.pop('credit_reviewed', None)
         record.update({
             "date": record_date,
             "supplier": supplier,
@@ -289,6 +291,16 @@ class PurchaseManager:
             for item in self.records(month=month, kind=kind)
         )
 
+    def review_credit(self, record_id, status):
+        if status not in ('unknown', 'registered', 'transition', 'none'):
+            raise ValueError('控除区分が不正です')
+        record = next((r for r in self.records() if r['id'] == record_id), None)
+        if record is None:
+            raise ValueError('仕入記録が見つかりません')
+        record.update(invoice_status='registered' if status == 'registered' else 'unknown' if status == 'unknown' else 'unregistered',
+                      transition_eligible=status == 'transition', credit_reviewed=status == 'none')
+        self._data_manager.save()
+
     def monthly_tax_summary(self, month):
         """Return invoice-based input tax, estimating only legacy simple records."""
         try:
@@ -303,29 +315,17 @@ class PurchaseManager:
             "estimated_records": 0,
             "excluded_unregistered_records": 0,
         }
+        from core.consumption_tax import purchase_credit
+        result['unconfirmed_credit'] = 0
         for record in self.records(month=month):
-            if record.get("invoice_status") == "unregistered":
-                result["excluded_unregistered_records"] += 1
-                continue
-            breakdown = record.get("tax_breakdown")
-            if breakdown:
-                result["tax_1"] += int(breakdown.get("tax_1", 0))
-                result["tax_8"] += int(breakdown.get("tax_8", 0))
-                result["tax_10"] += int(breakdown.get("tax_10", 0))
-                continue
-            total = int(record.get("total", 0))
-            if record.get("kind", "cost") == "cost":
-                result["tax_8"] += self._round_tax(
-                    Decimal(total) * Decimal(8) / Decimal(108), "floor"
-                )
-            else:
-                result["tax_10"] += self._round_tax(
-                    Decimal(total) * Decimal(10) / Decimal(110), "floor"
-                )
-            result["estimated_records"] += 1
-        result["input_tax"] = (
-            result["tax_1"] + result["tax_8"] + result["tax_10"]
-        )
+            info = purchase_credit(record)
+            result['input_tax'] += info['credit']
+            result['unconfirmed_credit'] += info['potential']
+            result['estimated_records'] += int(info['estimated'])
+            result['excluded_unregistered_records'] += int(record.get('invoice_status') == 'unregistered' and not info['credit'])
+            breakdown = record.get('tax_breakdown', {}) or {}
+            for key in ('tax_1','tax_8','tax_10'):
+                result[key] += int(breakdown.get(key,0))
         return result
 
     @staticmethod

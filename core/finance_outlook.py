@@ -82,19 +82,12 @@ def month_outlook(month, as_of=None):
         messages.append('月次費用が未登録または0円です。費用を入力するまで参考値として確認してください。')
     if rate is None and not past:messages.append('原価の実績不足です。仕入れを入力するか想定原価率を設定してください。')
     values=calculate_outlook(landing,cost,fees,payroll,overhead,config.get('fees_variable',True))
-    # Approximate the input-tax share from the last three completed months.
-    # This is a management reserve, not a tax return or cash balance.
-    index=today.year*12+today.month-1
-    tax_months=[f'{i//12:04d}-{i%12+1:02d}' for i in range(index-3,index)]
-    purchase_total=sum(purchases.monthly_total(v) for v in tax_months)
-    input_tax=sum(purchases.monthly_tax_summary(v)['input_tax'] for v in tax_months)
-    input_fraction=input_tax/purchase_total if purchase_total else None
-    fixed_input_tax=financials.get_monthly_advertising(month)['input_tax']
-    cover=None
-    if input_fraction is not None:
-        cover=tax_and_repayment_threshold(landing,cost,fees,payroll,overhead,
-                operations['loan_payment'],input_fraction,fixed_input_tax,config.get('fees_variable',True))
-    messages.append('税・返済目安は売上10％、仕入控除は直近3か月の入力税額比率＋登録広告費で概算。家賃等の未登録控除・法人税・利息別入力は含みません。')
+    from core.consumption_tax import forecast_credits
+    credits=forecast_credits(financials,purchases,month,today,cost,fees)
+    cover=tax_and_repayment_threshold(landing,cost,fees,payroll,overhead,
+            operations['loan_payment'],credits['cost_fraction'],credits['fixed_credit'],config.get('fees_variable',True),credits['fee_fraction'])
+    messages.append('税・返済線は法人税前の目安。原価・決済手数料・その他経費の控除を別々に計算し、確認済みの税額だけを使用します。')
+    if credits['issues']: messages.append('控除未確認の経費があります。税設定で確認すると予測に反映します。')
     return dict(values, payroll_issues=coverage['issues'], payroll_estimated=coverage['estimated'],
                 payroll_breakdown={'入力済みバイト給与':staff['groups']['hourly']['gross_wages'],
                                    '社員等の月給':sum(staffing.monthly_salaries().values()),
@@ -109,7 +102,7 @@ def month_outlook(month, as_of=None):
 
 
 def tax_and_repayment_threshold(sales, cost, fees, payroll, fixed, repayment,
-                                input_tax_fraction=0, fixed_input_tax=0, fees_variable=True):
+                                input_tax_fraction=0, fixed_input_tax=0, fees_variable=True, fee_input_fraction=0):
     if not sales or any(v is None for v in (cost, fees, payroll, fixed)):
         return None
     variable=(cost+(fees if fees_variable else 0))/sales
@@ -117,7 +110,7 @@ def tax_and_repayment_threshold(sales, cost, fees, payroll, fixed, repayment,
     margin=1-variable
     if margin<=0:return None
     before=total_fixed/margin
-    net_tax_rate=10/110-cost/sales*input_tax_fraction
+    net_tax_rate=10/110-cost/sales*input_tax_fraction-fees/sales*fee_input_fraction
     if before*net_tax_rate<=fixed_input_tax:return round(before)
     if margin-net_tax_rate<=0:return None
     return round(max(0,(total_fixed-fixed_input_tax)/(margin-net_tax_rate)))

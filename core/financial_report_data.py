@@ -17,7 +17,10 @@ PAYMENT_COLUMNS = (
 )
 
 
-def build_financial_report(start, end):
+def build_financial_report(start, end, financial_manager=None, purchase_manager=None, staffing_manager=None, as_of=None, include_settlement=True):
+    financials = financial_manager or globals()["financials"]
+    purchases = purchase_manager or globals()["purchases"]
+    staffing = staffing_manager or globals()["staffing"]
     start_day, end_day = date.fromisoformat(start), date.fromisoformat(end)
     sales = [row for row in financials.sales_records()
              if start <= str(row.get("date", "")) <= end]
@@ -40,7 +43,7 @@ def build_financial_report(start, end):
                        if row.get("kind") == "operating_supply")
     expense_total = sum(int(row.get("total", 0) or 0) for row in purchase_rows
                         if row.get("kind") == "expense")
-    allocated = _allocated_monthly_costs(start_day, end_day)
+    allocated = _allocated_monthly_costs(start_day, end_day, financials, staffing, as_of)
     payment_totals = {field: sum(int(row.get(field, 0) or 0) for row in sales)
                       for _, field in PAYMENT_COLUMNS}
     payment_totals["points_sales"] = sum(
@@ -74,7 +77,7 @@ def build_financial_report(start, end):
         "labor_distribution": allocated["personnel"] / gross_profit if gross_profit > 0 else None,
         "operating_margin": operating_profit / sales_total if sales_total else None,
     }
-    return {
+    report = {
         "start": start, "end": end, "sales": sales, "purchases": purchase_rows,
         "suppliers": sorted(suppliers.items(), key=lambda pair: pair[1]["total"], reverse=True),
         "payment_totals": payment_totals, "payment_fees": payment_fees,
@@ -87,12 +90,25 @@ def build_financial_report(start, end):
         "expense_breakdown": expense_breakdown, "ratios": ratios,
     }
 
+    if include_settlement:
+        if start[:7] != end[:7]:
+            segments=[]
+            cursor=start_day.replace(day=1)
+            while cursor<=end_day:
+                last=cursor.replace(day=monthrange(cursor.year,cursor.month)[1])
+                segments.append(build_financial_report(max(start_day,cursor).isoformat(), min(end_day,last).isoformat(),financials,purchases,staffing,as_of,False))
+                cursor=(last+timedelta(days=1)).replace(day=1)
+            report['month_reports']=segments
+        from core.consumption_tax import settlement
+        report["settlement"] = settlement(financials, purchases, report)
+    return report
 
-def _allocated_monthly_costs(start, end):
+
+def _allocated_monthly_costs(start, end, financials=financials, staffing=staffing, as_of=None):
     result = {key: 0 for key in
               ("personnel", "rent", "utilities", "advertising", "other_admin")}
     cursor = start.replace(day=1)
-    today = today_jst()
+    today = as_of or today_jst()
     while cursor <= end:
         days = monthrange(cursor.year, cursor.month)[1]
         month_end = cursor.replace(day=days)
@@ -105,10 +121,10 @@ def _allocated_monthly_costs(start, end):
             result[key] += round(operations[key] * selected_days / days)
         result["advertising"] += round(advertising * selected_days / days)
         if cursor < today.replace(day=1):
-            month_personnel = staffing.month_cost_summary(month, today)["company_cost"]
+            month_personnel = staffing.month_cost_summary(month, today)["company_cost"] or operations["personnel"]
             result["personnel"] += round(month_personnel * selected_days / days)
         elif cursor.year == today.year and cursor.month == today.month:
-            month_personnel = staffing.month_cost_summary(month, today)["company_cost"]
+            month_personnel = staffing.month_cost_summary(month, today)["company_cost"] or operations["personnel"]
             effective_end = min(selected_end, today)
             covered = max(0, (effective_end - selected_start).days + 1)
             result["personnel"] += round(month_personnel * covered / max(1, today.day))

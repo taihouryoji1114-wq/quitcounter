@@ -38,13 +38,13 @@ class ShiftPayrollTests(unittest.TestCase):
         s = self.staff.month_cost_summary('2026-10',self.today)
         self.assertEqual(s['planned_hourly_gross'],0)
         self.assertEqual(s['plan_coverage']['board_cells'],0)
-    def test_off_overrides_previous_work_and_partial_day_is_missing(self):
+    def test_off_and_published_blank_override_previous_work(self):
         self.board('休み','off')
         self.data.data['business_staff_shift_plans'] = {'2026-10-19':{'スタッフA':dict(dinner_start='18:00',dinner_end='22:00')}}
         plans, coverage = effective_plans(self.staff,'2026-10',self.today)
         self.assertFalse(self.staff._worked(plans['2026-10-19']['スタッフA']))
         self.assertNotIn('2026-10-19',coverage['missing_by_staff']['スタッフA'])
-        self.assertIn('2026-10-19',coverage['missing_by_staff']['スタッフB'])
+        self.assertNotIn('2026-10-19',coverage['missing_by_staff']['スタッフB'])
     def test_unknown_time_does_not_use_initial_default_or_old_plan(self):
         self.board('ランチ','ランチ')
         self.data.data['business_staff_shift_plans'] = {'2026-10-19':{'スタッフA':dict(lunch_start='10:00',lunch_end='15:00')}}
@@ -103,6 +103,18 @@ class ShiftPayrollTests(unittest.TestCase):
         self.assertIsNotNone(result['break_even'])
         self.assertIsNotNone(result['personnel_rate'])
         self.assertIsNotNone(result['labor_rate'])
-        self.assertTrue(result['payroll_provisional'])
-        self.assertTrue(any(v['staff']=='スタッフB' for v in result['payroll_issues']))
+        self.assertFalse(result['payroll_provisional'])
+        self.assertFalse(any(v['staff']=='スタッフB' for v in result['payroll_issues']))
         self.assertEqual(sum(result['payroll_breakdown'].values()),result['projected_personnel'])
+
+    def test_published_half_blank_is_off_but_other_half_stays_unpublished(self):
+        self.board('休み','off')
+        published=self.data.data['store_manual_shift_board']['2026-10']['published']
+        published['periods']={'first':'published'}
+        published['entries']={};published['cells']={}
+        before=deepcopy(self.data.data)
+        plans,coverage=effective_plans(self.staff,'2026-10',date(2026,10,10))
+        self.assertFalse(self.staff._worked(plans['2026-10-11']['スタッフA']))
+        self.assertNotIn('2026-10-15',coverage['missing_by_staff']['スタッフB'])
+        self.assertIn('2026-10-16',coverage['missing_by_staff']['スタッフB'])
+        self.assertEqual(self.data.data,before)

@@ -72,33 +72,18 @@ class MonthlyEvaluationService:
 
     def snapshot(self, month, as_of=None):
         as_of = as_of or date.today()
-        sales = self.financials.monthly_sales_total(month)
-        cost = self.purchases.monthly_total(month, kind="cost")
-        supplies = self.purchases.monthly_total(month, kind="operating_supply")
-        expenses = self.purchases.monthly_total(month, kind="expense")
-        operations = self.financials.get_monthly_operations(month)
-        personnel = self.staffing.month_cost_summary(month, as_of)["company_cost"]
-        if not personnel:
-            personnel = operations["personnel"]
-        advertising = self.financials.get_monthly_advertising(month)["total"]
-        advertising_input_tax = self.financials.get_monthly_advertising(month)["input_tax"]
-        fees = self.financials.monthly_payment_summary(month)["total_fees"]
-        fixed_costs = (
-            operations["rent"] + operations["utilities"] + advertising
-            + operations["other_admin"]
-        )
-        gross = sales - cost
-        operating_expenses = personnel + fixed_costs + supplies + expenses + fees
-        operating = gross - operating_expenses
-        # Monthly non-operating and corporate-tax actuals are not stored yet.  Do
-        # not invent them: ordinary/net profit therefore use the registered scope.
-        ordinary = operating
-        net = ordinary
-        purchase_input_tax = self.purchases.monthly_tax_summary(month)["input_tax"]
-        consumption_tax = max(
-            0, sales * 10 // 110 - purchase_input_tax - advertising_input_tax
-        )
-        post_repayment = net - operations["loan_payment"] - consumption_tax
+        from core.financial_report_data import build_financial_report
+        year, number = map(int, month.split('-'))
+        end = as_of.isoformat() if month == as_of.strftime('%Y-%m') else f'{month}-{monthrange(year,number)[1]:02d}'
+        report = build_financial_report(month+'-01', end, self.financials, self.purchases, self.staffing, as_of)
+        settled = report['settlement']
+        sales, cost, gross = report['sales_total'], report['cost_total'], report['gross_profit']
+        personnel = report['personnel']
+        fixed_costs = sum(report[k] for k in ('rent','utilities','advertising','other_admin'))
+        operating_expenses, operating = report['operating_expenses'], report['operating_profit']
+        ordinary, net = settled['pretax_profit'], settled['net_profit']
+        consumption_tax = settled['tax']['net_tax']
+        post_repayment = settled['post_repayment_profit']
         return {
             "sales": sales, "purchases": cost, "cost_rate": cost / sales if sales else None,
             "gross_profit": gross, "personnel": personnel,
@@ -108,7 +93,9 @@ class MonthlyEvaluationService:
             "operating_margin": operating / sales if sales else None,
             "ordinary_profit": ordinary, "net_profit": net,
             "consumption_tax_estimate": consumption_tax,
-            "loan_payment": operations["loan_payment"],
+            "loan_payment": settled["loan_payment"],
+            "net_label": settled["net_label"], "surplus_label": settled["surplus_label"],
+            "provisional": settled["provisional"], "corporate_tax": settled["corporate_tax"],
             "post_repayment_profit": post_repayment,
         }
 
@@ -247,7 +234,10 @@ class MonthlyEvaluationService:
             score -= 22; issues.append("営業利益が赤字"); actions.append("まず営業利益の黒字化を優先する")
         else:
             score -= 7; issues.append(f"営業利益率が{margin*100:.1f}%と低い")
-        if m["post_repayment_profit"] >= 0:
+        if m.get("provisional"):
+            issues.append("税金の確認が未完了のため、最終残額は暫定")
+            actions.append("税設定で法人税と経費の控除条件を確認する")
+        elif m["post_repayment_profit"] >= 0:
             score += 8; good.append("借入返済後も利益が残る")
         else:
             score -= 16; issues.append("借入返済後の残額がマイナス"); actions.append("利益と元金返済額のバランスを確認する")
@@ -279,7 +269,7 @@ class MonthlyEvaluationService:
             actions.append("今月の利益構造を維持し、前月との変化を確認する")
         score = max(0, min(100, round(score)))
         rank = "S" if score >= 90 else "A" if score >= 80 else "B" if score >= 65 else "C" if score >= 45 else "D"
-        health = "safe" if score >= 80 and m["post_repayment_profit"] >= 0 else "warning" if score >= 55 and m["operating_profit"] >= 0 else "danger"
+        health = "safe" if score >= 80 and m["post_repayment_profit"] >= 0 and not m.get("provisional") else "warning" if score >= 55 and m["operating_profit"] >= 0 else "danger"
         if not issues:
             summary = "利益・原価・人件費・返済負担を総合すると、安定した経営状態です。"
         elif m["operating_profit"] >= 0:

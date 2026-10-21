@@ -145,7 +145,7 @@ class PurchaseManagerTest(unittest.TestCase):
 
     def test_monthly_tax_summary_uses_edited_invoice_rates(self):
         record = self.purchases.add(
-            "2026-08-10", "市場A", 1080, tax_breakdown=
+            "2026-08-10", "市場A", 1080, invoice_status="registered", tax_breakdown=
             self.purchases.calculate_tax_breakdown(
                 amount_8=1080, price_mode="included"
             ),
@@ -156,19 +156,19 @@ class PurchaseManagerTest(unittest.TestCase):
         )
         self.purchases.update(
             record["id"], "2026-08-10", "市場A", 1080,
-            tax_breakdown=breakdown_10,
+            tax_breakdown=breakdown_10, invoice_status="registered",
         )
         self.assertEqual(self.purchases.monthly_tax_summary("2026-08")["input_tax"], 98)
 
     def test_monthly_tax_summary_estimates_legacy_and_excludes_unregistered(self):
-        self.purchases.add("2026-08-10", "食品", 1080, "cost")
+        self.purchases.add("2026-08-10", "食品", 1080, "cost", invoice_status="registered")
         self.purchases.add(
             "2026-08-10", "対象外", 1100, "expense",
             invoice_status="unregistered",
         )
         summary = self.purchases.monthly_tax_summary("2026-08")
         self.assertEqual(summary["input_tax"], 80)
-        self.assertEqual(summary["estimated_records"], 1)
+        self.assertEqual(summary["estimated_records"], 2)
         self.assertEqual(summary["excluded_unregistered_records"], 1)
 
     def test_suppliers_are_reused_without_duplicates(self):

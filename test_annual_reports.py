@@ -123,7 +123,7 @@ class AnnualReportManagerTest(unittest.TestCase):
             "corporate_taxes": 100,
         })
         self.assertEqual(result["operating_profit"], 1000)
-        self.assertEqual(result["net_income"], 1000)
+        self.assertEqual(result["net_income"], 900)
 
     def test_restaurant_health_compares_cost_and_personnel_to_sales(self):
         health = {item["key"]: item for item in self.reports.restaurant_health({

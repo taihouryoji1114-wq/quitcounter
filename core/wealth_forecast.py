@@ -48,7 +48,8 @@ def accumulate(rows, tax_rate, opening_retained=None, opening_surplus=None):
     for row in rows:
         year = fiscal_year(date.fromisoformat(row['month'] + '-01'))
         group = years.setdefault(year, dict(year=year, pretax=0, principal=0,
-                                            depreciation=0, investment=0, dividend=0, months=0))
+                                            depreciation=0, investment=0, dividend=0, months=0, consumption_tax=0))
+        group['consumption_tax'] += row['consumption_tax']
         group['pretax'] += row['operating'] - row['consumption_tax'] - row['interest'] - row['depreciation']
         for key in ('principal', 'depreciation', 'investment', 'dividend'):
             group[key] += row[key]
@@ -59,7 +60,7 @@ def accumulate(rows, tax_rate, opening_retained=None, opening_surplus=None):
         corporate_tax = max(0, group['pretax']) * tax_rate / 100
         net = group['pretax'] - corporate_tax
         earnings = net - group['dividend']
-        remaining = earnings + group['depreciation'] - group['principal'] - group['investment']
+        remaining = earnings + group['depreciation'] - group['principal'] - group['investment'] - max(0, -group['consumption_tax'])
         retained += earnings
         surplus += remaining
         output.append(dict(group, tax=round(corporate_tax), net=round(net),
@@ -113,8 +114,10 @@ def project(base, records, settings, as_of, end_year, input_fraction):
         cost = sales * cost_ratio
         fees = sales * fee_ratio
         operating = sales-cost-fees-(payroll+fixed)*cost_factor
-        credit = cost*input_fraction + base.get('fixed_input_tax', 0)*cost_factor + (config.get('extra_input_tax') or 0)
-        consumption_tax = max(0, sales*10/110-credit)
+        credit = cost*input_fraction + fees*base.get('fee_input_fraction',0) + base.get('fixed_input_tax', 0)*cost_factor + (config.get('extra_input_tax') or 0)
+        if index == start and base.get('current_input_tax') is not None:
+            credit = base['current_input_tax'] + (config.get('extra_input_tax') or 0)
+        consumption_tax = sales*10/110-credit
         repayment = 0 if config['repayment_end'] and key > config['repayment_end'] else principal
         rows.append(dict(month=key, sales=round(sales), operating=operating,
                          consumption_tax=consumption_tax, principal=repayment,
@@ -133,17 +136,33 @@ def load_projection(settings, as_of, end_year):
     month = as_of.strftime('%Y-%m')
     base = month_outlook(month, as_of)
     base['principal'] = financials.get_monthly_operations(month)['loan_payment']
-    base['fixed_input_tax'] = financials.get_monthly_advertising(month)['input_tax']
-    index = as_of.year*12+as_of.month-1
-    months = [f'{i//12:04d}-{i%12+1:02d}' for i in range(index-3,index+1)]
-    total = sum(purchases.monthly_total(v) for v in months)
-    credit = sum(purchases.monthly_tax_summary(v)['input_tax'] for v in months)
+    from core.consumption_tax import forecast_credits
+    credits=forecast_credits(financials,purchases,month,as_of,base['projected_cost'],base['projected_fees'])
+    base['fixed_input_tax']=credits['fixed_credit']
+    base['fee_input_fraction']=credits['fee_fraction']
+    base['current_input_tax']=credits['current_credit']
     effective_settings = dict(settings)
+    extra_unreviewed=bool(effective_settings.get("extra_input_tax")) and not settings.get("extra_credit_reviewed")
+    if extra_unreviewed:
+        effective_settings["extra_input_tax"]=0
+    raw=financials._data_manager.data
+    common=raw.get('finance_tax_policy',{}).get('corporate_rate')
+    if common is not None:
+        effective_settings['corporate_tax_rate']=common
+    month_settings=raw.get('business_tax_settings',{}).get(month,{})
+    for key in ('interest','depreciation'):
+        if effective_settings.get(key) is None:
+            effective_settings[key]=month_settings.get(key,0)
     stale_opening = settings.get('opening_month') != month and any(settings.get(k) is not None for k in ('opening_retained', 'opening_surplus'))
     if stale_opening:
         effective_settings.update(opening_retained=None, opening_surplus=None)
     result = project(base, financials.sales_records(), effective_settings, as_of, end_year,
-                     credit/total if total else None)
+                     credits['cost_fraction'])
     result['opening_stale'] = stale_opening
-    result['basis_messages'] = base['messages']
+    result['basis_messages'] = list(base['messages'])
+    if extra_unreviewed:
+        result['basis_messages'].append('以前の追加控除は税設定との重複確認が必要です。予測の前提で確認するまで加算しません。')
+    if credits['issues']:
+        result['basis_messages'].append('税控除に未確認項目があります。確認できた税額だけを差し引いた暫定予測です。')
+    result['basis_messages'].append('税設定の共通税率を優先。月別法人税実額は将来試算では使わず、各期の利益×概算税率です。')
     return result

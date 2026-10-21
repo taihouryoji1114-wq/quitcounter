@@ -12,7 +12,7 @@ from core.purchases import purchases
 from core.staffing import staffing
 from core.theme import Theme
 from pages.sales_targets import render_sales_targets
-from pages import finance_graphs, wealth_forecast
+from pages import finance_graphs, wealth_forecast, finance_taxes
 
 
 def _valid_month(value):
@@ -52,49 +52,20 @@ def _render_future_financials_home(selected_month=None, detailed=False, evaluati
         "/mirai-kessan/dashboard" if current_month == actual_current_month
         else f"/mirai-kessan/month/{current_month}"
     )
-    purchase_total = purchases.monthly_total(current_month, kind="cost")
-    operating_supply_total = purchases.monthly_total(current_month, kind="operating_supply")
-    other_expense_total = purchases.monthly_total(current_month, kind="expense")
-    sales_total = financials.monthly_sales_total(current_month)
-    payment_fees = financials.monthly_payment_summary(current_month)["total_fees"]
-    advertising_summary = financials.get_monthly_advertising(current_month)
-    advertising_total = advertising_summary["total"]
+    from core.financial_report_data import build_financial_report
     today = today_jst()
-    selected_year, selected_month_number = (int(part) for part in current_month.split("-"))
-    days_in_month = monthrange(selected_year, selected_month_number)[1]
-    if (selected_year, selected_month_number) < (today.year, today.month):
-        elapsed_days = days_in_month
-    elif (selected_year, selected_month_number) > (today.year, today.month):
-        elapsed_days = 0
-    else:
-        elapsed_days = min(today.day, days_in_month)
-    elapsed_ratio = elapsed_days / days_in_month
-    purchase_tax = purchases.monthly_tax_summary(current_month)
-    output_tax = sales_total * 10 // 110
-    consumption_tax_estimate = max(
-        0,
-        output_tax - purchase_tax["input_tax"] - advertising_summary["input_tax"],
-    )
+    year, number = map(int,current_month.split('-'))
+    end = today.isoformat() if current_month==actual_current_month else f'{current_month}-{monthrange(year,number)[1]:02d}'
+    report = build_financial_report(current_month+'-01',end)
+    settled=report['settlement']
+    sales_total, purchase_total = report['sales_total'], report['cost_total']
+    gross_profit, operating_profit = report['gross_profit'], report['operating_profit']
     operations = financials.get_monthly_operations(current_month)
-    staff_personnel_total = staffing.month_cost_summary(current_month, today)["company_cost"]
-    if staff_personnel_total:
-        operations["personnel"] = staff_personnel_total
-    gross_profit = sales_total - purchase_total
-    current_rent = round(operations["rent"] * elapsed_ratio)
-    current_utilities = round(operations["utilities"] * elapsed_ratio)
-    current_advertising = round(advertising_total * elapsed_ratio)
-    operating_costs = (
-        operations["personnel"] + current_rent + current_utilities
-        + operations["other_admin"] + operating_supply_total + other_expense_total + payment_fees
-        + current_advertising
-    )
-    operating_profit = gross_profit - operating_costs
-    cash_after_tax_and_loan = (
-        operating_profit - consumption_tax_estimate - operations["loan_payment"]
-    )
-    cost_rate = purchase_total / sales_total if sales_total else 0
-    personnel_rate = operations["personnel"] / sales_total if sales_total else None
-    labor_rate = operations["personnel"] / gross_profit if gross_profit > 0 else None
+    advertising_summary = financials.get_monthly_advertising(current_month)
+    advertising_total = advertising_summary['total']
+    cost_rate = report['ratios']['cost_rate'] or 0
+    personnel_rate = report['ratios']['personnel_rate']
+    labor_rate = report['ratios']['labor_distribution']
     management_preview = evaluator.preview(current_month, today)
     landing_forecast = evaluator.forecast(current_month, today)
     saved_evaluation = financials.get_monthly_evaluation(current_month)
@@ -104,7 +75,7 @@ def _render_future_financials_home(selected_month=None, detailed=False, evaluati
     ]
     targets = management_preview["targets"]
     provisional_health = (
-        "safe" if operating_profit >= 0
+        "safe" if not settled["provisional"] and operating_profit >= 0
         and (cost_rate <= targets["cost_rate"] if sales_total else False)
         and (personnel_rate <= targets["personnel_rate"] if personnel_rate is not None else False)
         else "warning" if operating_profit >= 0 else "danger"
@@ -124,6 +95,7 @@ def _render_future_financials_home(selected_month=None, detailed=False, evaluati
     with content:
         month_field = ui.input("対象月", value=current_month).props("type=month outlined").classes("w-full q-mb-md")
         month_field.on("change", lambda: ui.navigate.to(("/mirai-kessan/evaluation" if evaluation else "/mirai-kessan/details") + "?month=" + str(month_field.value)))
+        ui.link("税金・利益の確認", "/mirai-kessan/taxes?month="+current_month).classes("q-mb-md").style("color:#ffda92")
         if evaluation:
             with ui.card().classes("surface-card monthly-evaluation w-full q-pa-md q-mb-md"):
                 with ui.row().classes("w-full items-start justify-between no-wrap"):
@@ -234,10 +206,10 @@ def _render_future_financials_home(selected_month=None, detailed=False, evaluati
                         ("固定費", management_preview["metrics"]["fixed_costs"]),
                         ("営業利益", operating_profit),
                         ("経常利益（登録済み範囲）", management_preview["metrics"]["ordinary_profit"]),
-                        ("当期純利益（概算）", management_preview["metrics"]["net_profit"]),
-                        ("消費税納付見込", management_preview["metrics"]["consumption_tax_estimate"]),
+                        (management_preview["metrics"]["net_label"], management_preview["metrics"]["net_profit"]),
+                        ("消費税見込（負数は還付）", management_preview["metrics"]["consumption_tax_estimate"]),
                         ("借入元金返済", management_preview["metrics"]["loan_payment"]),
-                        ("返済後に残る利益", management_preview["metrics"]["post_repayment_profit"]),
+                        (management_preview["metrics"]["surplus_label"], management_preview["metrics"]["post_repayment_profit"]),
                     ):
                         with ui.element("div").classes("meaning-row compact"):
                             ui.label(label).classes("meaning-label")
