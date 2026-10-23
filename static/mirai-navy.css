@@ -157,3 +157,20 @@
 }
 
 /* finance release: finance-auto-tax-20261021 */
+
+/* Saved timecards must remain identifiable under the dark theme. */
+@layer theme {
+  @media screen {
+    body .month-hours-row.timecard-entered {background:#183a2b!important;border:1px solid #58ae7d!important;border-left:5px solid #73d39c!important}
+    body .month-hours-row.timecard-empty {background:#191919!important;border:1px solid #555!important;border-left:5px solid #555!important}
+    body .month-hours-row.timecard-pending {background:#3c2d13!important;border:1px solid #d6a54b!important;border-left:5px solid #f0c36e!important}
+    body .timecard-entered .timecard-entry-badge {color:#b9f5ce!important}
+    body .timecard-pending .timecard-entry-badge {color:#ffe0a2!important}
+    body .timecard-empty .timecard-entry-badge {color:#ddd!important}
+    body .month-hours-row .q-field__control {background:#15231c!important}
+    body .timecard-empty .q-field__control {background:#232323!important}
+    body .timecard-pending .q-field__control {background:#2b2418!important}
+  }
+}
+
+/* finance release: finance-timecards-20261023 */

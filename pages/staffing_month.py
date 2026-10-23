@@ -11,6 +11,13 @@ from core.staffing import staffing
 from core.theme import Theme
 
 
+def _paint_entry(card, badge, status, pending=False):
+    """Saved entries stay green; edits are amber until successfully saved."""
+    card.classes(remove="timecard-entered timecard-pending timecard-empty")
+    card.classes(add="timecard-pending" if pending else "timecard-entered" if status != "未入力" else "timecard-empty")
+    badge.set_text("未保存" if pending else "入力済み" if status != "未入力" else "未入力")
+
+
 @ui.page("/mirai-kessan/staffing/month")
 def monthly_timecards():
     if not require_app_access("future_financials") or not require_permission("future_dashboard", "/mirai-kessan/input"):
@@ -44,7 +51,7 @@ def monthly_timecards():
             expected = {}
             rows = {}
             with editor:
-                ui.label(f"入力中：{selected} ／ {first.year}年{first.month}月").classes("text-lg font-bold")
+                ui.label(f"入力中：{staff_display_name(selected)} ／ {first.year}年{first.month}月").classes("text-lg font-bold")
                 ui.label("1000 → 10:00 の数字入力OK。休みは「休み」を選択。何も触らない日は未入力のまま残ります。").classes("text-xs")
                 progress = staffing.timecard_progress(month, today_jst().isoformat())[selected]
                 ui.label(f"入力済み {progress['entered_count']}日 ／ 未確認 {len(progress['missing_days'])}日").classes("text-sm font-bold text-primary")
@@ -57,19 +64,20 @@ def monthly_timecards():
                         working = values["attended"] or any(values[k] for k in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"))
                         status = "出勤" if working else "休み" if values.get("entry_confirmed") else "未入力"
                         with ui.card().classes("month-hours-row w-full q-pa-sm") as card:
-                            if status != "未入力":
-                                card.style("border-left:4px solid #368264")
                             with ui.row().classes("w-full items-center no-wrap justify-between"):
                                 weekday = "月火水木金土日"[date(first.year, first.month, number).weekday()]
-                                ui.label(f"{number}日（{weekday}）").classes("font-bold")
+                                with ui.column().classes("gap-0"):
+                                    ui.label(f"{number}日（{weekday}）").classes("font-bold")
+                                    badge = ui.label().classes("timecard-entry-badge text-xs")
+                                _paint_entry(card, badge, status)
                                 state = ui.select(["未入力", "出勤", "休み"], value=status).props("outlined dense").style("width:110px")
                             inputs = {}
                             if selected in staffing.HOURLY_STAFF:
                                 with ui.element("div").classes("month-hours-grid"):
                                     for key, label in (("lunch_start", "昼・開始"), ("lunch_end", "昼・終了"), ("dinner_start", "夜・開始"), ("dinner_end", "夜・終了")):
-                                        inputs[key] = ui.input(label, value=values[key]).props("outlined dense inputmode=numeric placeholder=10:00").classes("w-full")
+                                        inputs[key] = ui.input(label, value=values[key]).props("outlined dense inputmode=numeric stack-label").classes("w-full")
                                 inputs["break_minutes"] = ui.number("休憩（分）", value=values["break_minutes"], min=0).props("outlined dense inputmode=numeric").classes("w-full")
-                            row = {"state": state, "inputs": inputs, "changing": False, "values": values}
+                            row = {"state": state, "inputs": inputs, "changing": False, "values": values, "card":card, "badge":badge}
                             rows[record_date] = row
                             def changed(_, day=record_date, item=row):
                                 if item["changing"]:
@@ -78,8 +86,9 @@ def monthly_timecards():
                                 item["state"].set_value("出勤")
                                 item["changing"] = False
                                 dirty.add(day)
+                                _paint_entry(item["card"], item["badge"], item["state"].value, pending=True)
                                 counter.set_text(f"未保存：{len(dirty)}日分")
-                            def state_changed(_, day=record_date, item=row, tile=card):
+                            def state_changed(_, day=record_date, item=row):
                                 if item["changing"]:
                                     return
                                 item["changing"] = True
@@ -88,7 +97,7 @@ def monthly_timecards():
                                         field.set_value(0 if key == "break_minutes" else "")
                                 item["changing"] = False
                                 dirty.add(day)
-                                tile.style("border-left:4px solid #D19132")
+                                _paint_entry(item["card"], item["badge"], item["state"].value, pending=True)
                                 counter.set_text(f"未保存：{len(dirty)}日分")
                             for field in inputs.values():
                                 field.on_value_change(changed)
@@ -117,8 +126,8 @@ def monthly_timecards():
                     person.set_value(selected)
                     month_input.set_value(month)
                     load()
-                    ui.notify(f"{selected}の{count}日分を保存しました", type="positive")
-                ui.button(f"{selected}の変更分をまとめて保存", icon="save", on_click=save).classes("w-full q-py-sm")
+                    ui.notify(f"{staff_display_name(selected)}の{count}日分を保存しました", type="positive")
+                ui.button(f"{staff_display_name(selected)}の変更分をまとめて保存", icon="save", on_click=save).classes("w-full q-py-sm")
 
         def request_load():
             if not dirty:
@@ -173,17 +182,20 @@ def daily_timecards(request: Request):
                         value = values[name]
                         work = value["attended"] or any(value[k] for k in ("lunch_start", "lunch_end", "dinner_start", "dinner_end"))
                         status = "出勤" if work else "休み" if value.get("entry_confirmed") else "未入力"
-                        with ui.card().classes("w-full q-pa-sm").style("border:1px solid #d7e3da;border-radius:14px;box-shadow:none"):
+                        with ui.card().classes("month-hours-row w-full q-pa-sm").style("border-radius:14px;box-shadow:none") as card:
                             with ui.row().classes("w-full justify-between items-center"):
-                                ui.label(staff_display_name(name)).classes("font-bold")
+                                with ui.column().classes("gap-0"):
+                                    ui.label(staff_display_name(name)).classes("font-bold")
+                                    badge = ui.label().classes("timecard-entry-badge text-xs")
+                                _paint_entry(card, badge, status)
                                 state = ui.select(["未入力", "出勤", "休み"], value=status).props("outlined dense").style("width:110px")
                             inputs = {}
                             if name in staffing.HOURLY_STAFF:
                                 with ui.element("div").classes("daily-time-grid"):
                                     for key, label in (("lunch_start", "昼・開始"), ("lunch_end", "昼・終了"), ("dinner_start", "夜・開始"), ("dinner_end", "夜・終了")):
-                                        inputs[key] = ui.input(label, value=value[key]).props("outlined dense inputmode=numeric placeholder=10:00")
+                                        inputs[key] = ui.input(label, value=value[key]).props("outlined dense inputmode=numeric stack-label")
                                 inputs["break_minutes"] = ui.number("休憩（分）", value=value["break_minutes"], min=0).props("outlined dense inputmode=numeric").classes("w-full")
-                            row = {"state": state, "inputs": inputs, "changing": False}
+                            row = {"state": state, "inputs": inputs, "changing": False, "card":card, "badge":badge}
                             rows[name] = row
                             def changed(_, person=name, item=row):
                                 if item["changing"]:
@@ -192,6 +204,7 @@ def daily_timecards(request: Request):
                                 item["state"].set_value("出勤")
                                 item["changing"] = False
                                 dirty.add(person)
+                                _paint_entry(item["card"], item["badge"], item["state"].value, pending=True)
                                 counter.set_text(f"未保存：{len(dirty)}人")
                             def state_changed(_, person=name, item=row):
                                 if item["changing"]:
@@ -202,6 +215,7 @@ def daily_timecards(request: Request):
                                         field.set_value(0 if key == "break_minutes" else "")
                                 item["changing"] = False
                                 dirty.add(person)
+                                _paint_entry(item["card"], item["badge"], item["state"].value, pending=True)
                                 counter.set_text(f"未保存：{len(dirty)}人")
                             state.on_value_change(state_changed)
                             for field in inputs.values():
