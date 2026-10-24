@@ -40,7 +40,7 @@ def wealth_forecast_page():
                 with ui.card().classes('surface-card w-full'):
                     ui.label('予測の前提を設定しましょう').classes('font-bold')
                     ui.label(forecast['message']).classes('text-sm finance-readable')
-                    ui.label('下の「予測の前提・開始残高」またはホームの税設定で設定できます。').classes('text-sm')
+                    ui.label('右上の設定から「将来予測の条件」を確認できます。').classes('text-sm')
                 return
             if forecast.get('opening_stale'):
                 config = dict(config, opening_retained=None, opening_surplus=None)
@@ -58,6 +58,8 @@ def wealth_forecast_page():
                             with ui.column().classes('gap-1 min-w-0'):
                                 ui.label(title).classes('text-xs finance-readable')
                                 ui.label(money(amount)).classes('text-lg font-bold').style(f'color:{color}')
+            if forecast['seasonal_missing']:
+                ui.label('季節データ不足 '+str(len(forecast['seasonal_missing']))+'か月：今月のペースで仮置き').classes('text-xs finance-warning')
             if int(value) >= 10:
                 ui.label('長期の条件付き試算です。税制・返済額・成長率が続くと仮定しています。').classes('text-xs finance-warning')
             ui.label('予測は銀行残高や確定決算ではありません。開始残高が空欄の項目は、今月からの増加分を表示します。').classes('text-xs finance-readable')
@@ -86,7 +88,16 @@ def wealth_forecast_page():
                     ui.label(note).classes('text-xs finance-readable')
         horizon.on_value_change(result.refresh)
         result()
-        with ui.expansion('予測の前提・開始残高', icon='settings').classes('w-full') as settings_panel:
+        ui.link('予測条件を変更', '/mirai-kessan/settings/wealth').classes('text-sm').style('color:#f6d390')
+
+
+@ui.page('/mirai-kessan/settings/wealth')
+def wealth_settings_page():
+    if not require_app_access('future_financials') or not require_permission('future_dashboard', '/mirai-kessan/input'):return
+    today=today_jst()
+    Theme.page('将来予測の設定',app_name='mirai-kessan')
+    with Theme.shell('将来予測の設定','',brand='未来決算',back_to='/mirai-kessan/settings'):
+        with ui.card().classes('surface-card w-full'):
             saved = data.data.get('wealth_forecast_settings', {})
             fields = {}
             ui.label('人件費・その他経費の空欄は今月見込を使用し、元金返済の空欄は登録した返済月額を使用します。').classes('text-xs')
@@ -114,6 +125,7 @@ def wealth_forecast_page():
             ui.label('登録返済額が利息込みなら、上の元金と追加利息に分けて入力してください。追加利息・減価償却・税額控除には、既存経費に含まれる分を重ねて入れないでください。').classes('text-xs finance-warning')
             ui.label('返済終了月の翌月から元金返済と追加利息を0円にします。法人税等は30％固定の管理用概算です。').classes('text-xs')
             def save():
+                if not require_permission('future_dashboard', '/mirai-kessan/input'):return
                 try:
                     settings = validate_settings(dict({key: field.value for key, field in fields.items()}, repayment_end=repayment.value))
                 except (ValueError, TypeError):
@@ -123,7 +135,6 @@ def wealth_forecast_page():
                 settings['opening_month'] = today.strftime('%Y-%m')
                 data.data['wealth_forecast_settings'] = settings
                 data.save()
-                result.refresh()
-                settings_panel.set_value(False)
+                ui.navigate.to('/mirai-kessan/forecast/wealth')
                 ui.notify('予測の前提を保存しました', type='positive')
             ui.button('前提を保存・再計算', on_click=save).classes('w-full')

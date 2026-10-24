@@ -17,6 +17,8 @@ def compact_finance_home(month):
     today=today_jst()
     r=monthly_forecast(records,month,today,[],settings.get('closed_dates',[]))
     outlook=month_outlook(month)
+    from core.finance_tasks import build_finance_tasks
+    tasks=build_finance_tasks(data,month,today,outlook)
     money=lambda value:'—' if value is None else f'¥{value:,.0f}'
     y,m=map(int,month.split('-'))
     fiscal=y if m>=10 else y-1
@@ -25,6 +27,7 @@ def compact_finance_home(month):
         index=y*12+m-1
         ui.button(icon='chevron_left',on_click=lambda:ui.navigate.to(f'/mirai-kessan/month/{(index-1)//12:04d}-{(index-1)%12+1:02d}')).props('flat round aria-label=前月')
         ui.label(f'{y}年{m}月').classes('finance-month')
+        ui.button(icon='settings',on_click=lambda:ui.navigate.to('/mirai-kessan/settings')).props('flat round dense aria-label=設定')
         ui.button(icon='chevron_right',on_click=lambda:ui.navigate.to(f'/mirai-kessan/month/{(index+1)//12:04d}-{(index+1)%12+1:02d}')).props('flat round aria-label=翌月')
     with ui.card().classes('surface-card w-full finance-hero'):
         ui.label('今月の着地予測').classes('finance-gold')
@@ -54,8 +57,7 @@ def compact_finance_home(month):
     with ui.card().classes('surface-card w-full finance-ratios q-mb-sm'):
         with ui.row().classes('w-full justify-between items-center'):
             ui.label('現在の経営指標').classes('finance-gold')
-            if outlook.get('payroll_issues'):
-                ui.link(f"未反映 {len(outlook['payroll_issues'])}件", '/mirai-kessan/graphs?month='+month).classes('text-xs').style('color:#ffb1aa')
+            ui.link(f"やること {len(tasks)}項目" if tasks else 'やることを確認', '/mirai-kessan/tasks?month='+month).classes('text-xs').style('color:#ffda96')
         with ui.element('div').classes('finance-ratio-grid w-full'):
             for label, value, predicted in (
                 ('原価率', cost / sales if sales > 0 else None, outlook['cost_rate']),

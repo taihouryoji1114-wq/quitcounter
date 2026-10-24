@@ -97,20 +97,8 @@ def finance_graphs(month: str = ''):
                     ui.label(f"着地予測との差：{outlook['sales']-threshold:+,}円").classes('font-bold')
                 from pages.payroll_forecast_details import render_payroll_details
                 render_payroll_details(outlook)
-                for note in outlook['messages']:ui.label(note).classes('finance-warning text-xs')
-                with ui.expansion('計算の前提・設定',icon='settings').classes('w-full'):
-                    ui.label('損益分岐点は営業利益ゼロの見込。税・返済は含めません。今月の予定人件費を固定の費用見込として扱います。')
-                    ui.label('原価見込：入力済み仕入れ＋残り予測売上×想定原価率。'+outlook['basis'])
-                    ui.label('人件費見込：登録月給全額＋今日までの入力済み実績＋明日以降の公開済みシフトボード。未確定分がある場合は登録済みの範囲で参考値を表示。')
-                    config=data.data.get('finance_outlook_settings',{})
-                    rate=ui.number('想定原価率（％・空欄は直近12週）',value=config.get('cost_rate'),min=0,max=100).props('outlined').classes('w-full')
-                    fees=ui.checkbox('決済手数料も変動費に含める',value=config.get('fees_variable',True))
-                    ui.label('外した場合も決済手数料は経費から除外せず、固定の費用見込に含めます。').classes('text-xs')
-                    def save():
-                        value=rate.value
-                        if value is not None and (not isfinite(float(value)) or not 0<=float(value)<=100):
-                            ui.notify('原価率は0〜100％で入力してください',type='warning');return
-                        data.data['finance_outlook_settings']={'cost_rate':None if value is None else float(value),'fees_variable':fees.value}
-                        data.save();content.refresh()
-                    ui.button('設定を保存',on_click=save)
+                warnings=[note for note in outlook['messages'] if any(word in note for word in ('未入力','未公開','未登録','未確認','不足','未設定'))]
+                for note in warnings:ui.label(note).classes('finance-warning text-xs')
+                from pages.finance_help import finance_help
+                finance_help('グラフの計算',outlook['messages']+['想定原価率・決済手数料の扱いは、右上の設定から変更できます。'])
         kind.on_value_change(lambda: (tax.set_visibility(kind.value=='売上'),content.refresh()));tax.on_value_change(content.refresh);content()

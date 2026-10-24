@@ -174,3 +174,10 @@
 }
 
 /* finance release: finance-timecards-20261023 */
+@media screen {
+  .finance-input-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .finance-input-card {padding:12px!important;min-height:112px;gap:4px!important;border-radius:16px!important}
+  .finance-input-card .q-row {margin:0!important}
+}
+
+/* finance release: finance-organize-20261024 */

@@ -72,6 +72,10 @@ class Theme:
                     ui.label(brand).classes("text-xl font-bold")
                 if action:
                     action()
+                if brand == "未来決算":
+                    from core.auth import has_permission
+                    if has_permission("future_dashboard"):
+                        ui.button(icon="settings", on_click=lambda: ui.navigate.to("/mirai-kessan/settings")).props("flat round dense aria-label=設定").tooltip("設定")
             ui.label(title).classes("text-4xl font-bold metric-value")
             ui.label(subtitle).classes("text-grey-7 q-mt-xs q-mb-xl")
             return ui.column().classes("w-full gap-0")

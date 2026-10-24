@@ -12,7 +12,7 @@ from core.purchases import purchases
 from core.staffing import staffing
 from core.theme import Theme
 from pages.sales_targets import render_sales_targets
-from pages import finance_graphs, wealth_forecast, finance_taxes
+from pages import finance_graphs, wealth_forecast, finance_taxes, finance_settings, finance_tasks
 
 
 def _valid_month(value):
@@ -336,26 +336,29 @@ def future_financials_input_hub():
         return
     Theme.page("未来決算｜日常入力", app_name="mirai-kessan")
 
-    content = Theme.shell("未来決算 日常入力", "許可された入力だけを、迷わず記録",
+    content = Theme.shell("入力", "",
                           brand="未来決算")
     with content:
-        for title, subtitle, icon, path in (
-            ("売上入力", "ランチ・ディナーと決済別売上", "point_of_sale", "/mirai-kessan/sales"),
-            ("仕入れ入力", "原価・備品・その他経費", "inventory_2", "/mirai-kessan/shiire"),
-            *(([("人件費管理", "勤務時間・給与・会社負担", "groups", "/mirai-kessan/staffing"),
-               ("立替管理", "立替・返金・残額", "account_balance_wallet", "/mirai-kessan/advances"),
-               ("月次費用", "家賃・光熱費・広告費・返済", "receipt_long", "/mirai-kessan/details")]
-               if current_role() in {"owner", "executive"} else
-               [("勤務・出勤入力", "出勤状況と勤務時間", "groups", "/mirai-kessan/attendance")])),
-        ):
-            with ui.card().classes("habit-card w-full q-pa-lg q-mb-sm cursor-pointer").on(
-                "click", lambda _, target=path: ui.navigate.to(target)):
-                with ui.row().classes("w-full items-center no-wrap"):
-                    ui.icon(icon).classes("text-3xl text-primary q-mr-md")
-                    with ui.column().classes("gap-0 grow"):
-                        ui.label(title).classes("text-lg font-black")
-                        ui.label(subtitle).classes("text-xs finance-readable")
-                    ui.icon("chevron_right").classes("finance-readable")
+        if current_role() in {"owner", "executive"}:
+            ui.button("未入力・未反映を確認",icon="checklist",on_click=lambda:ui.navigate.to("/mirai-kessan/tasks")).props("outline").classes("w-full q-mb-sm")
+        with ui.element("div").classes("finance-input-grid w-full"):
+            for title, subtitle, icon, path in (
+                ("売上入力", "ランチ・ディナーと決済別売上", "point_of_sale", "/mirai-kessan/sales"),
+                ("仕入れ入力", "原価・備品・その他経費", "inventory_2", "/mirai-kessan/shiire"),
+                *(([("人件費管理", "勤務時間・給与・会社負担", "groups", "/mirai-kessan/staffing"),
+                   ("立替管理", "立替・返金・残額", "account_balance_wallet", "/mirai-kessan/advances"),
+                   ("月次費用", "家賃・光熱費・広告費・返済", "receipt_long", "/mirai-kessan/details")]
+                   if current_role() in {"owner", "executive"} else
+                   [("勤務・出勤入力", "出勤状況と勤務時間", "groups", "/mirai-kessan/attendance")])),
+            ):
+                with ui.card().classes("surface-card finance-input-card w-full cursor-pointer").on(
+                    "click", lambda _, target=path: ui.navigate.to(target)):
+                    with ui.row().classes("w-full items-start gap-1"):
+                        ui.icon(icon).classes("text-2xl finance-gold")
+                        with ui.column().classes("gap-1 w-full"):
+                            ui.label(title).classes("text-base font-bold")
+                            ui.label(subtitle).classes("text-xs finance-readable")
+
 
 
     with content:
