@@ -1,0 +1,22 @@
+from nicegui import ui
+
+from store_preview.core.auth import current_role, current_staff_id, log_out
+from store_preview.pages.announcement_controls import announcement_player
+
+
+def store_header_actions():
+    announcement_player()
+    with ui.row().classes("gap-0"):
+        if current_staff_id():
+            ui.button("マイページ", icon="person", on_click=lambda: ui.navigate.to("/store-preview/me")).props("flat dense")
+        ui.button(icon="logout", on_click=lambda: log_out("/store-preview/login")).props(
+            "flat round aria-label='ログアウト'").classes("text-grey-8")
+
+def app_card(title, subtitle, icon, path, accent, badge_count=0):
+    with ui.card().classes("store-app-card cursor-pointer q-pa-lg").on(
+            "click", lambda _, target=path: ui.navigate.to(target)):
+        if badge_count:
+            ui.label(str(badge_count)).classes("store-app-badge")
+        ui.icon(icon).classes(f"text-4xl {accent}")
+        ui.label(title).classes("text-lg font-black q-mt-sm")
+        ui.label(subtitle).classes("text-[10px] text-grey-6 q-mt-xs")

@@ -1,0 +1,543 @@
+from datetime import date
+from html import escape
+from pathlib import Path
+
+from nicegui import ui
+
+from store_preview.core.auth import current_role, current_staff_id, require_staff_identity, require_app_access
+from store_preview.core.staff_identity import staff_display_name
+from store_preview.core.clock import today_jst
+from store_preview.core.shift_submissions import shift_submissions
+from store_preview.core.shift_schedule_pdf import create_shift_schedule_pdf
+from store_preview.core.theme import Theme
+from store_preview.pages.store_common import store_header_actions
+
+
+def submission_overview_html(period, submitted):
+    """One compact cell per person/day, with escaped submitted time labels."""
+    staff_ids = [s for s in shift_submissions.STAFF if s != '副社長']
+    table = ['<div class="compact-overview"><table><thead><tr><th class="compact-date">日付</th>']
+    for staff in staff_ids:
+        table.append('<th>' + escape(staff_display_name(staff)) + '</th>')
+    table.append('</tr></thead><tbody>')
+    for day in range(period['start'], period['end'] + 1):
+        weekday = '月火水木金土日'[date(period['year'], period['month'], day).weekday()]
+        table.append(f'<tr><th class="compact-date">{day} {weekday}</th>')
+        for staff in staff_ids:
+            record = submitted.get(staff)
+            value = shift_submissions._day_value(record.get('days', {}).get(str(day), {})) if record else {'type':'','start':'','end':''}
+            kind = value['type']
+            css = {'ランチ':'lunch', 'ディナー':'dinner', '通し':'both', '絶対休み':'off'}.get(kind, 'empty')
+            label = {'ランチ':'昼', 'ディナー':'夜', '通し':'通し', '絶対休み':'休'}.get(kind, '休' if record else '未提出')
+            text = escape(label)
+            if value['start'] or value['end']:
+                text += '<small>' + escape(value['start'] + '〜') + '<br>' + escape(value['end']) + '</small>'
+            table.append(f'<td class="{css}">{text}</td>')
+        table.append('</tr>')
+    table.append('</tbody></table></div>')
+    return ''.join(table)
+
+
+@ui.page("/store-preview/shift-submission")
+def shift_submission_page():
+    if not require_app_access("store_ops"):
+        return
+    Theme.page("シフト提出｜店舗運営", app_name="store-ops")
+    identity = current_staff_id()
+    today = today_jst()
+    from store_preview.pages.store_personal import submission_period_for
+    default_year, default_month, default_half = submission_period_for(today)
+
+    content = Theme.shell("シフト提出", "半月ごとの希望をまとめて提出",
+                          back_to="/store-preview", action=store_header_actions,
+                          brand="店舗運営")
+    with content:
+        with ui.card().classes("shift-guide w-full q-pa-lg q-mb-md"):
+            ui.label("提出期限").classes("text-[10px] font-black opacity-70")
+            ui.label("前半分は前月20日・後半分は当月5日まで").classes(
+                "text-base font-black q-mt-xs")
+
+        with ui.card().classes("surface-card w-full q-pa-lg"):
+            staff = ui.select({key: staff_display_name(key) for key in ([identity] if identity else shift_submissions.STAFF)}, value=identity, label="名前").props(
+                "outlined dense").classes("w-full")
+            if identity:
+                staff.disable()
+            with ui.row().classes("w-full gap-2 no-wrap q-mt-sm"):
+                year = ui.number("年", value=default_year, min=2026, max=2100, step=1).props(
+                    "outlined dense").classes("grow")
+                month = ui.select(list(range(1, 13)), value=default_month, label="月").props(
+                    "outlined dense").classes("grow")
+            half = ui.toggle({"first": "前半 1〜15日", "second": "後半 16日〜"},
+                             value=default_half).props("unelevated spread no-caps").classes(
+                                 "w-full q-mt-sm")
+            ui.label("名前・期間を選んで「入力を開く」を押してください").classes(
+                "text-[10px] text-grey-6 q-mt-sm")
+
+            editor = ui.column().classes("w-full gap-0 q-mt-md")
+
+            def render_editor(staff_name=None):
+                selected_staff = staff_name or staff.value
+                require_staff_identity(selected_staff)
+                if not selected_staff:
+                    ui.notify("名前を選択してください", type="negative")
+                    return
+                try:
+                    submission = shift_submissions.submission(
+                        selected_staff, int(year.value), int(month.value), half.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="negative")
+                    return
+                editor.clear()
+                period = submission["period"]
+                fields = {}
+                with editor:
+                    ui.separator().classes("q-my-sm")
+                    ui.label(period["label"]).classes("text-lg font-black")
+                    deadline = period["deadline"][5:].replace("-", "/")
+                    ui.label(f"提出期限 {deadline}").classes("text-[10px] text-negative font-bold")
+                    if submission.get("pending_change"):
+                        ui.label("取消申請は管理者の確認待ちです" if submission["pending_change"].get("action") == "cancel" else "変更申請は管理者の確認待ちです").classes(
+                            "pending-notice w-full q-mt-sm")
+                    for day in range(period["start"], period["end"] + 1):
+                        weekday = date(period["year"], period["month"], day).strftime("%a")
+                        weekday_jp = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木",
+                                      "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
+                        with ui.column().classes("shift-day-row w-full gap-1"):
+                            ui.label(f"{day}日（{weekday_jp}）").classes("shift-day-label")
+                            saved_day = submission["days"].get(
+                                str(day), {"type": "", "start": "", "end": ""})
+                            with ui.element("div").classes("shift-input-grid w-full"):
+                                shift_type = ui.select(
+                                    ["", *shift_submissions.OPTIONS],
+                                    value=saved_day.get("type", ""), label="希望",
+                                ).props("outlined dense options-dense").classes("shift-kind")
+                                with ui.row().classes("shift-time-pair w-full no-wrap gap-1"):
+                                    start = ui.input("開始", value=saved_day.get("start", "")).props(
+                                        "outlined dense type=time").classes("shift-time")
+                                    end = ui.input("終了", value=saved_day.get("end", "")).props(
+                                        "outlined dense type=time").classes("shift-time")
+                            fields[str(day)] = {"type": shift_type, "start": start, "end": end}
+                            ui.button("この日の入力を消す", icon="backspace", on_click=lambda _, t=shift_type, s=start, e=end: (
+                                t.set_value(""), s.set_value(""), e.set_value(""))).props("flat dense color=negative")
+                    ui.label("日別の入力を消した後は、下の提出・変更ボタンで保存してください。").classes("text-xs text-grey-7")
+                    note = ui.textarea("希望・連絡事項（任意）", value=submission["note"]).props(
+                        "outlined autogrow").classes("w-full q-mt-sm")
+
+                    def save_submission():
+                        try:
+                            require_staff_identity(selected_staff)
+                            result = shift_submissions.save(
+                                selected_staff, period["year"], period["month"], period["half"],
+                                {day: {key: field.value for key, field in day_fields.items()}
+                                 for day, day_fields in fields.items()}, note.value)
+                        except ValueError as error:
+                            ui.notify(str(error), type="negative")
+                            return
+                        if result.get("change_request"):
+                            ui.notify("期限後のため、変更申請を送りました", type="warning")
+                        else:
+                            ui.notify("シフト希望を保存しました", type="positive")
+                        render_editor(selected_staff)
+
+                    expired_change = bool(submission["submitted_at"]) and today > date.fromisoformat(
+                        period["deadline"])
+                    button_text = "変更を申請" if expired_change else (
+                        "この内容で変更" if submission["submitted_at"] else "この内容で提出")
+                    ui.button(button_text, icon="send", on_click=save_submission).classes(
+                        "shift-submit w-full q-mt-md")
+                    if submission["submitted_at"]:
+                        def cancel_submission():
+                            with ui.dialog() as cancel_dialog, ui.card().classes("w-full max-w-sm"):
+                                ui.label(f"{staff_display_name(selected_staff)}：{period['label']}").classes("font-bold")
+                                needs_review = current_role() != "owner" and today_jst() > date.fromisoformat(period["deadline"])
+                                ui.label("半月分の取消申請を送ります。承認までは元の提出を残します。" if needs_review else "この半月分の提出を取り消し、未提出に戻します。")
+                                confirm_pin = ui.input("本人の個人PIN", password=True).props("outlined inputmode=numeric") if current_role() != "owner" else None
+                                def execute():
+                                    try:
+                                        require_staff_identity(selected_staff)
+                                        result = shift_submissions.cancel_submission(
+                                            selected_staff, period["year"], period["month"], period["half"],
+                                            pin=confirm_pin.value if confirm_pin else None,
+                                            administrator=current_role() == "owner")
+                                    except ValueError as error:
+                                        ui.notify(str(error), type="negative")
+                                        return
+                                    cancel_dialog.close()
+                                    ui.notify("取消申請を送りました" if result["change_request"] else "提出を取り消しました")
+                                    render_editor(selected_staff)
+                                ui.button("取消申請を送る" if needs_review else "提出を取り消す", on_click=execute).props("color=negative")
+                                ui.button("やめる", on_click=cancel_dialog.close).props("flat")
+                            cancel_dialog.open()
+                        ui.button("半月分の提出を取り消す", icon="cancel", on_click=cancel_submission).props("outline color=negative").classes("w-full q-mt-sm")
+                        ui.label(f"前回提出：{submission['submitted_at'][5:].replace('-', '/')}").classes(
+                            "text-[9px] text-grey-6 text-center w-full q-mt-xs")
+                    ui.button("入力を閉じる", icon="expand_less", on_click=editor.clear).props(
+                        "flat no-caps color=grey-7").classes("w-full q-mt-sm")
+
+            pin_target = {"staff": ""}
+            with ui.dialog() as pin_dialog, ui.card().classes("surface-card q-pa-lg"):
+                ui.label("本人確認").classes("text-lg font-black")
+                pin_message = ui.label().classes("text-[10px] text-grey-6")
+                pin_input = ui.input("個人PIN", password=True, password_toggle_button=True).props(
+                    "outlined inputmode=numeric maxlength=8").classes("w-full q-mt-sm")
+
+                def unlock_editor():
+                    name = pin_target["staff"]
+                    if not shift_submissions.verify_staff_pin(name, pin_input.value):
+                        ui.notify("個人PINが違います", type="negative")
+                        return
+                    pin_dialog.close()
+                    pin_input.value = ""
+                    render_editor(name)
+
+                with ui.row().classes("w-full gap-2 q-mt-md"):
+                    ui.button("やめる", on_click=pin_dialog.close).props(
+                        "flat no-caps").classes("grow")
+                    ui.button("入力を開く", icon="lock_open", on_click=unlock_editor).props(
+                        "unelevated no-caps").classes("grow")
+
+            def open_editor():
+                if not staff.value:
+                    ui.notify("名前を選択してください", type="negative")
+                    return
+                require_staff_identity(staff.value)
+                if identity or current_role() == "owner":
+                    render_editor(identity or staff.value)
+                    return
+                if not shift_submissions.has_staff_pin(staff.value):
+                    ui.notify("個人PINが未設定です。管理者に設定してもらってください", type="warning")
+                    return
+                pin_target["staff"] = staff.value
+                pin_message.set_text(f"{staff_display_name(staff.value)}さんの個人PINを入力してください")
+                pin_input.value = ""
+                pin_dialog.open()
+
+            ui.button("入力を開く", icon="edit_calendar", on_click=open_editor).props(
+                "outline no-caps").classes("w-full q-mt-md")
+
+        if current_role() == "owner":
+            with ui.expansion("シフト案を自動作成", icon="auto_awesome", value=False).classes(
+                    "surface-card w-full q-mt-md"):
+                ui.label("提出された希望だけを使って、偏りを抑えた下書きを作ります").classes(
+                    "text-xs font-black")
+                ui.label("勤務実績には反映されません。人数不足の日も隠さず表示します。").classes(
+                    "text-[9px] text-grey-6 q-mb-sm")
+                with ui.row().classes("w-full gap-2 no-wrap"):
+                    auto_lunch = ui.number(
+                        "ランチ必要人数", value=3, min=0, max=30, step=1,
+                    ).props("outlined dense").classes("grow")
+                    auto_dinner = ui.number(
+                        "ディナー必要人数", value=4, min=0, max=30, step=1,
+                    ).props("outlined dense").classes("grow")
+                auto_thick_days = ui.input(
+                    "厚めにする日（例：5, 12, 20）",
+                ).props("outlined dense").classes("w-full q-mt-sm")
+                ui.label("作成方針").classes("text-[10px] font-black q-mt-sm")
+                auto_priority = ui.toggle(
+                    {"employees": "社員優先", "hourly": "バイト優先"},
+                    value="employees",
+                ).props("unelevated spread no-caps").classes("w-full q-mt-xs")
+                ui.label("社員優先＝人件費を抑える／バイト優先＝提出希望をほぼ通す").classes(
+                    "text-[9px] text-grey-6")
+                auto_preserve_hourly = ui.switch(
+                    "バイトの提出希望を一切削らない", value=False,
+                ).classes("no-cut-switch w-full q-mt-sm")
+                ui.label("ONの場合は必要人数を超えても希望を採用します。手動で休みにした場合だけ外れます").classes(
+                    "text-[9px] text-grey-6")
+                with ui.expansion("細かい条件", icon="tune", value=False).classes(
+                        "shift-advanced-options w-full q-mt-sm"):
+                    auto_deputy_rest = ui.switch(
+                        "副社長はできるだけ休みを多くする", value=True,
+                    ).classes("text-[10px] font-bold")
+                    auto_employee_rest = ui.switch(
+                        "社員Aの休みを1日多めにする", value=False,
+                    ).classes("text-[10px] font-bold")
+                    auto_leader_required = ui.switch(
+                        "店長か副社長のどちらかは出勤にする", value=True,
+                    ).classes("text-[10px] font-bold")
+                    auto_pair_together = ui.switch(
+                        "副社長と社員Aは出勤・休みを極力そろえる", value=True,
+                    ).classes("text-[10px] font-bold")
+                    auto_avoid_streaks = ui.switch(
+                        "5連勤以上をなるべく作らない", value=True,
+                    ).classes("text-[10px] font-bold")
+                ui.separator().classes("q-my-sm")
+                ui.label("作成後の表を直接タップして変更").classes("text-xs font-black")
+                ui.label("変更したマスは固定され、もう一度自動作成しても維持されます").classes(
+                    "text-[9px] text-grey-6")
+                manual_overrides = {}
+                manual_list = ui.label("固定した変更はありません").classes(
+                    "text-[9px] text-grey-6 w-full")
+
+                def update_manual_summary():
+                    summary = [f"{day}日 {staff_display_name(name)}＝{value}"
+                               for day, records in sorted(manual_overrides.items(), key=lambda pair: int(pair[0]))
+                               for name, value in records.items()]
+                    manual_list.set_text("／".join(summary) if summary else "固定した変更はありません")
+
+                def set_manual_override(day, staff_name, shift_type):
+                    ui.run_javascript("""
+                    const el = document.getElementById('auto-shift-editor');
+                    if (el) window.__autoShiftScroll = {left: el.scrollLeft, top: el.scrollTop};
+                    """)
+                    day_key = str(int(day))
+                    if shift_type == "自動":
+                        manual_overrides.get(day_key, {}).pop(staff_name, None)
+                        if not manual_overrides.get(day_key):
+                            manual_overrides.pop(day_key, None)
+                        update_manual_summary()
+                        build_auto_schedule(notify=False)
+                    else:
+                        manual_overrides.setdefault(day_key, {})[staff_name] = shift_type
+                        update_manual_summary()
+                        try:
+                            edited = shift_submissions.update_auto_schedule_cell(
+                                int(year.value), int(month.value), half.value,
+                                day, staff_name, shift_type)
+                        except ValueError as error:
+                            ui.notify(str(error), type="negative")
+                            return
+                        build_auto_schedule(notify=False, existing_result=edited)
+
+                    def restore_shift_scroll():
+                        ui.run_javascript("""
+                        const el = document.getElementById('auto-shift-editor');
+                        const pos = window.__autoShiftScroll;
+                        if (el && pos) el.scrollTo(pos.left, pos.top);
+                        """)
+
+                    ui.timer(.12, restore_shift_scroll, once=True)
+
+                auto_result = ui.column().classes("auto-result-print w-full gap-1 q-mt-sm")
+
+                def build_auto_schedule(notify=True, existing_result=None):
+                    result = existing_result
+                    if result is None:
+                        raw_days = str(auto_thick_days.value or "").replace("、", ",")
+                        thick_days = [value.strip() for value in raw_days.split(",")]
+                        try:
+                            result = shift_submissions.auto_schedule(
+                            int(year.value), int(month.value), half.value,
+                            lunch_required=auto_lunch.value,
+                            dinner_required=auto_dinner.value,
+                            thick_days=thick_days,
+                            deputy_rest_priority=auto_deputy_rest.value,
+                            employee_rest_priority=auto_employee_rest.value,
+                            require_manager_or_deputy=auto_leader_required.value,
+                            align_deputy_employee=auto_pair_together.value,
+                            manual_overrides=manual_overrides,
+                            staffing_priority=auto_priority.value,
+                            avoid_long_streaks=auto_avoid_streaks.value,
+                            preserve_hourly_requests=auto_preserve_hourly.value,
+                            )
+                        except ValueError as error:
+                            ui.notify(str(error), type="negative")
+                            return
+                    auto_result.clear()
+                    with auto_result:
+                        shortage_days = sum(
+                            1 for value in result["days"].values()
+                            if value["shortages"]["lunch"] or value["shortages"]["dinner"])
+                        if shortage_days:
+                            ui.label(f"人数不足の日が {shortage_days}日あります").classes(
+                                "auto-shift-warning w-full")
+                        else:
+                            ui.label("必要人数を満たす案ができました").classes(
+                                "auto-shift-success w-full")
+                        cut_total = sum(value["cut_days"] for value in
+                                        result["preference_summary"].values())
+                        fixed_total = sum(len(value) for value in manual_overrides.values())
+                        with ui.row().classes("auto-result-summary w-full no-wrap gap-2"):
+                            ui.label(f"不足 {shortage_days}日").classes(
+                                "auto-result-chip shortage-chip")
+                            ui.label(f"希望削減 {cut_total}日").classes(
+                                "auto-result-chip cut-chip")
+                            ui.label(f"固定変更 {fixed_total}件").classes(
+                                "auto-result-chip fixed-chip")
+                        period = result["period"]
+                        columns = f"58px repeat({len(shift_submissions.STAFF)},80px) 80px 80px"
+                        with ui.element("div").props("id=auto-shift-editor").classes(
+                                "direct-shift-scroll w-full"):
+                            with ui.element("div").classes("direct-shift-grid").style(
+                                    f"grid-template-columns:{columns}"):
+                                ui.label("日付").classes("direct-head direct-date")
+                                for name in shift_submissions.STAFF:
+                                    ui.label(staff_display_name(name)).classes("direct-head")
+                                ui.label("不足").classes("direct-head")
+                                ui.label("実人数").classes("direct-head")
+                                lunch_totals = {name: 0 for name in shift_submissions.STAFF}
+                                dinner_totals = {name: 0 for name in shift_submissions.STAFF}
+                                for day in range(period["start"], period["end"] + 1):
+                                    value = result["days"][str(day)]
+                                    weekday = date(period["year"], period["month"], day).strftime("%a")
+                                    weekday_jp = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木",
+                                                  "Fri": "金", "Sat": "土", "Sun": "日"}[weekday]
+                                    ui.label(f"{day}\n{weekday_jp}").classes(
+                                        f"direct-day {'saturday' if weekday == 'Sat' else 'sunday' if weekday == 'Sun' else ''}")
+                                    for name in shift_submissions.STAFF:
+                                        staff_plan = value["staff"][name]
+                                        lunch_on, dinner_on = staff_plan["lunch"], staff_plan["dinner"]
+                                        lunch_totals[name] += int(bool(lunch_on))
+                                        dinner_totals[name] += int(bool(dinner_on))
+                                        if lunch_on and dinner_on:
+                                            text, css = "通し", "both-on"
+                                        elif lunch_on:
+                                            text, css = "L", "lunch-on"
+                                        elif dinner_on:
+                                            text, css = "D", "dinner-on"
+                                        else:
+                                            text, css = "休", "day-off"
+                                        fixed = name in manual_overrides.get(str(day), {})
+                                        if (staff_plan.get("requested_type") == "絶対休み"
+                                                and not fixed):
+                                            text, css = "希望休", "absolute-off"
+                                        cut_meals = staff_plan.get("cut_meals", [])
+                                        if cut_meals:
+                                            cut_label = "/".join(cut_meals)
+                                            text += f"\n{cut_label}希望削減"
+                                            css += " preference-cut"
+                                        with ui.button(
+                                                ("📌 " if fixed else "") + text,
+                                        ).props("flat dense no-caps").classes(
+                                                f"direct-shift-cell {css} {'manual-fixed' if fixed else ''}"):
+                                            with ui.menu().props("auto-close"):
+                                                for choice in ("通し", "ランチ", "ディナー", "休み", "自動"):
+                                                    ui.menu_item(
+                                                        "自動作成に戻す" if choice == "自動" else choice,
+                                                        on_click=lambda _=None, d=day, n=name, c=choice:
+                                                        set_manual_override(d, n, c),
+                                                    )
+                                    shortage = value["shortages"]
+                                    shortage_text = " / ".join(part for part in (
+                                        f'L {shortage["lunch"]}' if shortage["lunch"] else "",
+                                        f'D {shortage["dinner"]}' if shortage["dinner"] else "",
+                                    ) if part)
+                                    ui.label(shortage_text or "—").classes("direct-shortage")
+                                    lunch_count = sum(int(plan["lunch"])
+                                                      for plan in value["staff"].values())
+                                    dinner_count = sum(int(plan["dinner"])
+                                                       for plan in value["staff"].values())
+                                    ui.label(f"L {lunch_count}\nD {dinner_count}").classes(
+                                        "direct-current")
+                                ui.label("出勤数").classes("direct-total-label")
+                                for name in shift_submissions.STAFF:
+                                    ui.label(
+                                        f'L {lunch_totals[name]}\nD {dinner_totals[name]}'
+                                    ).classes("direct-staff-total")
+                                ui.label("—").classes("direct-staff-total")
+                                ui.label("—").classes("direct-staff-total")
+                        ui.label("バイト希望の反映状況").classes("text-xs font-black q-mt-sm")
+                        for name, summary in result["preference_summary"].items():
+                            if summary["requested_days"]:
+                                ui.label(
+                                    f'{staff_display_name(name)}：希望 {summary["requested_days"]}日／希望通り {summary["accepted_days"]}日／一部含む削減 {summary["cut_days"]}日'
+                                ).classes("text-[10px] text-grey-7")
+                        ui.label("L＝ランチ、D＝ディナー。これは編集前提の下書きです。").classes(
+                            "text-[9px] text-grey-6 q-mt-xs")
+                        def download_shift_pdf():
+                            filename = (f'シフト案_{period["year"]}-{period["month"]:02d}_'
+                                        f'{period["start"]}-{period["end"]}.pdf')
+                            output = Path("/tmp") / ("preview-" + filename)
+                            create_shift_schedule_pdf(
+                                output, result, tuple(shift_submissions.STAFF))
+                            ui.download(str(output), filename=filename)
+
+                        with ui.row().classes("no-print w-full gap-2 q-mt-sm"):
+                            ui.button(
+                                "PDFとして保存", icon="picture_as_pdf",
+                                on_click=download_shift_pdf,
+                            ).props("unelevated no-caps color=negative").classes("grow")
+                            ui.button(
+                                "紙に印刷", icon="print",
+                                on_click=lambda: ui.run_javascript("window.print()"),
+                            ).props("outline no-caps").classes("grow")
+                    if notify:
+                        ui.notify("シフト案を作成しました", type="positive")
+
+                ui.button("シフト案を作る", icon="auto_awesome", on_click=build_auto_schedule).props(
+                    "unelevated no-caps").classes("shift-submit w-full q-mt-sm")
+                ui.button("固定した変更を踏まえて再作成", icon="refresh",
+                          on_click=build_auto_schedule).props(
+                    "outline no-caps").classes("w-full q-mt-sm")
+
+            with ui.expansion("管理者用・提出状況", icon="fact_check", value=False).classes(
+                    "surface-card w-full q-mt-md"):
+                overview = ui.column().classes("w-full gap-1")
+
+                def show_overview():
+                    try:
+                        period = shift_submissions.period(
+                            int(year.value), int(month.value), half.value)
+                        submitted = shift_submissions.period_submissions(
+                            int(year.value), int(month.value), half.value)
+                        pending = shift_submissions.pending_changes(
+                            int(year.value), int(month.value), half.value)
+                    except ValueError as error:
+                        ui.notify(str(error), type="negative")
+                        return
+                    overview.clear()
+                    with overview:
+                        ui.label(period["label"]).classes("text-sm font-black q-mb-xs")
+                        ui.label("未入力の日は休み扱い。未提出とは区別して表示します").classes(
+                            "text-[9px] text-grey-6 q-mb-sm")
+                        if pending:
+                            ui.label(f"変更申請　{len(pending)}件").classes(
+                                "text-sm font-black text-warning q-mt-sm q-mb-xs")
+                            for name, request in pending.items():
+                                with ui.card().classes("change-request-card w-full q-pa-md q-mb-sm"):
+                                    ui.label(staff_display_name(name)).classes("text-sm font-black")
+                                    ui.label(f"申請日時 {request.get('requested_at', '')[5:].replace('-', '/')}").classes(
+                                        "text-[9px] text-grey-6")
+                                    changes = []
+                                    original_days = request.get("original_days", {})
+                                    requested_days = request.get("days", {})
+
+                                    def shift_text(raw):
+                                        value = shift_submissions._day_value(raw)
+                                        text = value["type"] or "休み"
+                                        if value["start"] or value["end"]:
+                                            text += f" {value['start']}〜{value['end']}"
+                                        return text
+
+                                    for request_day in sorted(
+                                            set(original_days) | set(requested_days), key=int):
+                                        before = shift_submissions._day_value(
+                                            original_days.get(request_day, {}))
+                                        after = shift_submissions._day_value(
+                                            requested_days.get(request_day, {}))
+                                        if before != after:
+                                            changes.append(
+                                                f"{request_day}日：{shift_text(before)} → {shift_text(after)}")
+                                    if request.get("original_note", "") != request.get("note", ""):
+                                        changes.append(
+                                            f"連絡事項：{request.get('original_note') or 'なし'} → {request.get('note') or 'なし'}")
+                                    ui.label("半月分の提出取消 → 承認すると未提出に戻ります" if request.get("action") == "cancel" else ("／".join(changes) if changes else "全日希望なし")).classes(
+                                        "request-summary q-mt-sm")
+                                    with ui.row().classes("w-full gap-2 q-mt-sm"):
+                                        ui.button("拒否", icon="close", on_click=lambda _, staff_name=name: (
+                                            shift_submissions.review_change(
+                                                staff_name, period["year"], period["month"],
+                                                period["half"], False),
+                                            show_overview()
+                                        )).props("outline no-caps color=negative").classes("grow")
+                                        ui.button("承認", icon="check", on_click=lambda _, staff_name=name: (
+                                            shift_submissions.review_change(
+                                                staff_name, period["year"], period["month"],
+                                                period["half"], True),
+                                            show_overview()
+                                        )).props("unelevated no-caps color=positive").classes("grow")
+                        ui.html(submission_overview_html(period, submitted), sanitize=False).classes("w-full")
+
+                ui.button("選択中の期間を確認", icon="refresh", on_click=show_overview).props(
+                    "outline no-caps").classes("w-full q-mb-sm")
+
+        ui.add_css("""
+        .compact-overview{width:100%;border:1px solid #d6ded8;border-radius:10px;overflow:hidden}.compact-overview table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:clamp(8px,1.8vw,12px)}.compact-overview th,.compact-overview td{border:1px solid #d6ded8;text-align:center;padding:3px 1px;overflow-wrap:anywhere;line-height:1.2;height:30px}.compact-overview th{background:#edf2ee;font-weight:bold}.compact-overview .compact-date{width:36px}.compact-overview small{display:block;font-size:inherit}.compact-overview .lunch{background:#ffe0b2}.compact-overview .dinner{background:#d6eaff}.compact-overview .both{background:#d5edcf}.compact-overview .off{background:#f7e2e0}.compact-overview .empty{background:#f8f9f8;color:#888}
+        .shift-guide{border:0!important;border-radius:24px!important;color:white!important;background:linear-gradient(135deg,#173D30,#4F7C68)!important}
+        .shift-day-row{padding:9px 0;border-bottom:1px solid #EDF1EE}.shift-day-label{font-size:11px;font-weight:900}.shift-input-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:start}.shift-kind{width:100%}.shift-time-pair{width:100%}.shift-time{width:50%;min-width:0;flex:1}.shift-time .q-field__label{font-size:9px}.pending-notice{padding:9px 11px;border-radius:10px;background:#FFF2D9;color:#966317;font-size:10px;font-weight:900}.shift-submit{background:#2F7457!important;color:#fff!important;border-radius:14px!important;font-weight:900!important}.change-request-card{border:1px solid #E6B65E!important;border-radius:17px!important;box-shadow:none!important;background:#FFFBF2!important}.request-summary{padding:8px 10px;border-radius:9px;background:#fff;font-size:9px;line-height:1.6}.admin-day-card{border:1px solid #E1E9E4!important;border-radius:17px!important;box-shadow:none!important}.admin-shift-row{padding:5px 0;border-top:1px solid #F0F2F1}.admin-staff-name{width:64px;flex:0 0 64px;font-size:10px;font-weight:900}.admin-shift-value{min-width:0;padding:5px 8px;border-radius:8px;font-size:9px;font-weight:800}.admin-shift-value.available{background:#DFF2E7;color:#276D49}.admin-shift-value.absolute-off{background:#FFE2E2;color:#A43E3E}.admin-shift-value.day-off{background:#F1F3F2;color:#7C8781}.admin-shift-value.not-submitted{background:#FFF0D7;color:#9A671D}
+        .shift-sheet-scroll{width:100%;max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.shift-sheet{border-collapse:separate;border-spacing:0;min-width:max-content;font-size:9px}.shift-sheet th,.shift-sheet td{border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;text-align:center}.shift-sheet thead th{position:sticky;z-index:4;background:#243E34;color:#fff}.shift-sheet thead tr:first-child th{top:0;height:36px}.shift-sheet thead tr:nth-child(2) th{top:36px;height:28px}.date-head{left:0;z-index:7!important;min-width:58px}.staff-head{min-width:156px;font-size:10px}.lunch-head,.dinner-head{width:78px;min-width:78px}.lunch-head{background:#315F72!important}.dinner-head{background:#795B35!important}.date-cell{position:sticky;left:0;z-index:3;width:58px;height:48px;background:#F5F7F5;color:#34443C}.date-cell b,.date-cell span{display:block}.date-cell b{font-size:13px}.date-cell.saturday{color:#2E6FA2;background:#EFF7FC}.date-cell.sunday{color:#B24B4B;background:#FFF2F1}.shift-cell{width:78px;max-width:78px;height:48px;padding:4px;white-space:normal;font-weight:800;line-height:1.25}.shift-cell.lunch-on{background:#D9F0FA;color:#245D75}.shift-cell.dinner-on{background:#F8E8C9;color:#79551F}.shift-cell.absolute-off{background:#F8DADA;color:#9A3C3C}.shift-cell.not-submitted{color:#A08760;background:#FFF9ED;font-size:8px}.shift-cell.day-off{background:#FAFBFA}
+        .auto-shift-warning,.auto-shift-success{padding:9px 11px;border-radius:10px;font-size:10px;font-weight:900}.auto-shift-warning{background:#FFF0D7;color:#946018}.auto-shift-success{background:#DFF2E7;color:#276D49}.auto-shift-sheet .staff-head{min-width:80px}.auto-shift-sheet .shift-cell{width:80px;max-width:80px}.auto-shift-sheet .both-on{background:#E6E0F7;color:#5B438D}.auto-shift-sheet .shortage{background:#FFF1EE;color:#B2463E}.auto-shift-sheet small{display:block;font-size:7px;line-height:1.2;margin-top:2px}
+        .no-cut-switch{padding:9px 12px;border:1px solid #D6E7DD;border-radius:13px;background:#F2F9F5;color:#194D38;font-size:11px;font-weight:950}.shift-advanced-options{border:1px solid #E2E8E4!important;border-radius:13px!important;background:#FAFBFA!important}.shift-advanced-options>.q-expansion-item__container>.q-item{min-height:45px!important;font-size:11px;font-weight:900}.auto-result-summary{margin:4px 0 2px}.auto-result-chip{flex:1;padding:8px 4px;border-radius:11px;text-align:center;font-size:9px;font-weight:950}.shortage-chip{background:#FFF0E7;color:#A14D27}.cut-chip{background:#FFEAEA;color:#A33D42}.fixed-chip{background:#FFF6D9;color:#87631A}
+        .direct-shift-scroll{max-height:68vh;overflow:auto;border:1px solid #DDE5E0;border-radius:14px;background:#fff}.direct-shift-grid{display:grid;min-width:max-content;align-items:stretch}.direct-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:center;min-height:38px;padding:4px;border-right:1px solid #496057;background:#243E34;color:#fff;font-size:9px;font-weight:900}.direct-date{left:0;z-index:7}.direct-day{position:sticky;left:0;z-index:3;display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;background:#F5F7F5;color:#34443C;text-align:center;font-size:11px;font-weight:900}.direct-day.saturday{color:#2E6FA2;background:#EFF7FC}.direct-day.sunday{color:#B24B4B;background:#FFF2F1}.direct-shift-cell{width:80px!important;min-height:48px!important;white-space:pre-line!important;line-height:1.2!important;border-radius:0!important;border-right:1px solid #E1E7E3!important;border-bottom:1px solid #E1E7E3!important;font-size:10px!important;font-weight:900!important}.direct-shift-cell.lunch-on{background:#D9F0FA!important;color:#245D75!important}.direct-shift-cell.dinner-on{background:#F8E8C9!important;color:#79551F!important}.direct-shift-cell.both-on{background:#E6E0F7!important;color:#5B438D!important}.direct-shift-cell.day-off{background:#FAFBFA!important;color:#8B9690!important}.direct-shift-cell.absolute-off{background:#222!important;color:#fff!important}.direct-shift-cell.preference-cut{background:#FFE2E2!important;color:#A43E3E!important;box-shadow:inset 0 0 0 2px #E7A0A0!important;font-size:8px!important}.direct-shift-cell.manual-fixed{box-shadow:inset 0 0 0 2px #E6A91A!important}.direct-shortage,.direct-current,.direct-staff-total,.direct-total-label{display:flex;align-items:center;justify-content:center;min-height:48px;white-space:pre-line;border-right:1px solid #E1E7E3;border-bottom:1px solid #E1E7E3;font-size:9px;font-weight:900;text-align:center}.direct-shortage{background:#FFF1EE;color:#B2463E}.direct-current{background:#E8F2EC;color:#245D45}.direct-staff-total,.direct-total-label{background:#E2ECE7;color:#173D30}.direct-total-label{position:sticky;left:0;z-index:3}
+        @media print{@page{size:A4 landscape;margin:7mm}body *{visibility:hidden!important}.auto-result-print,.auto-result-print *{visibility:visible!important}.auto-result-print{position:absolute!important;inset:0!important;width:100%!important;margin:0!important}.direct-shift-scroll{max-height:none!important;overflow:visible!important;border:0!important}.direct-shift-grid{transform-origin:top left;transform:scale(.72)}.no-print{display:none!important}}
+        """)

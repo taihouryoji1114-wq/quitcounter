@@ -54,6 +54,8 @@ import pages.workout
 import pages.chess_coach
 import pages.system_status
 
+import store_preview.register
+
 ui.run(
     title="R-BASE",
     host="0.0.0.0",

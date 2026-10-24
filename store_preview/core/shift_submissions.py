@@ -1,0 +1,555 @@
+"""Half-month shift availability submissions for store staff."""
+
+from __future__ import annotations
+
+from calendar import monthrange
+from datetime import date, datetime
+import base64
+import hashlib
+import hmac
+import os
+import secrets
+import unicodedata
+
+from store_preview.core.data import data
+from store_preview.core.clock import today_jst
+from store_preview.core.staffing import StaffingManager
+
+
+class ShiftSubmissionManager:
+    OPTIONS = ("通し", "ランチ", "ディナー", "絶対休み")
+    STAFF = StaffingManager.STAFF
+
+    def __init__(self, data_manager=None):
+        self._data_manager = data_manager or data
+
+    @staticmethod
+    def period(year, month, half):
+        year, month = int(year), int(month)
+        if half not in {"first", "second"}:
+            raise ValueError("提出期間が正しくありません。")
+        last = monthrange(year, month)[1]
+        start, end = (1, 15) if half == "first" else (16, last)
+        label = f"{year}年{month}月 {'前半（1〜15日）' if half == 'first' else f'後半（16〜{last}日）'}"
+        if half == "first":
+            previous_month = 12 if month == 1 else month - 1
+            previous_year = year - 1 if month == 1 else year
+            deadline = date(previous_year, previous_month, 20)
+        else:
+            deadline = date(year, month, 5)
+        return {"key": f"{year:04d}-{month:02d}-{half}", "year": year, "month": month,
+                "half": half, "start": start, "end": end, "label": label,
+                "deadline": deadline.isoformat()}
+
+    def submission(self, staff, year, month, half):
+        self._staff(staff)
+        period = self.period(year, month, half)
+        stored = self._data_manager.data.get("store_shift_submissions", {}).get(
+            period["key"], {}).get(staff, {})
+        raw_days = dict(stored.get("days", {})) if isinstance(stored, dict) else {}
+        days = {str(day): self._day_value(value) for day, value in raw_days.items()}
+        pending = self._data_manager.data.get("store_shift_change_requests", {}).get(
+            period["key"], {}).get(staff, {})
+        return {"staff": staff, "period": period,
+                "days": days,
+                "note": str(stored.get("note", "")) if isinstance(stored, dict) else "",
+                "submitted_at": str(stored.get("submitted_at", "")) if isinstance(stored, dict) else "",
+                "pending_change": dict(pending) if isinstance(pending, dict)
+                and pending.get("status") == "pending" else {}}
+
+    def save(self, staff, year, month, half, days, note=""):
+        self._staff(staff)
+        period = self.period(year, month, half)
+        cleaned = {}
+        for day in range(period["start"], period["end"] + 1):
+            value = self._day_value((days or {}).get(str(day), {}))
+            if value["type"] and value["type"] not in self.OPTIONS:
+                raise ValueError(f"{day}日の希望が正しくありません。")
+            if value["start"] and not self._valid_time(value["start"]):
+                raise ValueError(f"{day}日の開始時間が正しくありません。")
+            if value["end"] and not self._valid_time(value["end"]):
+                raise ValueError(f"{day}日の終了時間が正しくありません。")
+            if value["type"] or value["start"] or value["end"]:
+                cleaned[str(day)] = value
+        record = {"days": cleaned, "note": str(note or "").strip()[:500],
+                  "submitted_at": datetime.now().isoformat(timespec="minutes")}
+        submissions = self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
+            period["key"], {})
+        existing = submissions.get(staff)
+        if existing and today_jst() > date.fromisoformat(period["deadline"]):
+            request = {**record, "status": "pending", "requested_at": record["submitted_at"],
+                       "original_days": dict(existing.get("days", {})),
+                       "original_note": str(existing.get("note", ""))}
+            self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(
+                period["key"], {})[staff] = request
+            self._data_manager.save()
+            return {**request, "change_request": True}
+        submissions[staff] = record
+        self._data_manager.save()
+        return {**record, "change_request": False}
+
+    def period_submissions(self, year, month, half):
+        period = self.period(year, month, half)
+        stored = self._data_manager.data.get("store_shift_submissions", {}).get(period["key"], {})
+        return {staff: dict(record) for staff, record in stored.items()
+                if staff in self.STAFF and isinstance(record, dict)}
+
+    def cancel_submission(self, staff, year, month, half, pin=None, administrator=False):
+        self._staff(staff)
+        if not administrator and not self.verify_staff_pin(staff, pin):
+            raise ValueError("個人PINが違います。")
+        period = self.period(year, month, half)
+        records = self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(period["key"], {})
+        if staff not in records:
+            raise ValueError("取り消す提出がありません。")
+        now = datetime.now().isoformat(timespec="minutes")
+        if not administrator and today_jst() > date.fromisoformat(period["deadline"]):
+            self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(period["key"], {})[staff] = {
+                "action": "cancel", "status": "pending", "requested_at": now}
+            self._data_manager.save()
+            return {"change_request": True}
+        self._archive_cancelled(staff, period["key"], now)
+        request = self._data_manager.data.get("store_shift_change_requests", {}).get(period["key"], {}).get(staff)
+        if request and request.get("status") == "pending":
+            request["status"] = "cancelled"
+        self._data_manager.save()
+        return {"change_request": False}
+
+    def _archive_cancelled(self, staff, key, now):
+        record = self._data_manager.data.get("store_shift_submissions", {}).get(key, {}).pop(staff, None)
+        if record is not None:
+            self._data_manager.data.setdefault("store_shift_cancelled_archive", []).append(
+                {"staff": staff, "period": key, "record": record, "cancelled_at": now})
+        self._data_manager.data.get("store_auto_shift_drafts", {}).pop(key, None)
+
+    def pending_changes(self, year, month, half):
+        period = self.period(year, month, half)
+        stored = self._data_manager.data.get("store_shift_change_requests", {}).get(
+            period["key"], {})
+        return {staff: dict(record) for staff, record in stored.items()
+                if staff in self.STAFF and isinstance(record, dict)
+                and record.get("status") == "pending"}
+
+    @staticmethod
+    def _clean_pin(pin):
+        value = unicodedata.normalize("NFKC", str(pin or "")).strip()
+        if not value.isdigit() or not 4 <= len(value) <= 8:
+            raise ValueError("個人PINは4〜8桁の数字で設定してください。")
+        return value
+
+    def has_staff_pin(self, staff):
+        self._staff(staff)
+        stored = self._data_manager.data.get("store_shift_staff_pins", {}).get(staff, {})
+        return bool(isinstance(stored, dict) and stored.get("salt") and stored.get("digest"))
+
+    def set_staff_pin(self, staff, pin):
+        """Set a staff PIN and keep an authenticated encrypted admin-viewable copy."""
+        self._staff(staff)
+        value = self._clean_pin(pin)
+        salt = secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", value.encode("utf-8"), salt.encode("ascii"), 120_000,
+        ).hex()
+        self._data_manager.data.setdefault("store_shift_staff_pins", {})[staff] = {
+            "salt": salt, "digest": digest, "sealed_pin": self._seal_pin(value),
+        }
+        self._data_manager.save()
+
+    @staticmethod
+    def _pin_secret():
+        return os.environ.get("STORAGE_SECRET", "habitory-local-pin-key").encode("utf-8")
+
+    @classmethod
+    def _seal_pin(cls, value):
+        nonce = secrets.token_bytes(16)
+        key = hashlib.sha256(cls._pin_secret() + nonce).digest()
+        encrypted = bytes(byte ^ key[index % len(key)]
+                          for index, byte in enumerate(value.encode("utf-8")))
+        payload = nonce + encrypted
+        tag = hmac.new(cls._pin_secret(), payload, hashlib.sha256).digest()[:16]
+        return base64.urlsafe_b64encode(payload + tag).decode("ascii")
+
+    @classmethod
+    def _open_pin(cls, sealed):
+        try:
+            raw = base64.urlsafe_b64decode(str(sealed).encode("ascii"))
+            payload, tag = raw[:-16], raw[-16:]
+            if not hmac.compare_digest(
+                    tag, hmac.new(cls._pin_secret(), payload, hashlib.sha256).digest()[:16]):
+                return None
+            nonce, encrypted = payload[:16], payload[16:]
+            key = hashlib.sha256(cls._pin_secret() + nonce).digest()
+            return bytes(byte ^ key[index % len(key)]
+                         for index, byte in enumerate(encrypted)).decode("utf-8")
+        except (ValueError, UnicodeError):
+            return None
+
+    def staff_pin_for_admin(self, staff):
+        """Return a PIN only for the administrator settings UI."""
+        self._staff(staff)
+        stored = self._data_manager.data.get("store_shift_staff_pins", {}).get(staff, {})
+        if not isinstance(stored, dict):
+            return None
+        return self._open_pin(stored.get("sealed_pin", ""))
+
+    def verify_staff_pin(self, staff, pin):
+        self._staff(staff)
+        try:
+            value = self._clean_pin(pin)
+        except ValueError:
+            return False
+        stored = self._data_manager.data.get("store_shift_staff_pins", {}).get(staff, {})
+        if not isinstance(stored, dict) or not stored.get("salt") or not stored.get("digest"):
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", value.encode("utf-8"), stored["salt"].encode("ascii"), 120_000,
+        ).hex()
+        return hmac.compare_digest(digest, stored["digest"])
+
+    def auto_schedule(self, year, month, half, lunch_required=3, dinner_required=4,
+                      thick_days=None, deputy_rest_priority=True,
+                      employee_rest_priority=False,
+                      require_manager_or_deputy=True,
+                      align_deputy_employee=True, manual_overrides=None,
+                      staffing_priority="employees", avoid_long_streaks=True,
+                      preserve_hourly_requests=False):
+        """Create a fair, editable draft from submitted availability.
+
+        This never writes attendance records. It is deliberately a proposal so
+        an owner can inspect shortages and adjust the roster before using it.
+        """
+        period = self.period(year, month, half)
+        submissions = self.period_submissions(year, month, half)
+        try:
+            lunch_required = max(0, int(lunch_required))
+            dinner_required = max(0, int(dinner_required))
+        except (TypeError, ValueError) as error:
+            raise ValueError("必要人数は数字で入力してください。") from error
+        thick = {int(value) for value in (thick_days or [])
+                 if str(value).strip().isdigit()}
+        manual = {str(day): dict(values) for day, values in
+                  (manual_overrides or {}).items() if isinstance(values, dict)}
+        if staffing_priority not in {"employees", "hourly"}:
+            raise ValueError("シフトの優先方針が正しくありません。")
+        assigned = {name: 0 for name in self.STAFF}
+        days = {}
+
+        salaried = tuple(StaffingManager.SALARIED_STAFF)
+        all_days = list(range(period["start"], period["end"] + 1))
+        rest_days = {}
+        for index, name in enumerate(salaried):
+            record = submissions.get(name, {})
+            absolute = {day for day in all_days if self._day_value(
+                record.get("days", {}).get(str(day), {}))["type"] == "絶対休み"}
+            # Salaried staff work ten full days per half by default. A long
+            # second half can contain sixteen days, so it needs six days off.
+            needed = max(0, (len(all_days) - 10) - len(absolute))
+            available = [day for day in all_days if day not in absolute and day not in thick]
+            available += [day for day in all_days if day not in absolute and day in thick]
+            if align_deputy_employee and name == "社員A" and "副社長" in rest_days:
+                preferred = [day for day in rest_days["副社長"] if day not in absolute]
+                chosen = preferred[:needed]
+                chosen += [day for day in available if day not in chosen][:needed - len(chosen)]
+            else:
+                # Spread days off across the half instead of placing five
+                # together; this prevents long streaks without making it an
+                # absolute rule when staffing is tight.
+                rotated = available[index:] + available[:index]
+                if name == "店長" and "副社長" in rest_days:
+                    non_deputy_rest = [day for day in rotated
+                                       if day not in rest_days["副社長"]]
+                    if len(non_deputy_rest) >= needed:
+                        rotated = non_deputy_rest
+                chosen = []
+                while len(chosen) < needed and rotated:
+                    target = round(len(chosen) * (len(rotated) - 1) / max(1, needed - 1))
+                    candidate = rotated[target]
+                    if candidate not in chosen:
+                        chosen.append(candidate)
+                    else:
+                        chosen.extend(day for day in rotated if day not in chosen)
+                        chosen = chosen[:needed]
+            rest_days[name] = absolute | set(chosen)
+
+        def priority(name, day=None):
+            penalty = 0
+            if deputy_rest_priority and name == "副社長":
+                penalty += 100
+            if employee_rest_priority and name == "社員A":
+                penalty += 30
+            if avoid_long_streaks and day is not None:
+                previous = [days.get(str(value), {}).get("staff", {}).get(name, {})
+                            for value in range(max(period["start"], day - 4), day)]
+                if len(previous) == 4 and all(item.get("lunch") or item.get("dinner")
+                                              for item in previous):
+                    penalty += 1000
+            return assigned[name] + penalty, assigned[name], self.STAFF.index(name)
+
+        for day in range(period["start"], period["end"] + 1):
+            extra = 1 if day in thick else 0
+            day_plan = {name: {"lunch": False, "dinner": False, "time": ""}
+                        for name in self.STAFF}
+            shortages = {}
+            for meal, required in (("lunch", lunch_required + extra),
+                                   ("dinner", dinner_required + extra)):
+                label = "ランチ" if meal == "lunch" else "ディナー"
+                selected = []
+                locked = manual.get(str(day), {})
+                forced_on = {name for name, override in locked.items()
+                             if override in {label, "通し"}}
+                salaried_candidates = []
+                for name in salaried:
+                    override = str(locked.get(name, ""))
+                    if override == "休み" or (override and override not in {label, "通し"}):
+                        continue
+                    if day in rest_days[name]:
+                        continue
+                    value = self._day_value(submissions.get(name, {}).get(
+                        "days", {}).get(str(day), {}))
+                    salaried_candidates.append((name, value if value["type"] else {
+                        "type": "通し", "start": "", "end": ""}))
+                candidates = []
+                for name, record in submissions.items():
+                    if name in salaried:
+                        continue
+                    override = str(locked.get(name, ""))
+                    if override and override not in {label, "通し"}:
+                        continue
+                    value = self._day_value(record.get("days", {}).get(str(day), {}))
+                    if value["type"] not in {label, "通し"}:
+                        continue
+                    candidates.append((name, value))
+                candidates.sort(key=lambda pair: priority(pair[0], day))
+                salaried_candidates.sort(key=lambda pair: priority(pair[0], day))
+                if staffing_priority == "hourly" or preserve_hourly_requests:
+                    # In hourly-priority mode submitted requests are accepted
+                    # first, even when that makes a deliberately thick shift.
+                    selected += candidates
+                    selected += salaried_candidates[:max(0, required - len(selected))]
+                else:
+                    selected += salaried_candidates
+                    selected += candidates[:max(0, required - len(selected))]
+                selected_names = {name for name, _value in selected}
+                forced_additions = set()
+                for name, override in locked.items():
+                    if name in selected_names or override not in {label, "通し"}:
+                        continue
+                    selected.append((name, {"type": override, "start": "", "end": ""}))
+                    forced_additions.add(name)
+                if require_manager_or_deputy and required and not any(
+                        pair[0] in {"副社長", "店長"} for pair in selected):
+                    leader = next((pair for pair in [*salaried_candidates, *candidates]
+                                   if pair[0] in {"副社長", "店長"}), None)
+                    if leader:
+                        replace_index = next((index for index in range(len(selected) - 1, -1, -1)
+                                              if selected[index][0] not in forced_on), None)
+                        if replace_index is None or preserve_hourly_requests:
+                            selected.append(leader)
+                        else:
+                            selected[replace_index] = leader
+                selected_names = {name for name, _value in selected}
+                pair_names = {"副社長", "社員A"}
+                if align_deputy_employee and required >= 2 and len(
+                        selected_names & pair_names) == 1:
+                    missing_name = (pair_names - selected_names).pop()
+                    missing = next((pair for pair in [*salaried_candidates, *candidates]
+                                    if pair[0] == missing_name), None)
+                    if missing:
+                        replace_index = next((index for index in range(len(selected) - 1, -1, -1)
+                                              if selected[index][0] not in pair_names
+                                              and selected[index][0] != "店長"
+                                              and selected[index][0] not in forced_on), None)
+                        if replace_index is not None and not preserve_hourly_requests:
+                            selected[replace_index] = missing
+                        elif preserve_hourly_requests:
+                            selected.append(missing)
+                for name, value in selected:
+                    day_plan[name][meal] = True
+                    day_plan[name]["time"] = (
+                        f"{value['start'] or '—'}〜{value['end'] or '—'}"
+                        if value["start"] or value["end"] else value["type"])
+                    if name not in forced_additions:
+                        assigned[name] += 1
+                shortages[meal] = max(0, required - len(selected))
+
+            # Salaried staff are full-day workers by default. Only an explicit
+            # manual Lunch/Dinner instruction may create a half-day assignment.
+            locked = manual.get(str(day), {})
+            for name in salaried:
+                override = str(locked.get(name, ""))
+                if override in {"ランチ", "ディナー", "休み"}:
+                    continue
+                if day_plan[name]["lunch"] or day_plan[name]["dinner"]:
+                    day_plan[name]["lunch"] = True
+                    day_plan[name]["dinner"] = True
+                    day_plan[name]["time"] = "通し"
+            shortages = {
+                "lunch": max(0, lunch_required + extra - sum(
+                    bool(value["lunch"]) for value in day_plan.values())),
+                "dinner": max(0, dinner_required + extra - sum(
+                    bool(value["dinner"]) for value in day_plan.values())),
+            }
+            for name in self.STAFF:
+                requested_type = self._day_value(
+                    submissions.get(name, {}).get("days", {}).get(str(day), {})
+                )["type"]
+                requested_meals = set()
+                if requested_type in {"ランチ", "通し"}:
+                    requested_meals.add("L")
+                if requested_type in {"ディナー", "通し"}:
+                    requested_meals.add("D")
+                assigned_meals = ({"L"} if day_plan[name]["lunch"] else set()) | (
+                    {"D"} if day_plan[name]["dinner"] else set())
+                day_plan[name]["requested_type"] = requested_type
+                day_plan[name]["cut_meals"] = [
+                    meal for meal in ("L", "D")
+                    if meal in requested_meals - assigned_meals
+                ]
+            days[str(day)] = {"staff": day_plan, "shortages": shortages,
+                              "thick": day in thick}
+        assigned = {name: sum(
+            int(value["staff"][name]["lunch"]) + int(value["staff"][name]["dinner"])
+            for value in days.values()) for name in self.STAFF}
+        preference_summary = {}
+        for name in self.STAFF:
+            if name in salaried:
+                continue
+            record_days = submissions.get(name, {}).get("days", {})
+            requested = {day for day in all_days if self._day_value(
+                record_days.get(str(day), {}))["type"] in {"通し", "ランチ", "ディナー"}}
+            accepted = {day for day in requested
+                        if not days[str(day)]["staff"][name]["cut_meals"]}
+            partially_accepted = {day for day in requested
+                                  if (days[str(day)]["staff"][name]["lunch"]
+                                      or days[str(day)]["staff"][name]["dinner"])
+                                  and days[str(day)]["staff"][name]["cut_meals"]}
+            preference_summary[name] = {"requested_days": len(requested),
+                                        "accepted_days": len(accepted),
+                                        "partially_accepted_days": len(partially_accepted),
+                                        "cut_days": len(requested - accepted)}
+        result = {"period": period, "days": days, "assigned": assigned,
+                  "preference_summary": preference_summary,
+                  "settings": {"lunch_required": lunch_required,
+                               "dinner_required": dinner_required,
+                               "thick_days": sorted(thick),
+                               "deputy_rest_priority": bool(deputy_rest_priority),
+                               "employee_rest_priority": bool(employee_rest_priority),
+                               "require_manager_or_deputy": bool(require_manager_or_deputy),
+                               "align_deputy_employee": bool(align_deputy_employee),
+                               "staffing_priority": staffing_priority,
+                               "avoid_long_streaks": bool(avoid_long_streaks),
+                               "preserve_hourly_requests": bool(preserve_hourly_requests),
+                               "manual_overrides": manual,
+                               "salaried_rest_days": {name: sorted(value)
+                                                       for name, value in rest_days.items()}}}
+        self._data_manager.data.setdefault("store_auto_shift_drafts", {})[
+            period["key"]] = result
+        self._data_manager.save()
+        return result
+
+    def update_auto_schedule_cell(self, year, month, half, day, staff, shift_type):
+        """Edit exactly one draft cell without recalculating any coworker."""
+        self._staff(staff)
+        period = self.period(year, month, half)
+        day_key = str(int(day))
+        if not period["start"] <= int(day) <= period["end"]:
+            raise ValueError("日付が作成期間の外です。")
+        if shift_type not in {"通し", "ランチ", "ディナー", "休み"}:
+            raise ValueError("勤務区分が正しくありません。")
+        draft = self._data_manager.data.get("store_auto_shift_drafts", {}).get(period["key"])
+        if not isinstance(draft, dict) or day_key not in draft.get("days", {}):
+            raise ValueError("先にシフト案を作成してください。")
+        plan = draft["days"][day_key]["staff"][staff]
+        plan["lunch"] = shift_type in {"通し", "ランチ"}
+        plan["dinner"] = shift_type in {"通し", "ディナー"}
+        plan["time"] = shift_type
+        requested = plan.get("requested_type", "")
+        requested_meals = (({"L"} if requested in {"通し", "ランチ"} else set()) |
+                           ({"D"} if requested in {"通し", "ディナー"} else set()))
+        assigned_meals = (({"L"} if plan["lunch"] else set()) |
+                          ({"D"} if plan["dinner"] else set()))
+        plan["cut_meals"] = [meal for meal in ("L", "D")
+                             if meal in requested_meals - assigned_meals]
+
+        manual = draft.setdefault("settings", {}).setdefault("manual_overrides", {})
+        manual.setdefault(day_key, {})[staff] = shift_type
+        required_extra = 1 if draft["days"][day_key].get("thick") else 0
+        lunch_required = int(draft["settings"].get("lunch_required", 0)) + required_extra
+        dinner_required = int(draft["settings"].get("dinner_required", 0)) + required_extra
+        staff_plans = list(draft["days"][day_key]["staff"].values())
+        draft["days"][day_key]["shortages"] = {
+            "lunch": max(0, lunch_required - sum(bool(value["lunch"]) for value in staff_plans)),
+            "dinner": max(0, dinner_required - sum(bool(value["dinner"]) for value in staff_plans)),
+        }
+        draft["assigned"] = {name: sum(
+            int(value["staff"][name]["lunch"]) + int(value["staff"][name]["dinner"])
+            for value in draft["days"].values()) for name in self.STAFF}
+        for name, summary in draft.get("preference_summary", {}).items():
+            requested_days = [value["staff"][name] for value in draft["days"].values()
+                              if value["staff"][name].get("requested_type") in
+                              {"通し", "ランチ", "ディナー"}]
+            summary["accepted_days"] = sum(not value.get("cut_meals")
+                                           for value in requested_days)
+            summary["partially_accepted_days"] = sum(
+                bool(value["lunch"] or value["dinner"]) and bool(value.get("cut_meals"))
+                for value in requested_days)
+            summary["cut_days"] = sum(bool(value.get("cut_meals"))
+                                      for value in requested_days)
+        self._data_manager.save()
+        return draft
+
+    def review_change(self, staff, year, month, half, approved):
+        self._staff(staff)
+        period = self.period(year, month, half)
+        requests = self._data_manager.data.setdefault("store_shift_change_requests", {}).setdefault(
+            period["key"], {})
+        request = requests.get(staff)
+        if not isinstance(request, dict) or request.get("status") != "pending":
+            raise ValueError("確認待ちの変更申請がありません。")
+        now = datetime.now().isoformat(timespec="minutes")
+        request["status"] = "approved" if approved else "rejected"
+        request["reviewed_at"] = now
+        if approved and request.get("action") == "cancel":
+            self._archive_cancelled(staff, period["key"], now)
+        elif approved:
+            self._data_manager.data.setdefault("store_shift_submissions", {}).setdefault(
+                period["key"], {})[staff] = {
+                    "days": dict(request.get("days", {})),
+                    "note": str(request.get("note", "")),
+                    "submitted_at": now,
+                    "approved_change": True,
+                }
+        if approved:
+            from store_preview.core.shift_board import ShiftBoardManager
+            ShiftBoardManager(self._data_manager).apply_approved_change(staff, year, month, half)
+        self._data_manager.save()
+        return True
+
+    def _staff(self, staff):
+        if staff not in self.STAFF:
+            raise ValueError("スタッフを選択してください。")
+
+    @classmethod
+    def _day_value(cls, value):
+        if isinstance(value, dict):
+            shift_type = str(value.get("type", "")).strip()
+            start = str(value.get("start", "")).strip()
+            end = str(value.get("end", "")).strip()
+        else:
+            shift_type, start, end = str(value or "").strip(), "", ""
+        if shift_type == "出勤可":
+            shift_type = "通し"
+        elif shift_type == "休み":
+            shift_type = "絶対休み"
+        return {"type": shift_type, "start": start, "end": end}
+
+    @staticmethod
+    def _valid_time(value):
+        try:
+            datetime.strptime(value, "%H:%M")
+            return True
+        except ValueError:
+            return False
+
+
+shift_submissions = ShiftSubmissionManager()

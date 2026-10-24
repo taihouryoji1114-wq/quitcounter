@@ -132,6 +132,17 @@ def portal():
                 ui.space()
                 ui.icon("chevron_right").classes("text-2xl text-grey-7")
 
+        if current_role() == "owner":
+            with ui.card().classes("habit-card w-full q-pa-lg q-mb-md cursor-pointer").on("click", lambda _: ui.navigate.to("/store-preview")):
+                with ui.row().classes("w-full items-center no-wrap"):
+                    ui.icon("science").classes("text-4xl text-orange-8 q-mr-md")
+                    with ui.column().classes("gap-0"):
+                        ui.label("店舗管理・確認用").classes("text-xl font-bold")
+                        ui.label("新しい画面を試す · 本番とは別データ").classes("text-grey-7 text-sm")
+                    ui.space()
+                    ui.icon("chevron_right")
+
+
         with ui.card().classes(
             "habit-card w-full q-pa-lg q-mb-md cursor-pointer"
         ).on("click", lambda _: ui.navigate.to("/store-ops")):

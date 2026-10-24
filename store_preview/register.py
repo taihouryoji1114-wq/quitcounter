@@ -1,0 +1,19 @@
+"""Frozen preview snapshot; never imports production store managers."""
+import store_preview.pages.store_fire_training
+import store_preview.pages.store_shift_board
+import store_preview.pages.store_dashboard
+import store_preview.pages.store_personal
+import store_preview.pages.store_cleaning
+import store_preview.pages.store_common
+import store_preview.pages.store_settings
+import store_preview.pages.store_checklist
+import store_preview.pages.store_operations
+import store_preview.pages.store_manual_admin
+import store_preview.pages.store_manual
+import store_preview.pages.store_live_board
+import store_preview.pages.store_events
+import store_preview.pages.store_chanhaya
+import store_preview.pages.store_sections
+import store_preview.pages.store_cleaning_admin
+import store_preview.pages.shift_submission
+import store_preview.pages.purchase_list

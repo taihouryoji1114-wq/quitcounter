@@ -7,3 +7,6 @@ __pycache__/
 # 個人の記録はこのMacだけに保存し、GitHubへ送らない
 data.json
 data.json.*
+
+store-preview.json
+store-preview.json.*

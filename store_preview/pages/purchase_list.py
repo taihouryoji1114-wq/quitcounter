@@ -1,0 +1,96 @@
+from nicegui import ui
+from store_preview.pages.store_live_board import format_live_board_update_time
+
+def inventory_check_label(item):
+    value = item.get("last_inventory_check_at")
+    return format_live_board_update_time(value).replace("最終更新", "在庫確認", 1) if value else "在庫確認日時：記録なし"
+
+
+from store_preview.core.auth import current_role, require_app_access
+from store_preview.core.clock import operational_date_jst
+from store_preview.core.store_ops import store_ops
+from store_preview.core.theme import Theme
+from store_preview.pages.store_common import store_header_actions
+
+
+@ui.page("/store-preview/purchase-list")
+def purchase_list_page():
+    if not require_app_access("store_ops"):
+        return
+    Theme.page("仕入れリスト｜店舗運営", app_name="store-ops")
+    content = Theme.shell("仕入れリスト", "この画面を見ながら、書いてある数だけ仕入れる",
+                          back_to="/store-preview", action=store_header_actions,
+                          brand="店舗運営")
+    with content:
+        if current_role() != "owner":
+            with ui.card().classes("surface-card w-full q-pa-xl text-center"):
+                ui.icon("lock").classes("text-4xl text-grey-5")
+                ui.label("この画面は管理者専用です").classes("text-base font-black q-mt-sm")
+            return
+        record_date = operational_date_jst().isoformat()
+        all_purchase_items = store_ops.purchase_list(record_date, include_completed=True)
+        purchase_items = [item for item in all_purchase_items if not item.get("completed")]
+        completed_items = [item for item in all_purchase_items if item.get("completed")]
+
+        def set_completed(item_id, completed):
+            store_ops.set_purchase_item_completed(item_id, completed, record_date)
+            ui.notify("保存しました", type="positive")
+
+        if not purchase_items:
+            with ui.card().classes("surface-card w-full q-pa-xl text-center"):
+                ui.icon("shopping_basket").classes("text-5xl text-grey-4")
+                ui.label("未完了の仕入れはありません").classes("text-lg font-black q-mt-sm")
+                ui.label("在庫不足の商品は自動表示され、完了済みは下から戻せます").classes(
+                    "text-[10px] text-grey-6 q-mt-xs")
+        else:
+            ui.label("今日仕入れるもの").classes("text-[10px] font-black text-primary q-ml-xs")
+            category_order = {value["name"]: index for index, value in enumerate(
+                store_ops.inventory_categories())}
+            grouped = {}
+            for item in purchase_items:
+                grouped.setdefault(item.get("category") or "その他", []).append(item)
+            for category in sorted(grouped, key=lambda name: (
+                    category_order.get(name, 999), name)):
+                category_items = grouped[category]
+                with ui.card().classes("purchase-card w-full q-pa-lg q-mb-sm"):
+                    with ui.row().classes("w-full items-center no-wrap q-mb-xs"):
+                        ui.icon("folder").classes("purchase-category-icon")
+                        ui.label(category).classes("purchase-category-title grow")
+                        ui.label(f"{len(category_items)}品").classes("purchase-category-count")
+                    for item in category_items:
+                        quantity = item["purchase_quantity"]
+                        if isinstance(quantity, float) and quantity.is_integer():
+                            quantity = int(quantity)
+                        with ui.row().classes("purchase-row w-full items-center no-wrap"):
+                            ui.checkbox(value=False, on_change=lambda e, selected=item:
+                                        set_completed(selected["id"], e.value)).props(
+                                            "dense color=positive aria-label='仕入れ完了'")
+                            with ui.column().classes("gap-0 grow min-w-0"):
+                                ui.label(item["name"]).classes("text-sm font-black")
+                                ui.label(inventory_check_label(item)).classes("text-xs text-grey-7")
+                                subcategory = item.get("subcategory")
+                                if subcategory:
+                                    ui.label(subcategory).classes("purchase-subcategory")
+                                ui.label(
+                                    f"現在 {item.get('current_stock')} / 最低 {item.get('reorder_point')} {item.get('unit', '個')}"
+                                ).classes("text-[9px] text-grey-6")
+                            ui.label(f"{quantity}{item.get('unit', '個')}").classes(
+                                "text-lg font-black text-negative")
+            ui.label("在庫数が最低在庫数を上回ると、自動でリストから外れます").classes(
+                "text-[9px] text-grey-6 text-center w-full q-mt-sm")
+        if completed_items:
+            with ui.expansion(f"表示時点の完了済み　{len(completed_items)}品", icon="undo",
+                              value=False).classes("purchase-completed w-full q-mt-md"):
+                ui.label("チェックを外すと未完了に戻せます。表示位置は移動しません").classes(
+                    "text-[9px] text-grey-6 q-mb-xs")
+                for item in completed_items:
+                    with ui.row().classes("purchase-row w-full items-center no-wrap"):
+                        ui.icon("check_circle").classes("text-positive")
+                        with ui.column().classes("grow gap-0"):
+                            ui.label(item["name"]).classes("text-sm font-black")
+                            ui.label(inventory_check_label(item)).classes("text-xs text-grey-7")
+                        ui.checkbox("完了", value=True, on_change=lambda e, selected=item:
+                                    set_completed(selected["id"], e.value)).props("dense color=positive")
+        ui.add_css("""
+        .purchase-card{border-radius:22px!important;border:1px solid #E1E9E4!important;box-shadow:0 8px 24px rgba(39,55,45,.05)!important}.purchase-category-icon{color:#47745F}.purchase-category-title{font-size:15px;font-weight:950;color:#17382C}.purchase-category-count{padding:3px 8px;border-radius:999px;background:#E8F1EC;color:#315E49;font-size:9px;font-weight:900}.purchase-subcategory{display:inline-flex;width:max-content;margin:2px 0;padding:1px 6px;border-radius:999px;background:#F0F3F1;color:#64736B;font-size:8px;font-weight:900}.purchase-row{padding:12px 0;border-bottom:1px solid #EDF1EE}.purchase-row:last-child{border-bottom:0}.purchase-completed{border:1px solid #E1E9E4!important;border-radius:18px!important;background:#fff!important}.purchase-completed .q-expansion-item__content{padding:5px 14px 12px}
+        """)
