@@ -4,7 +4,7 @@ from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.data import data
 from core.financials import financials
-from core.sales_targets import build_target_plan, save_target_plan, plan_results, weekly_adjustment, with_historical_targets, recommend_target, automatic_target_plan
+from core.sales_targets import build_target_plan, save_target_plan, plan_results, weekly_adjustment, with_historical_targets, recommend_target, automatic_target_plan, use_automatic_landing
 from core.theme import Theme
 
 
@@ -80,10 +80,11 @@ def render_sales_targets(month):
         closed = data.data.get('landing_forecast_settings',{}).get('closed_dates',[])
         suggestion = recommend_target(financials.sales_records(),month,today_jst(),closed)
         forecast = suggestion['forecast']
-        automatic = not plans
+        landing_mode = data.data.get('sales_target_modes', {}).get(month) == 'landing'
+        automatic = landing_mode or not plans
         if automatic:
-            generated = automatic_target_plan(financials.sales_records(),month,today_jst(),closed)
-            if generated:plans = [generated]
+            generated = automatic_target_plan(financials.sales_records(),month,today_jst(),closed,use_landing=landing_mode)
+            plans = ([generated] + plans) if generated else []
         def money(value):return '記録を増やそう' if value is None else f'¥{value:,}'
         with ui.element('div').classes('target-summary q-mb-sm'):
             for label,value,icon in [('このままなら',forecast['landing'],'trending_up'),('おすすめ目標',suggestion['target'],'flag')]:
@@ -105,6 +106,9 @@ def render_sales_targets(month):
         def save(value,source):
             if not require_permission('future_dashboard','/mirai-kessan/input'):return
             try:
+                if source == 'manual' and value == 0:
+                    use_automatic_landing(data,month)
+                    manual.close();ui.notify('着地予測を目標に使います',type='positive');board.refresh();return
                 records = financials.sales_records()
                 closure = data.data.get('landing_forecast_settings',{}).get('closed_dates',[])
                 current = recommend_target(records,month,today_jst(),closure) if source == 'recommended' else None
@@ -121,14 +125,15 @@ def render_sales_targets(month):
 
         with ui.dialog() as manual, ui.card().classes('target-dialog q-pa-md'):
             ui.label('自分で目標を決める').classes('text-xl font-bold')
-            goal = ui.number('月の売上目標',value=plans[0]['monthly_target'] if plans else None,min=1,step=10000).props('outlined prefix=¥').classes('w-full')
+            goal = ui.number('月の売上目標',value=0 if landing_mode else plans[0]['monthly_target'] if plans else None,min=0,step=10000).props('outlined prefix=¥').classes('w-full')
+            ui.label('0円で保存すると、着地予測を自動で使います').classes('text-sm')
             ui.button('この金額で保存',icon='save',on_click=lambda:save(goal.value,'manual')).classes('w-full target-action')
             ui.button('戻る',on_click=manual.close).props('flat').classes('w-full')
         use = ui.button('おすすめを使う',icon='auto_awesome',on_click=lambda:save(suggestion['target'],'recommended')).classes('w-full target-action q-mb-sm')
         if suggestion['target'] is None:use.disable()
         ui.button('自分で決める',icon='edit',on_click=manual.open).props('outline').classes('w-full target-action q-mb-sm')
         if plans:
-            ui.label(f"{'自動目標' if automatic else '今の目標'}　¥{plans[0]['monthly_target']:,}").classes('font-bold q-mb-sm')
+            ui.label(f"{'着地予測の目標' if landing_mode else '自動目標' if automatic else '今の目標'}　¥{plans[0]['monthly_target']:,}").classes('font-bold q-mb-sm')
         else:ui.label('売上を入力すると、自動目標と週間表が出ます').classes('text-sm q-mb-sm')
 
         if automatic and plans:ui.label('自動目標は実績に合わせて更新されます。固定する場合は「おすすめを使う」で保存。').classes('text-xs q-mb-sm')
@@ -171,7 +176,7 @@ def print_targets(plan_id: str, start: str = '', month: str = ''):
     if plan_id == 'automatic':
         try:
             month = date.fromisoformat((month or today_jst().strftime('%Y-%m'))+'-01').strftime('%Y-%m')
-            plan = automatic_target_plan(financials.sales_records(),month,today_jst(),data.data.get('landing_forecast_settings',{}).get('closed_dates',[]))
+            plan = automatic_target_plan(financials.sales_records(),month,today_jst(),data.data.get('landing_forecast_settings',{}).get('closed_dates',[]),use_landing=data.data.get('sales_target_modes',{}).get(month)=='landing')
         except (ValueError,TypeError):
             ui.label('対象月を選び直してください');return
     else:

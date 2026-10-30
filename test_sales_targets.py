@@ -142,3 +142,18 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(sum(r['target'] for r in plan['rows']),3000)
         self.assertEqual(records,before)
         self.assertIsNone(automatic_target_plan([],'2026-11',date(2026,10,30)))
+
+    def test_zero_mode_preserves_history_and_positive_save_restores(self):
+        from core.sales_targets import use_automatic_landing,automatic_target_plan
+        manager=SimpleNamespace(data={},save=lambda:None)
+        original=save_target_plan(manager,build_target_plan([],'2026-11',9000,date(2026,10,30)))
+        use_automatic_landing(manager,'2026-11')
+        self.assertEqual(manager.data['sales_target_modes']['2026-11'],'landing')
+        self.assertEqual(manager.data['sales_target_plans'][original['id']]['monthly_target'],9000)
+        records=[{'date':f'2026-11-{d:02d}','amount':100} for d in range(1,16)]
+        automatic=automatic_target_plan(records,'2026-11',date(2026,11,16),use_landing=True)
+        self.assertEqual(automatic['monthly_target'],3000)
+        self.assertEqual(automatic_target_plan(records,'2026-11',date(2026,11,16))['monthly_target'],3075)
+        save_target_plan(manager,build_target_plan(records,'2026-11',4000,date(2026,11,16)))
+        self.assertEqual(manager.data['sales_target_modes']['2026-11'],'saved')
+        self.assertEqual(len(manager.data['sales_target_plans']),2)

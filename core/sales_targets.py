@@ -72,6 +72,7 @@ def save_target_plan(manager, plan):
     saved['id'] = uuid4().hex
     saved['created_at'] = now_jst().isoformat()
     manager.data.setdefault('sales_target_plans', {})[saved['id']] = saved
+    manager.data.setdefault('sales_target_modes', {})[saved['month']] = 'saved'
     manager.save()
     return saved
 
@@ -134,11 +135,18 @@ def recommend_target(records, month, as_of, closed_dates=()):
                 sample_days=len(recent_days), version='remaining-5pct-v1')
 
 
-def automatic_target_plan(records, month, as_of, closed_dates=()):
+def automatic_target_plan(records, month, as_of, closed_dates=(), use_landing=False):
     """A read-only current plan, usable without a saved manual target."""
     suggestion = recommend_target(records, month, as_of, closed_dates)
     if suggestion['target'] is None:
         return None
-    plan = build_target_plan(records, month, suggestion['target'], as_of, closed_dates)
+    target = suggestion['forecast']['landing'] if use_landing else suggestion['target']
+    plan = build_target_plan(records, month, target, as_of, closed_dates)
     plan.update(id='automatic', source='automatic', created_at=as_of.isoformat()+'T00:00:00')
     return plan
+
+
+def use_automatic_landing(manager, month):
+    date.fromisoformat(month+'-01')
+    manager.data.setdefault('sales_target_modes', {})[month] = 'landing'
+    manager.save()
