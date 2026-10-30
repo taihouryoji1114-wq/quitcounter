@@ -39,7 +39,7 @@ class TargetTests(unittest.TestCase):
 
 class WeeklyAdjustmentTests(unittest.TestCase):
     def plan(self):
-        return {'month':'2026-11','closed_dates':[], 'rows':[{'date':f'2026-11-{d:02d}','target':100,'lunch':40,'dinner':60} for d in range(1,8)]}
+        return {'month':'2026-11','as_of':'2026-11-01','closed_dates':[], 'rows':[{'date':f'2026-11-{d:02d}','target':100,'lunch':40,'dinner':60} for d in range(1,8)]}
     def test_shortfall_and_excess_preserve_week_total(self):
         from core.sales_targets import weekly_adjustment
         from copy import deepcopy
@@ -73,3 +73,28 @@ class WeeklyAdjustmentTests(unittest.TestCase):
         self.assertIn('新目標',html)
         self.assertIn('¥650',html)
         self.assertNotIn('手書き用',html)
+
+    def test_past_actual_without_target_is_visible_in_print(self):
+        from unittest.mock import patch
+        from pages.sales_targets import target_table
+        p=self.plan();p['as_of']='2026-11-06';p['rows']=p['rows'][5:]
+        with patch('pages.sales_targets.today_jst',return_value=date(2026,11,6)),patch('pages.sales_targets.financials.sales_records',return_value=[{'date':'2026-11-01','amount':12345}]),patch('pages.sales_targets.data',SimpleNamespace(data={})):
+            html=target_table(p,'2026-11-01',True)
+        self.assertIn('¥12,345',html)
+        self.assertIn('目標未設定',html)
+        self.assertIn('入力済み1日分',html)
+
+    def test_historical_targets_and_no_double_adjustment(self):
+        from core.sales_targets import with_historical_targets, weekly_adjustment
+        from copy import deepcopy
+        old=self.plan();old['created_at']='2026-11-01T10:00:00'
+        current=self.plan();current.update(as_of='2026-11-06',created_at='2026-11-06T10:00:00');current['rows']=current['rows'][5:]
+        original=deepcopy(current)
+        later=deepcopy(old);later['created_at']='2026-11-07T10:00:00';later['rows'][0]['target']=9999
+        merged=with_historical_targets(current,[old,later])
+        self.assertEqual(merged['rows'][0]['target'],100)
+        self.assertTrue(merged['rows'][0]['historical_target'])
+        result=weekly_adjustment(merged,[{'date':'2026-11-01','amount':50}],date(2026,11,1),date(2026,11,6))
+        self.assertEqual(result['difference'],-50)
+        self.assertEqual(sum(r['revised_target'] or 0 for r in result['rows']),200)
+        self.assertEqual(original,current)

@@ -93,9 +93,26 @@ def weekly_adjustment(plan, records, start, as_of):
             if start.isoformat() <= r['date'] < end.isoformat()]
     difference = sum(r['difference'] for r in rows if r['difference'] is not None)
     remaining = [r for r in rows if r['date'] >= as_of.isoformat()]
-    required = max(0, sum(r['target'] for r in remaining) - difference)
+    adjustment = sum(r['difference'] for r in rows if r['difference'] is not None and not r.get('historical_target'))
+    required = max(0, sum(r['target'] for r in remaining) - adjustment)
     revised = dict(zip((r['date'] for r in remaining), allocate(required, [r['target'] for r in remaining])))
     return {'rows': [dict(r, revised_target=revised.get(r['date'])) for r in rows],
             'difference': difference,
             'missing': sum(r['actual'] is None and r['date'] < as_of.isoformat() for r in rows),
             'unallocated': required if not remaining else 0}
+
+
+def with_historical_targets(plan, saved_plans):
+    """Fill past gaps from earlier saved versions, without rewriting the plan."""
+    result = deepcopy(plan)
+    rows = {r['date']:r for r in result['rows']}
+    cutoff = plan.get('created_at', plan['as_of']+'T23:59:59')
+    earlier = sorted((p for p in saved_plans if p.get('month') == plan['month']
+                      and p.get('created_at', '') < cutoff),
+                     key=lambda p:p.get('created_at',''), reverse=True)
+    for previous in earlier:
+        for row in previous['rows']:
+            if row['date'] < plan['as_of'] and row['date'] not in rows:
+                rows[row['date']] = dict(row, historical_target=True)
+    result['rows'] = sorted(rows.values(), key=lambda r:r['date'])
+    return result
