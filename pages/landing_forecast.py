@@ -7,15 +7,13 @@ from core.landing_forecast import monthly_forecast, save_snapshot
 
 def render_landing_forecast(month, price_change=0):
     from pages.sales_targets import render_sales_targets
-    ui.button('利益剰余金・返済後の将来予測', icon='trending_up', on_click=lambda: ui.navigate.to('/mirai-kessan/forecast/wealth')).classes('w-full q-mb-md')
     render_sales_targets(month)
     settings=data.data.get('landing_forecast_settings',{})
     def money(value):
         return '算出待ち' if value is None else f'¥{value:,.0f}'
     result=monthly_forecast(financials.sales_records(),month,today_jst(),[],settings.get('closed_dates',[]))
-    if result['missing']:
-        ui.label(f"売上未入力 {len(result['missing'])}日分を推定に含みます").classes('finance-warning text-xs')
-    with ui.expansion('月末着地の詳細・過去の予測',icon='query_stats').classes('w-full'):
+    ui.button('もっと先の利益を見る', icon='trending_up', on_click=lambda: ui.navigate.to('/mirai-kessan/forecast/wealth')).props('outline').classes('w-full q-mb-sm')
+    with ui.expansion('予測を詳しく見る',icon='query_stats').classes('w-full'):
         with ui.card().classes('surface-card w-full q-pa-lg q-mb-md'):
             ui.label('実績から見る、今月の着地').classes('text-xl font-bold')
             ui.label('前日までの入力済み売上で計算。今日の途中入力は予測の基準に含めません。').classes('text-xs finance-readable')

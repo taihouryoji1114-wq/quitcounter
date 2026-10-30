@@ -4,7 +4,7 @@ from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.data import data
 from core.financials import financials
-from core.sales_targets import build_target_plan, save_target_plan, plan_results, weekly_adjustment, with_historical_targets
+from core.sales_targets import build_target_plan, save_target_plan, plan_results, weekly_adjustment, with_historical_targets, recommend_target, automatic_target_plan
 from core.theme import Theme
 
 
@@ -73,69 +73,111 @@ body:has(.target-print-sheet){background:#fff!important;color:#111!important}
 
 def render_sales_targets(month):
     ui.add_css(TARGET_CSS)
+    ui.add_css('.target-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}.target-amount{font-size:clamp(19px,5.2vw,30px);font-weight:800;overflow-wrap:anywhere}.target-action{min-height:54px!important;font-size:16px!important}.target-dialog{width:900px;max-width:96vw!important;background:#171717!important;color:#fff!important}.target-dialog .target-table{min-width:680px}.target-week-scroll{width:100%;overflow-x:auto}')
     @ui.refreshable
     def board():
         plans = sorted((p for p in data.data.get('sales_target_plans',{}).values() if p['month']==month), key=lambda p:p['created_at'],reverse=True)
-        with ui.card().classes('surface-card w-full q-pa-md q-mb-md'):
-            ui.label('月の目標から、毎日の目標へ').classes('text-xl font-bold')
-            ui.label('予測は見込み、目標は目指す売上。目標を保存してから週間表を印刷できます。').classes('finance-readable text-sm')
-            goal = ui.number('月間売上目標（税込）', value=plans[0]['monthly_target'] if plans else None,min=1,step=10000).props('outlined prefix=¥').classes('w-full')
-            def save():
-                try:
-                    plan = build_target_plan(financials.sales_records(),month,goal.value or 0,today_jst(),data.data.get('landing_forecast_settings',{}).get('closed_dates',[]))
-                    save_target_plan(data,plan)
-                except (ValueError,TypeError) as error:
-                    ui.notify(str(error),type='warning');return
-                ui.notify('目標を保存しました。以前の版も残しています。',type='positive');board.refresh()
-            ui.button('目標を作成・保存' if not plans else '目標を見直して新しい版を保存',on_click=save,icon='save').classes('w-full')
-            if not plans:
-                ui.label('目標額は自動では決めません。達成したい月間売上を入力してください。').classes('finance-readable text-sm');return
-            choice = ui.select({p['id']:f"{p['created_at'][:16].replace('T',' ')} 保存・¥{p['monthly_target']:,}" for p in plans},value=plans[0]['id'],label='保存した目標').classes('w-full').props('outlined')
-            @ui.refreshable
-            def details():
-                p = next(p for p in plans if p['id']==choice.value)
-                recent = {r['date']:r for r in financials.sales_records() if r.get('amount') is not None and r['date'] < today_jst().isoformat()}
-                current_actual = sum(r['amount'] for key,r in recent.items() if key.startswith(month))
-                ui.label(f"月間目標 ¥{p['monthly_target']:,} ／ 現在の入力済み実績 ¥{current_actual:,}").classes('font-bold')
-                ui.label(f"実績との差額 あと ¥{max(0,p['monthly_target']-current_actual):,}").classes('font-bold')
-                if p['missing']:
-                    ui.label(f"作成時の未入力 {len(p['missing'])}日を ¥{p['imputed']:,} と推定し、残りの目標 ¥{p['remaining']:,} を配分しています。上の実績には推定を含みません。").classes('finance-warning text-sm')
-                ui.label('保存済みの目標は自動変更しません。売上や休業日を変更した場合、必要に応じて新しい版を保存してください。').classes('finance-readable text-xs')
-                if p['equal_allocation']:ui.label('日別の実績不足のため、営業日に均等配分しています。').classes('finance-warning text-sm')
-                if any(r['split_basis']=='実績不足のため半分ずつ' for r in p['rows']):ui.label('時間帯の実績がない日はランチ・ディナー半分ずつ。客数は記録がある場合だけ表示します。').classes('finance-warning text-sm')
-                results = plan_results(with_historical_targets(p, plans),financials.sales_records(),today_jst())
-                compared = [r for r in results if r['actual'] is not None]
-                yesterday = (today_jst()-timedelta(days=1)).isoformat()
-                previous = next((r for r in results if r['date']==yesterday),None)
-                if previous:
-                    ui.label('昨日の差額：'+(f"{previous['difference']:+,}円" if previous['difference'] is not None else '売上未入力')).classes('font-bold')
-                ui.label(f"実績入力済み {len(compared)}日分の累計差額：{sum(r['difference'] for r in compared):+,}円").classes('text-sm')
-                default = max(month+'-01', min((today_jst()-timedelta(days=today_jst().weekday())).isoformat(),p['rows'][-1]['date'])) if p['rows'] else month+'-01'
-                start = ui.input('週間表の開始日（7日間）',value=default).props('type=date outlined').classes('w-full')
-                table=ui.html('',sanitize=False).classes('w-full')
-                def show():
-                    try:table.set_content(target_table(p,start.value))
-                    except (ValueError,TypeError):ui.notify('開始日を入力してください',type='warning')
-                start.on_value_change(show);show()
+        closed = data.data.get('landing_forecast_settings',{}).get('closed_dates',[])
+        suggestion = recommend_target(financials.sales_records(),month,today_jst(),closed)
+        forecast = suggestion['forecast']
+        automatic = not plans
+        if automatic:
+            generated = automatic_target_plan(financials.sales_records(),month,today_jst(),closed)
+            if generated:plans = [generated]
+        def money(value):return '記録を増やそう' if value is None else f'¥{value:,}'
+        with ui.element('div').classes('target-summary q-mb-sm'):
+            for label,value,icon in [('このままなら',forecast['landing'],'trending_up'),('おすすめ目標',suggestion['target'],'flag')]:
+                with ui.card().classes('surface-card w-full q-pa-sm gap-1'):
+                    ui.icon(icon).classes('finance-gold text-xl')
+                    ui.label(label).classes('text-sm')
+                    ui.label(money(value)).classes('target-amount')
+        if forecast['missing']:
+            ui.button(f"売上未入力 {len(forecast['missing'])}日を確認",icon='edit_note',on_click=lambda:ui.navigate.to('/mirai-kessan/tasks?month='+month)).props('flat').classes('w-full')
+        with ui.dialog() as reason, ui.card().classes('target-dialog q-pa-md'):
+            ui.label('どう決めた？').classes('text-xl font-bold')
+            ui.label(suggestion['reason'])
+            ui.label('前年同月の同曜日、または直近12週の売上を参考にしています。昨日までの実績で計算し、天気・予約・祝日はまだ含めていません。')
+            ui.label(f"直近12週の記録：{suggestion['sample_days']}日。金額は税込です。")
+            if suggestion['target'] is None:ui.label('記録不足、残りの営業日なし、または過去の月のため、新しい目標は提案していません。')
+            ui.button('閉じる',on_click=reason.close).classes('w-full')
+        ui.button('どう決めた？',icon='help_outline',on_click=reason.open).props('flat dense').classes('w-full')
+
+        def save(value,source):
+            if not require_permission('future_dashboard','/mirai-kessan/input'):return
+            try:
+                records = financials.sales_records()
+                closure = data.data.get('landing_forecast_settings',{}).get('closed_dates',[])
+                current = recommend_target(records,month,today_jst(),closure) if source == 'recommended' else None
+                # Adopt exactly the amount shown; refresh if records changed in another tab.
+                if current and current['target'] != value:
+                    ui.notify('実績が更新されました。新しいおすすめを確認してください',type='warning');board.refresh();return
+                plan = build_target_plan(records,month,value or 0,today_jst(),closure)
+                plan['source'] = source
+                if current:plan['recommendation'] = {k:current[k] for k in ('reason','uplift','sample_days','version')}
+                save_target_plan(data,plan)
+            except (ValueError,TypeError) as error:
+                ui.notify(str(error),type='warning');return
+            manual.close();ui.notify('目標を保存しました',type='positive');board.refresh()
+
+        with ui.dialog() as manual, ui.card().classes('target-dialog q-pa-md'):
+            ui.label('自分で目標を決める').classes('text-xl font-bold')
+            goal = ui.number('月の売上目標',value=plans[0]['monthly_target'] if plans else None,min=1,step=10000).props('outlined prefix=¥').classes('w-full')
+            ui.button('この金額で保存',icon='save',on_click=lambda:save(goal.value,'manual')).classes('w-full target-action')
+            ui.button('戻る',on_click=manual.close).props('flat').classes('w-full')
+        use = ui.button('おすすめを使う',icon='auto_awesome',on_click=lambda:save(suggestion['target'],'recommended')).classes('w-full target-action q-mb-sm')
+        if suggestion['target'] is None:use.disable()
+        ui.button('自分で決める',icon='edit',on_click=manual.open).props('outline').classes('w-full target-action q-mb-sm')
+        if plans:
+            ui.label(f"{'自動目標' if automatic else '今の目標'}　¥{plans[0]['monthly_target']:,}").classes('font-bold q-mb-sm')
+        else:ui.label('売上を入力すると、自動目標と週間表が出ます').classes('text-sm q-mb-sm')
+
+        if automatic and plans:ui.label('自動目標は実績に合わせて更新されます。固定する場合は「おすすめを使う」で保存。').classes('text-xs q-mb-sm')
+        with ui.dialog() as week, ui.card().classes('target-dialog q-pa-md'):
+            with ui.row().classes('w-full justify-between items-center'):
+                ui.label('週間表・印刷').classes('text-xl font-bold')
+                ui.button(icon='close',on_click=week.close).props('flat round aria-label=閉じる')
+            if plans:
+                with ui.expansion('以前の目標を選ぶ',icon='history').classes('w-full'):
+                    choice = ui.select({p['id']:f"{p['created_at'][:16].replace('T',' ')}・¥{p['monthly_target']:,}" for p in plans},value=plans[0]['id'],label='表示する目標').props('outlined').classes('w-full')
+                default = max(month+'-01', min((today_jst()-timedelta(days=today_jst().weekday())).isoformat(),plans[0]['rows'][-1]['date'])) if plans[0]['rows'] else month+'-01'
+                start = ui.input('開始日',value=default).props('type=date outlined').classes('w-full')
+                with ui.row().classes('w-full no-wrap'):
+                    def move(days):
+                        try:start.value=(date.fromisoformat(start.value)+timedelta(days=days)).isoformat()
+                        except (ValueError,TypeError):ui.notify('開始日を選んでください',type='warning')
+                    ui.button('前の週',icon='chevron_left',on_click=lambda:move(-7)).props('outline').classes('grow')
+                    ui.button('次の週',icon='chevron_right',on_click=lambda:move(7)).props('outline').classes('grow')
                 def print_view():
                     try:day=date.fromisoformat(start.value).isoformat()
-                    except (ValueError,TypeError):ui.notify('開始日を入力してください',type='warning');return
-                    ui.navigate.to(f"/mirai-kessan/targets/print/{p['id']}?start={day}")
-                ui.button('週間目標を印刷',icon='print',on_click=print_view).classes('w-full')
-                with ui.expansion('配分の根拠',icon='info').classes('w-full'):
-                    ui.label('日別は売上予測の比率で配分。時間帯は直近12週の同曜日（不足時は全曜日）の売上比。必要客数はその期間の客単価が続く場合の切り上げ目安です。')
-                    for r in p['rows']:
-                        ui.label(f"{r['date']}：{r['basis']}／{r['split_basis']}").classes('text-xs')
-            choice.on_value_change(details.refresh);details()
+                    except (ValueError,TypeError):ui.notify('開始日を選んでください',type='warning');return
+                    ui.navigate.to(f"/mirai-kessan/targets/print/{choice.value}?start={day}&month={month}")
+                ui.button('印刷する',icon='print',on_click=print_view).classes('w-full target-action')
+                ui.label('横に動かすと、新目標まで見られます').classes('text-xs')
+                with ui.element('div').classes('target-week-scroll'):
+                    table = ui.html('',sanitize=False).classes('w-full')
+                def show():
+                    plan = next(p for p in plans if p['id']==choice.value)
+                    try:table.set_content(target_table(plan,start.value))
+                    except (ValueError,TypeError):ui.notify('開始日を選んでください',type='warning')
+                choice.on_value_change(show);start.on_value_change(show);show()
+        weekly_button=ui.button('週間表・印刷',icon='print',on_click=week.open).classes('w-full target-action q-mb-sm')
+        if not plans:weekly_button.disable()
     board()
 
 
 @ui.page('/mirai-kessan/targets/print/{plan_id}')
-def print_targets(plan_id: str, start: str = ''):
+def print_targets(plan_id: str, start: str = '', month: str = ''):
     if not require_app_access('future_financials') or not require_permission('future_dashboard','/mirai-kessan/input'):return
-    plan=data.data.get('sales_target_plans',{}).get(plan_id)
+    if plan_id == 'automatic':
+        try:
+            month = date.fromisoformat((month or today_jst().strftime('%Y-%m'))+'-01').strftime('%Y-%m')
+            plan = automatic_target_plan(financials.sales_records(),month,today_jst(),data.data.get('landing_forecast_settings',{}).get('closed_dates',[]))
+        except (ValueError,TypeError):
+            ui.label('対象月を選び直してください');return
+    else:
+        plan=data.data.get('sales_target_plans',{}).get(plan_id)
     if not plan:
-        ui.label('保存された目標が見つかりません');return
+        ui.label('目標がないか、自動目標を作るための実績が不足しています');return
     try:start=date.fromisoformat(start or plan['as_of']).isoformat()
     except ValueError:
         ui.label('開始日が正しくありません');return
@@ -145,7 +187,7 @@ def print_targets(plan_id: str, start: str = ''):
         ui.button('印刷・PDF保存',icon='print',on_click=lambda:ui.run_javascript('window.print()'))
     with ui.column().classes('target-print-sheet w-full').style('max-width:1100px;margin:auto;padding:20px'):
         ui.html('<h1>みんなで目指す、今週の売上</h1>',sanitize=False)
-        ui.label(f"{start} 〜 {(date.fromisoformat(start)+timedelta(days=6)).isoformat()} ／ 保存日 {plan['created_at'][:10]}")
+        ui.label(f"{start} 〜 {(date.fromisoformat(start)+timedelta(days=6)).isoformat()} ／ {'自動計算日' if plan_id == 'automatic' else '保存日'} {plan['created_at'][:10]}")
         ui.html(target_table(plan,start,True),sanitize=False).classes('w-full')
         ui.label(f'金額は税込。実績集計：{(today_jst()-timedelta(days=1)).isoformat()}まで／再計算日：{today_jst().isoformat()}')
         ui.label('ひとこと・今週の取り組み：________________________________________________')

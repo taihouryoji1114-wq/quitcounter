@@ -98,3 +98,47 @@ class WeeklyAdjustmentTests(unittest.TestCase):
         self.assertEqual(result['difference'],-50)
         self.assertEqual(sum(r['revised_target'] or 0 for r in result['rows']),200)
         self.assertEqual(original,current)
+
+class RecommendationTests(unittest.TestCase):
+    def test_only_remaining_sales_are_increased(self):
+        from core.sales_targets import recommend_target
+        records=[{'date':f'2026-11-{d:02d}','amount':100} for d in range(1,16)]
+        result=recommend_target(records,'2026-11',date(2026,11,16))
+        self.assertEqual(result['forecast']['landing'],3000)
+        self.assertEqual(result['target'],3075)
+        self.assertEqual(result['uplift'],.05)
+    def test_sparse_missing_empty_and_finished(self):
+        from core.sales_targets import recommend_target
+        records=[{'date':'2026-11-01','amount':100}]
+        result=recommend_target(records,'2026-11',date(2026,11,3))
+        self.assertEqual(result['target'],result['forecast']['landing'])
+        self.assertEqual(result['uplift'],0)
+        self.assertIsNone(recommend_target([],'2026-11',date(2026,11,1))['target'])
+        self.assertIsNone(recommend_target(records,'2026-11',date(2026,12,1))['target'])
+    def test_closed_days_and_seasonal_baseline(self):
+        from core.sales_targets import recommend_target
+        records=[{'date':f'2025-11-{d:02d}','amount':200} for d in range(1,31)]
+        result=recommend_target(records,'2026-11',date(2026,11,1),['2026-11-01'])
+        self.assertEqual(result['target'],5800)
+        self.assertEqual(result['forecast']['remaining_days'],29)
+    def test_new_ui_renders_with_and_without_saved_goal(self):
+        from unittest.mock import patch
+        from nicegui import ui
+        from pages.sales_targets import render_sales_targets
+        plan=build_target_plan([],'2026-11',3000,date(2026,10,30))
+        plan.update(id='saved',created_at='2026-10-30T12:00:00')
+        for plans in ({},{'saved':plan}):
+            with patch('pages.sales_targets.data',SimpleNamespace(data={'sales_target_plans':plans})),patch('pages.sales_targets.financials.sales_records',return_value=[]),patch('pages.sales_targets.today_jst',return_value=date(2026,10,30)):
+                with ui.column():render_sales_targets('2026-11')
+
+    def test_automatic_plan_without_manual_target_does_not_write(self):
+        from core.sales_targets import automatic_target_plan
+        from copy import deepcopy
+        records=[{'date':'2026-10-29','amount':100}]
+        before=deepcopy(records)
+        plan=automatic_target_plan(records,'2026-11',date(2026,10,30))
+        self.assertEqual(plan['id'],'automatic')
+        self.assertEqual(plan['monthly_target'],3000)
+        self.assertEqual(sum(r['target'] for r in plan['rows']),3000)
+        self.assertEqual(records,before)
+        self.assertIsNone(automatic_target_plan([],'2026-11',date(2026,10,30)))

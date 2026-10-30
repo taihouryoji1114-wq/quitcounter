@@ -116,3 +116,29 @@ def with_historical_targets(plan, saved_plans):
                 rows[row['date']] = dict(row, historical_target=True)
     result['rows'] = sorted(rows.values(), key=lambda r:r['date'])
     return result
+
+
+def recommend_target(records, month, as_of, closed_dates=()):
+    """Explainable suggestion, not a learned probability or automatic saved goal."""
+    forecast = monthly_forecast(records, month, as_of, closed_dates=closed_dates)
+    recent_days = {r['date'] for r in records if r.get('amount') is not None
+                   and 0 < (as_of-date.fromisoformat(r['date'])).days <= 84}
+    enough = len(recent_days) >= 14 and not forecast['missing']
+    uplift = .05 if enough else 0
+    available = (month >= as_of.strftime('%Y-%m') and forecast['remaining_days'] > 0
+                 and forecast['landing'] is not None and forecast['landing'] > 0)
+    suggestion = round(forecast['landing'] + forecast['remaining'] * uplift) if available else None
+    reason = ('残りの日の予測売上を5％伸ばす目標です。5％は最初の目安で、達成を保証する数字ではありません。'
+              if enough else '未入力の日があるか、直近12週の記録が14日未満のため、上乗せせず予測額を提案します。')
+    return dict(forecast=forecast, target=suggestion, uplift=uplift, reason=reason,
+                sample_days=len(recent_days), version='remaining-5pct-v1')
+
+
+def automatic_target_plan(records, month, as_of, closed_dates=()):
+    """A read-only current plan, usable without a saved manual target."""
+    suggestion = recommend_target(records, month, as_of, closed_dates)
+    if suggestion['target'] is None:
+        return None
+    plan = build_target_plan(records, month, suggestion['target'], as_of, closed_dates)
+    plan.update(id='automatic', source='automatic', created_at=as_of.isoformat()+'T00:00:00')
+    return plan
