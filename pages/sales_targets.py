@@ -4,16 +4,17 @@ from core.auth import require_app_access, require_permission
 from core.clock import today_jst
 from core.data import data
 from core.financials import financials
-from core.sales_targets import build_target_plan, save_target_plan, plan_results
+from core.sales_targets import build_target_plan, save_target_plan, plan_results, weekly_adjustment
 from core.theme import Theme
 
 
 def target_table(plan, start, printable=False):
     selected = date.fromisoformat(start)
-    rows = {r['date']:r for r in plan['rows']}
-    actual = {r['date']:r for r in plan_results(plan, financials.sales_records(), today_jst())}
-    html = '<table class="target-table"><thead><tr><th>日付</th><th>ランチ</th><th>ディナー</th><th>合計目標</th><th>実績'+('' if printable else '／差額')+'</th></tr></thead><tbody>'
-    total = 0
+    result = weekly_adjustment(plan, financials.sales_records(), selected, today_jst())
+    rows = {r['date']:r for r in result['rows']}
+    html = '<table class="target-table"><thead><tr><th>日付</th><th>ランチ<br>当初目標</th><th>ディナー<br>当初目標</th><th>当初目標</th><th>実績</th><th>差額</th><th>新目標</th></tr></thead><tbody>'
+    total = actual_total = revised_total = 0
+    count = revised_count = 0
     for offset in range(7):
         day = selected + timedelta(days=offset)
         key = day.isoformat()
@@ -21,18 +22,29 @@ def target_table(plan, start, printable=False):
         row = rows.get(key)
         if row:
             total += row['target']
-            values = []
-            for session in ('lunch','dinner'):
-                customers = row[session+'_customers']
-                note = f'<small>目安 {customers}人</small>' if customers is not None else '<small>客数目安なし</small>'
-                values.append(f'<td>¥{row[session]:,}{note}</td>')
-            a = actual.get(key,{})
-            result = '' if printable else '—' if a.get('actual') is None else f"¥{a['actual']:,}<small>差 {a['difference']:+,}円</small>"
-            html += f'<tr><th>{label}</th>'+''.join(values)+f"<td>¥{row['target']:,}</td><td>{result}</td></tr>"
+            known = row['actual'] is not None
+            if known:
+                actual_total += row['actual']; count += 1
+            if row['revised_target'] is not None:
+                revised_total += row['revised_target']; revised_count += 1
+            actual = f"¥{row['actual']:,}" if known else '未入力' if day < today_jst() else '—'
+            difference = f"{row['difference']:+,}円" if known else '—'
+            revised = f"¥{row['revised_target']:,}" if row['revised_target'] is not None else '—'
+            session_cells = ''.join(f"<td>¥{row[session]:,}" + (f"<small>目安 {row[session+'_customers']}人</small>" if row.get(session+'_customers') is not None else '') + '</td>' for session in ('lunch','dinner'))
+            html += f"<tr><th>{label}</th>{session_cells}<td>¥{row['target']:,}</td><td>{actual}</td><td>{difference}</td><td><strong>{revised}</strong></td></tr>"
         else:
             state = '対象月外' if not key.startswith(plan['month']) else '休業日' if key in plan['closed_dates'] else '目標未設定'
-            html += f'<tr><th>{label}</th><td colspan="4">{state}</td></tr>'
-    return html+f'<tr><th colspan="3">この期間の目標合計</th><td>¥{total:,}</td><td></td></tr></tbody></table>'
+            html += f'<tr><th>{label}</th><td colspan="6">{state}</td></tr>'
+    actual_label = f'¥{actual_total:,}<small>入力済み{count}日分</small>' if count else '—'
+    revised_label = f'¥{revised_total:,}<small>残り{revised_count}日分</small>' if revised_count else '—'
+    html += f'<tr><th colspan="3">この7日間の合計</th><td>¥{total:,}</td><td>{actual_label}</td><td>{result["difference"]:+,}円</td><td>{revised_label}</td></tr></tbody></table>'
+    html += '<p class="target-note">実績は昨日までの入力済み分。差額＝実績−当初目標。新目標はこの7日間の差額を今日以降の当初目標の比率で配分（最低0円）。元の保存目標は変更しません。</p>'
+    if result['missing']:
+        html += f'<p class="target-note">未入力{result["missing"]}日分は差額の計算対象外です。実績を入力すると新目標も再計算されます。</p>'
+    if result['unallocated']:
+        html += f'<p class="target-note">この期間には残りの日がないため、不足{result["unallocated"]:,}円は配分していません。翌週には自動で繰り越しません。</p>'
+    return html
+
 
 
 TARGET_CSS = '''
@@ -44,7 +56,7 @@ TARGET_CSS = '''
 body:has(.target-print-sheet){background:#fff!important;color:#111!important}
 .target-print-sheet{width:100%!important;max-width:none!important;padding:0!important;margin:0!important;color:#111!important;break-inside:avoid}
 .target-print-sheet{gap:8px!important}body:has(.target-print-sheet) .nicegui-content{padding:0!important;gap:0!important}.target-print-sheet h1{font-size:22pt;margin:0 0 6px;line-height:1.2}.target-print-sheet p{font-size:11pt}
-.target-table{font-size:14pt!important;color:#111!important}.target-table th,.target-table td{box-sizing:border-box;padding:5px 6px!important;height:12mm;border-color:#333!important;background:white!important;color:#111!important}
+.target-note{font-size:9pt!important;line-height:1.4}.target-table{font-size:12pt!important;color:#111!important}.target-table th,.target-table td{box-sizing:border-box;padding:5px 6px!important;height:12mm;border-color:#333!important;background:white!important;color:#111!important}
 .target-table small{font-size:10pt!important;color:#333!important}}
 '''
 
@@ -88,7 +100,7 @@ def render_sales_targets(month):
                 if previous:
                     ui.label('昨日の差額：'+(f"{previous['difference']:+,}円" if previous['difference'] is not None else '売上未入力')).classes('font-bold')
                 ui.label(f"実績入力済み {len(compared)}日分の累計差額：{sum(r['difference'] for r in compared):+,}円").classes('text-sm')
-                default = max(p['rows'][0]['date'], min((today_jst()+timedelta(days=1)).isoformat(),p['rows'][-1]['date'])) if p['rows'] else month+'-01'
+                default = max(p['rows'][0]['date'], min((today_jst()-timedelta(days=today_jst().weekday())).isoformat(),p['rows'][-1]['date'])) if p['rows'] else month+'-01'
                 start = ui.input('週間表の開始日（7日間）',value=default).props('type=date outlined').classes('w-full')
                 table=ui.html('',sanitize=False).classes('w-full')
                 def show():
@@ -125,5 +137,5 @@ def print_targets(plan_id: str, start: str = ''):
         ui.html('<h1>みんなで目指す、今週の売上</h1>',sanitize=False)
         ui.label(f"{start} 〜 {(date.fromisoformat(start)+timedelta(days=6)).isoformat()} ／ 保存日 {plan['created_at'][:10]}")
         ui.html(target_table(plan,start,True),sanitize=False).classes('w-full')
-        ui.label('金額は税込。実績欄は手書き用。客数は最近の客単価から算出した目安です。')
+        ui.label(f'金額は税込。実績集計：{(today_jst()-timedelta(days=1)).isoformat()}まで／再計算日：{today_jst().isoformat()}')
         ui.label('ひとこと・今週の取り組み：________________________________________________')

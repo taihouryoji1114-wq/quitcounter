@@ -83,3 +83,19 @@ def plan_results(plan, records, as_of):
         value = actual.get(row['date'])
         rows.append(dict(row, actual=value, difference=None if value is None else value-row['target']))
     return rows
+
+
+def weekly_adjustment(plan, records, start, as_of):
+    """Redistribute only known differences within the selected seven days."""
+    from datetime import timedelta
+    end = start + timedelta(days=7)
+    rows = [r for r in plan_results(plan, records, as_of)
+            if start.isoformat() <= r['date'] < end.isoformat()]
+    difference = sum(r['difference'] for r in rows if r['difference'] is not None)
+    remaining = [r for r in rows if r['date'] >= as_of.isoformat()]
+    required = max(0, sum(r['target'] for r in remaining) - difference)
+    revised = dict(zip((r['date'] for r in remaining), allocate(required, [r['target'] for r in remaining])))
+    return {'rows': [dict(r, revised_target=revised.get(r['date'])) for r in rows],
+            'difference': difference,
+            'missing': sum(r['actual'] is None and r['date'] < as_of.isoformat() for r in rows),
+            'unallocated': required if not remaining else 0}

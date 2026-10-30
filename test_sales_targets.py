@@ -36,3 +36,40 @@ class TargetTests(unittest.TestCase):
         for value in [-1,0,float('nan'),10.5]:
             with self.assertRaises(ValueError):build_target_plan([],'2026-11',value,date(2026,10,18))
         with self.assertRaises(ValueError):build_target_plan([],'2026-10',3000,date(2026,10,18))
+
+class WeeklyAdjustmentTests(unittest.TestCase):
+    def plan(self):
+        return {'month':'2026-11','closed_dates':[], 'rows':[{'date':f'2026-11-{d:02d}','target':100,'lunch':40,'dinner':60} for d in range(1,8)]}
+    def test_shortfall_and_excess_preserve_week_total(self):
+        from core.sales_targets import weekly_adjustment
+        from copy import deepcopy
+        for actual in (0,50,150,900):
+            p=self.plan();before=deepcopy(p)
+            result=weekly_adjustment(p,[{'date':'2026-11-01','amount':actual}],date(2026,11,1),date(2026,11,2))
+            future=[r['revised_target'] for r in result['rows'] if r['revised_target'] is not None]
+            self.assertEqual(sum(future),max(0,700-actual))
+            self.assertEqual(result['difference'],actual-100)
+            self.assertEqual(p,before)
+    def test_missing_is_not_zero_and_today_is_not_completed(self):
+        from core.sales_targets import weekly_adjustment
+        result=weekly_adjustment(self.plan(),[{'date':'2026-11-03','amount':10}],date(2026,11,1),date(2026,11,3))
+        self.assertEqual(result['missing'],2)
+        self.assertEqual(result['difference'],0)
+        self.assertEqual(sum(r['revised_target'] or 0 for r in result['rows']),500)
+    def test_finished_week_and_outside_week(self):
+        from core.sales_targets import weekly_adjustment
+        records=[{'date':f'2026-11-{d:02d}','amount':50} for d in range(1,8)]
+        result=weekly_adjustment(self.plan(),records,date(2026,11,1),date(2026,11,9))
+        self.assertEqual(result['unallocated'],350)
+        self.assertTrue(all(r['revised_target'] is None for r in result['rows']))
+        self.assertEqual(weekly_adjustment(self.plan(),records,date(2026,12,1),date(2026,12,2))['rows'],[])
+    def test_print_includes_actual_and_adjusted_targets(self):
+        from unittest.mock import patch
+        from pages.sales_targets import target_table
+        with patch('pages.sales_targets.today_jst',return_value=date(2026,11,2)),patch('pages.sales_targets.financials.sales_records',return_value=[{'date':'2026-11-01','amount':50}]):
+            html=target_table(self.plan(),'2026-11-01',True)
+        self.assertIn('¥50',html)
+        self.assertIn('-50円',html)
+        self.assertIn('新目標',html)
+        self.assertIn('¥650',html)
+        self.assertNotIn('手書き用',html)
