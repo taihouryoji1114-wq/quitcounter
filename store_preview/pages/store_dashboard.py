@@ -1,3 +1,4 @@
+from pathlib import Path
 from store_preview.core.staff_identity import staff_display_name
 from nicegui import app, ui
 
@@ -59,91 +60,87 @@ def store_dashboard_page():
     if not require_app_access("store_ops"):
         return
     Theme.page("店舗運営", app_name="store-ops")
+    ui.colors(primary="#263D58", secondary="#64748B", positive="#237052")
+    ui.add_css(Path(__file__).with_name("store_home.css").read_text())
     store_ops.move_kitchen_handovers_to_prep()
     business_date, period = store_ops.active_service_context(
-        operational_date_jst().isoformat(), store_service_period_jst())
+        operational_date_jst(cutoff_hour=4).isoformat(), store_service_period_jst())
     period_label = "ランチ" if period == "lunch" else "ディナー"
 
-    async def follow_operating_date():
-        if operational_date_jst().isoformat() > business_date:
-            # Finish an open note editor before changing the page underneath it.
-            await ui.run_javascript("""
-                if (!document.querySelector('.q-dialog') &&
-                    !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
-                    window.location.reload();
-                }
-            """)
-
-    ui.timer(30, follow_operating_date)
     store_ops.ensure_service_checklist(business_date, period)
     board = store_ops.service_handover_board(business_date, period)
     can_manage = has_permission("store_manage")
-    content = Theme.shell("店舗運営", "今日必要なことだけ、ひと目で",
-                          action=store_header_actions, brand="店舗運営")
+    # The home starts with the service context; shared headers remain on other pages.
+    with ui.column().classes("app-shell gap-0"):
+        content = ui.column().classes("store-home w-full gap-0")
     with content:
-        notices = store_quiz.notices()
-        if notices:
-            with ui.card().classes("business-notice w-full q-pa-md q-mb-sm"):
-                with ui.row().classes("w-full items-center gap-2 no-wrap q-mb-xs"):
-                    ui.icon("campaign").classes("text-xl text-amber-9")
-                    ui.label(f"業務連絡　{len(notices)}件").classes(
-                        "text-sm font-black text-amber-10")
-                for notice in notices:
-                    with ui.card().classes("business-notice-card w-full q-pa-md q-mb-xs"):
-                        ui.label(notice["title"]).classes("text-sm font-black")
-                        if notice.get("details"):
-                            ui.label(notice["details"]).classes(
-                                "text-[10px] text-grey-7 whitespace-pre-wrap q-mt-xs")
-                        staff_name = ui.select(
-                            {key: staff_display_name(key) for key in staffing.STAFF}, label="確認するスタッフ名").props(
-                            "outlined dense options-dense").classes(
-                                "notice-staff-name w-full q-mt-sm")
-
-                        def notice_response(needs_explanation, selected=notice, field=staff_name):
-                            try:
-                                store_quiz.respond_to_notice(
-                                    selected["id"], field.value, needs_explanation)
-                            except ValueError as error:
-                                ui.notify(str(error), type="warning")
-                                return
-                            ui.notify(
-                                "説明依頼を送りました" if needs_explanation else "確認済みにしました",
-                                type="positive")
-                            ui.navigate.to("/store-preview")
-
-                        with ui.row().classes("w-full gap-2 q-mt-xs"):
-                            ui.button("確認済み", icon="check",
-                                      on_click=lambda _, fn=notice_response: fn(False)).props(
-                                          "unelevated dense no-caps").classes("grow")
-                            ui.button("説明を求める", icon="help_outline",
-                                      on_click=lambda _, fn=notice_response: fn(True)).props(
-                                          "outline dense no-caps color=warning").classes("grow")
-                        acknowledgements = notice.get("acknowledgements", [])
-                        explanation_requests = notice.get("explanation_requests", [])
-                        if acknowledgements:
-                            ui.label("確認済み：" + "、".join(
-                                staff_display_name(value.get("name", "")) for value in acknowledgements)).classes(
-                                    "notice-response-list text-positive")
-                        if explanation_requests:
-                            ui.label("説明希望：" + "、".join(
-                                staff_display_name(value.get("name", "")) for value in explanation_requests)).classes(
-                                    "notice-response-list text-warning")
-        notice_history = [item for item in store_quiz.notices(include_closed=True)
-                          if not item.get("active", True)]
-        if notice_history:
-            with ui.expansion(f"過去の業務連絡　{len(notice_history)}件", icon="history",
-                              value=False).classes("notice-history w-full q-mb-sm"):
-                with ui.element("div").classes("notice-history-scroll w-full"):
-                    for notice in reversed(notice_history):
-                        with ui.column().classes("w-full gap-0 q-py-xs"):
-                            ui.label(notice["title"]).classes("text-xs font-black")
+        notices_container = ui.column().classes("store-home-notices w-full gap-3")
+        with notices_container:
+            notices = store_quiz.notices()
+            if notices:
+                with ui.expansion(f"業務連絡 {len(notices)}件 · {notices[0]['title']}", icon="campaign", value=False).classes("business-notice w-full"):
+                    for notice in notices:
+                        with ui.card().classes("business-notice-card w-full q-pa-md q-mb-xs"):
+                            ui.label(notice["title"]).classes("text-sm font-black")
                             if notice.get("details"):
                                 ui.label(notice["details"]).classes(
-                                    "text-[9px] text-grey-6 whitespace-pre-wrap")
+                                    "text-[10px] text-grey-7 whitespace-pre-wrap q-mt-xs")
+                            staff_name = ui.select(
+                                {key: staff_display_name(key) for key in staffing.STAFF}, label="確認するスタッフ名").props(
+                                "outlined dense options-dense").classes(
+                                    "notice-staff-name w-full q-mt-sm")
+
+                            def notice_response(needs_explanation, selected=notice, field=staff_name):
+                                try:
+                                    store_quiz.respond_to_notice(
+                                        selected["id"], field.value, needs_explanation)
+                                except ValueError as error:
+                                    ui.notify(str(error), type="warning")
+                                    return
+                                ui.notify(
+                                    "説明依頼を送りました" if needs_explanation else "確認済みにしました",
+                                    type="positive")
+                                ui.navigate.to("/store-preview")
+
+                            with ui.row().classes("w-full gap-2 q-mt-xs"):
+                                ui.button("確認済み", icon="check",
+                                          on_click=lambda _, fn=notice_response: fn(False)).props(
+                                              "unelevated dense no-caps").classes("grow")
+                                ui.button("説明を求める", icon="help_outline",
+                                          on_click=lambda _, fn=notice_response: fn(True)).props(
+                                              "outline dense no-caps color=warning").classes("grow")
+                            acknowledgements = notice.get("acknowledgements", [])
+                            explanation_requests = notice.get("explanation_requests", [])
+                            if acknowledgements:
+                                ui.label("確認済み：" + "、".join(
+                                    staff_display_name(value.get("name", "")) for value in acknowledgements)).classes(
+                                        "notice-response-list text-positive")
+                            if explanation_requests:
+                                ui.label("説明希望：" + "、".join(
+                                    staff_display_name(value.get("name", "")) for value in explanation_requests)).classes(
+                                        "notice-response-list text-warning")
+            notice_history = [item for item in store_quiz.notices(include_closed=True)
+                              if not item.get("active", True)]
+            if notice_history:
+                with ui.expansion(f"過去の業務連絡　{len(notice_history)}件", icon="history",
+                                  value=False).classes("notice-history w-full q-mb-sm"):
+                    with ui.element("div").classes("notice-history-scroll w-full"):
+                        for notice in reversed(notice_history):
+                            with ui.column().classes("w-full gap-0 q-py-xs"):
+                                ui.label(notice["title"]).classes("text-xs font-black")
+                                if notice.get("details"):
+                                    ui.label(notice["details"]).classes(
+                                        "text-[9px] text-grey-6 whitespace-pre-wrap")
         year, month, day = (int(value) for value in business_date.split("-"))
-        ui.label(f"{month}月{day}日　TODAY'S OPERATION").classes(
-            "today-ribbon w-full")
-        render_live_board(business_date, period, period_label)
+        with ui.row().classes("store-home-context w-full items-center justify-between"):
+            date_label = ui.label(f"{year}年{month}月{day}日").classes("store-home-date")
+            ui.label(f"{period_label}営業").classes("store-home-period")
+        with ui.element("div").classes("store-home-workspace w-full"):
+            main_panel = ui.column().classes("store-home-main w-full gap-3")
+            aside = ui.column().classes("store-home-aside w-full gap-3")
+            notices_container.move(aside)
+            with main_panel:
+                render_live_board(business_date, period, period_label, aside=aside, date_label=date_label)
         return
         with ui.card().classes("store-board w-full q-pa-lg text-white"):
             with ui.row().classes("w-full items-start justify-between no-wrap"):
