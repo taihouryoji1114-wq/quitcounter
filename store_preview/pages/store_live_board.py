@@ -4,6 +4,7 @@ from nicegui import ui
 
 from store_preview.core.clock import JAPAN
 from store_preview.core.store_ops import store_ops
+from store_preview.core.live_board_review import live_board_review
 
 
 STATUS_META = {
@@ -71,7 +72,7 @@ def confirmation_label(checked, total):
     return "全項目 確認済み ✓" if checked == total else f"未確認 あと{total - checked}件"
 
 
-def render_live_board(business_date, period, period_label):
+def render_live_board(business_date, period, period_label, aside=None, date_label=None):
     """Render the staff-facing board: every routine action happens in place."""
     categories = store_ops.live_board_categories()
     category_visibility = {value["name"]: value.get("visible", True) for value in categories}
@@ -87,6 +88,29 @@ def render_live_board(business_date, period, period_label):
     items = [item for item in items if item.get("visible", True)
              and category_visibility.get(item.get("area", "厨房"), True)
              and item.get("area", "厨房") != order_category_name]
+    live_board_review.initialize_handover(items, {
+        item["id"]: store_ops.handover_acknowledged(business_date, period, item) for item in items
+    })
+    for item in items:
+        item["reviewed"] = live_board_review.checked(item["id"])
+    review_day = {"value": live_board_review.day_key()}
+
+    def current_context():
+        nonlocal business_date, period
+        today = live_board_review.day_key()
+        if today > business_date:
+            business_date, period = store_ops.active_service_context(today, period)
+        if date_label is not None:
+            year, month, day = map(int, today.split('-'))
+            date_label.set_text(f"{year}年{month}月{day}日")
+
+    def record_result(item_id, mark_checked=True):
+        saved = next(value for value in store_ops.service_prep_items(business_date, period) if value['id'] == item_id)
+        if mark_checked:
+            live_board_review.record(saved)
+        else:
+            live_board_review.update_note(saved)
+
     category_names = [value["name"] for value in categories if value.get("visible", True)]
     for item in items:
         if item.get("area", "厨房") not in category_names:
@@ -97,8 +121,7 @@ def render_live_board(business_date, period, period_label):
         "color", store_ops.DAILY_ORDER_CATEGORY_COLOR))
 
     def counts():
-        done, total, _ = live_board_summary(items)
-        return done, total
+        return sum(live_board_review.checked(item["id"]) for item in items), len(items)
 
     complete, total = counts()
 
@@ -108,30 +131,36 @@ def render_live_board(business_date, period, period_label):
 
     @ui.refreshable
     def handover_list():
-        _, _, all_groups = live_board_summary(items)
-        groups = all_groups
+        snapshots = live_board_review.handovers({item['id'] for item in items})
         with ui.card().classes("live-handover-top w-full gap-1"):
-            with ui.row().classes("w-full items-center justify-between gap-2"):
-                ui.label("引き継ぎリスト").classes("text-sm font-bold")
-                ui.button("仕入れリスト", icon="shopping_basket", on_click=lambda:
-                          ui.navigate.to("/store-preview/purchase-list")).props("flat dense no-caps")
-            summary = "　".join(f"{symbol} {len(values)}件" for symbol, values in groups.items())
-            with ui.expansion(summary, icon="list_alt").classes("w-full live-handover-details"):
-                for symbol, values in groups.items():
-                    with ui.column().classes("live-handover-group w-full gap-1"):
-                        ui.label(f"{symbol}　{len(values)}件").classes("font-bold")
-                        if not values:
-                            ui.label("該当なし").classes("text-xs text-grey-6")
-                        for value in values:
-                            with ui.row().classes("w-full items-center no-wrap"):
-                                if symbol in ("△", "×"):
-                                    ui.checkbox(value=store_ops.handover_acknowledged(business_date, period, value),
-                                                on_change=lambda e, item_id=value["id"]:
-                                                store_ops.set_handover_acknowledged(business_date, period, item_id, e.value)).props("dense aria-label='引き継ぎ確認'")
-                                with ui.column().classes("gap-0"):
-                                    ui.label(value["name"]).classes("live-handover-name")
-                                    ui.label(handover_date_label(value)).classes("text-xs text-grey-7")
-    handover_list()
+            ui.label("引き継ぎリスト").classes("text-sm font-bold")
+            ui.label("チェックした結果を保持します。午前4時には消えません。").classes("text-xs text-grey-7")
+            if not snapshots:
+                ui.label("チェックすると、ここに結果が表示されます").classes("text-sm text-grey-7 q-py-sm")
+            for value in snapshots:
+                with ui.column().classes("live-handover-group w-full gap-1"):
+                    with ui.row().classes("w-full items-center justify-between gap-2"):
+                        ui.label(value['name']).classes("live-handover-name")
+                        if value.get('item_type') == 'quantity':
+                            result = f"{value.get('quantity', 0)}{value.get('unit', '個')}"
+                        elif value.get('item_type') == 'memo':
+                            result = "確認済み"
+                        else:
+                            symbol = {'done': '○', 'attention': '△', 'incomplete': '×'}.get(value.get('status'), '—')
+                            text = value.get('status_labels', {}).get(value.get('status')) if value.get('item_type') == 'status' else ('完了' if value.get('status') == 'done' else '未完了')
+                            result = f"{symbol} {text or ''}"
+                        ui.label(result).classes("live-handover-result")
+                    if value.get('note'):
+                        ui.label(value['note']).classes("text-sm whitespace-pre-wrap")
+                    stamp = value.get('confirmed_at') or value.get('last_update', {}).get('updated_at')
+                    ui.label(format_live_board_update_time(stamp).replace('最終更新', '確認')).classes("text-xs text-grey-7")
+                    ui.checkbox("引き継ぎ確認", value=value.get('handover_acknowledged', False),
+                                on_change=lambda e, item_id=value['id']: live_board_review.acknowledge(item_id, e.value)).props("dense")
+    if aside is not None:
+        with aside:
+            handover_list()
+    else:
+        handover_list()
 
     def actor_text(value):
         update = value.get("last_update", {})
@@ -141,17 +170,19 @@ def render_live_board(business_date, period, period_label):
 
     actor_labels = {}
     status_buttons = {}
+    completion_painters = {}
+    review_labels = {}
     board_expansion = ui.expansion(
-        f"LIVE BOARD　{confirmation_label(complete, total)}", icon="dashboard", value=False,
+        "厨房ライブボード", icon="dashboard", value=True,
     ).props("duration=160").classes("live-board-collapsed w-full")
     with ui.card() as board_card:
         board_card.classes("live-board-v2 w-full")
         with ui.row().classes("live-board-head w-full items-center justify-between no-wrap"):
             with ui.column().classes("gap-0"):
-                ui.label("LIVE BOARD").classes("live-board-title")
+                ui.label("厨房ライブボード").classes("live-board-title")
                 ui.label(f"{business_date.replace('-', '/')}　{period_label}").classes(
                     "live-board-date")
-            with ui.row().classes("items-center no-wrap gap-1"):
+            with ui.row().classes("live-board-meta items-center no-wrap gap-1"):
                 with ui.column().classes("live-board-summary gap-0 items-end"):
                     progress_label = ui.label(confirmation_label(complete, total)).classes("live-board-progress")
                     updated_label = ui.label(update_time_text()).classes("live-board-updated")
@@ -159,37 +190,50 @@ def render_live_board(business_date, period, period_label):
                         "flat round dense aria-label='LIVE BOARDメニュー'").classes("live-board-more"):
                     with ui.menu():
                         def reset_all():
-                            store_ops.reset_service_prep_items(
-                                business_date, period, [item["id"] for item in items])
-                            for destination in store_ops.DAILY_ORDER_DESTINATIONS:
-                                store_ops.set_daily_order_check(
-                                    business_date, destination, False)
-                            ui.notify("この営業の入力内容を消しました", type="positive")
-                            ui.navigate.to("/store-preview")
+                            live_board_review.uncheck([item['id'] for item in items])
+                            reset_dialog.close()
+                            refresh_progress(saved_message=False)
+                            ui.notify("チェックを未確認に戻しました。引き継ぎは残っています。", type="positive")
 
-                        ui.menu_item("この営業の入力内容を消す", on_click=reset_all)
+                        with ui.dialog() as reset_dialog, ui.card().classes("home-reset-dialog"):
+                            ui.label("チェックだけを未確認に戻しますか？").classes("text-lg font-bold")
+                            ui.label("状態・数量・メモ・引き継ぎリストは残します。発注状況も変更しません。")
+                            with ui.row().classes("w-full justify-end gap-2"):
+                                ui.button("キャンセル", on_click=reset_dialog.close).props("flat no-caps")
+                                ui.button("チェックをリセット", on_click=reset_all).props("color=negative no-caps")
+                        ui.menu_item("チェックだけをリセット", on_click=reset_dialog.open)
 
-        def refresh_progress():
+        save_feedback = ui.label("チェックは毎朝4時にリセット。引き継ぎ結果は残ります。").classes("live-save-feedback").props('role=status aria-live=polite')
+
+        def refresh_progress(saved_message=True):
+            current_context()
             saved = {value["id"]: value for value in store_ops.service_prep_items(business_date, period)}
             for value in items:
                 if value["id"] in saved:
                     value.update(saved[value["id"]])
+                    value["reviewed"] = live_board_review.checked(value["id"])
+                    if value["id"] in completion_painters:
+                        completion_painters[value["id"]]()
+                    if value["id"] in review_labels:
+                        review_labels[value["id"]].set_text("確認済み" if value["reviewed"] else "未確認")
                     if value["id"] in actor_labels:
                         actor_labels[value["id"]].set_text(actor_text(value))
                     for status, button in status_buttons.get(value["id"], {}).items():
                         button.classes(remove="is-selected")
+                        button.props(f"aria-pressed={str(selected_live_status(value) == status).lower()}")
                         if selected_live_status(value) == status:
                             button.classes(add="is-selected")
             done, all_items = counts()
             progress_label.set_text(confirmation_label(done, all_items))
-            board_expansion.set_text(f"LIVE BOARD　{confirmation_label(done, all_items)}")
+            if saved_message:
+                save_feedback.set_text("保存済み · " + update_time_text())
             updated_label.set_text(update_time_text())
             handover_list.refresh()
             unconfirmed_list.refresh()
 
         @ui.refreshable
         def unconfirmed_list():
-            pending = [value for value in confirmation_items(items) if not value.get("reviewed")]
+            pending = [value for value in items if not live_board_review.checked(value["id"])]
             if not pending:
                 return
             with ui.expansion("未確認の項目を確認する", icon="fact_check").classes("w-full"):
@@ -199,7 +243,9 @@ def render_live_board(business_date, period, period_label):
                         ui.label(value["name"]).classes("text-sm")
 
                         def confirm(selected=value):
+                            current_context()
                             store_ops.confirm_service_prep_item(business_date, period, selected["id"])
+                            record_result(selected["id"])
                             refresh_progress()
 
                         ui.button("この状態で確認", on_click=confirm).props("outline dense no-caps")
@@ -226,6 +272,7 @@ def render_live_board(business_date, period, period_label):
                         with ui.row().classes("w-full items-center justify-between no-wrap"):
                             with ui.column().classes("live-board-copy gap-0"):
                                 ui.label(item["name"]).classes("live-board-name")
+                                review_labels[item["id"]] = ui.label("確認済み" if item["reviewed"] else "未確認").classes("live-review-state")
                                 actor_labels[item["id"]] = ui.label(actor_text(item)).classes("text-[9px] text-grey-7")
                                 note_label = ui.label(item.get("note", "")).classes(
                                     "live-board-note")
@@ -238,8 +285,10 @@ def render_live_board(business_date, period, period_label):
                                 status_buttons[item["id"]] = buttons
 
                                 def choose_status(status, selected=item, button_map=buttons):
+                                    current_context()
                                     store_ops.set_service_prep_status(
                                         business_date, period, selected["id"], status)
+                                    record_result(selected["id"])
                                     selected["status"] = status
                                     for key, button in button_map.items():
                                         button.classes(remove="is-selected")
@@ -256,6 +305,7 @@ def render_live_board(business_date, period, period_label):
                                                 fn=choose_status: fn(value)
                                             ).props("flat dense round no-caps").classes(
                                                 f"live-status-button status-{css_name}")
+                                            button.props(f'aria-label="状態を{symbol}にする" aria-pressed={str(selected_live_status(item) == status).lower()}')
                                             if selected_live_status(item) == status:
                                                 button.classes(add="is-selected")
                                             buttons[status] = button
@@ -271,10 +321,12 @@ def render_live_board(business_date, period, period_label):
                                 quantity_label.set_text(quantity_text(item.get("quantity", 0)))
 
                                 def change_quantity(direction, selected=item, label=quantity_label):
+                                    current_context()
                                     value = float(selected.get("quantity", 0)) + (
                                         float(selected.get("step", 1)) * direction)
                                     store_ops.set_service_prep_quantity(
                                         business_date, period, selected["id"], value)
+                                    record_result(selected["id"])
                                     minimum = float(selected.get("minimum_value", 0))
                                     maximum = selected.get("maximum_value")
                                     value = max(minimum, value)
@@ -296,14 +348,16 @@ def render_live_board(business_date, period, period_label):
                                 done_button = ui.button().props("flat dense no-caps")
 
                                 def paint_completion(selected=item, button=done_button):
-                                    done = selected.get("status") == "done"
-                                    button.set_text("✓ 完了" if done else "未完了")
+                                    checked = live_board_review.checked(selected["id"])
+                                    done = checked and selected.get("status") == "done"
+                                    button.set_text(("✓ 完了" if done else "未完了") if checked else "未確認")
                                     button.classes(remove="is-done is-pending")
                                     button.classes(add="is-done" if done else "is-pending")
 
                                 def toggle_completion(selected=item, paint=paint_completion):
+                                    current_context()
                                     selected["status"] = (
-                                        "incomplete" if selected.get("status") == "done" else "done")
+                                        "incomplete" if live_board_review.checked(selected["id"]) and selected.get("status") == "done" else "done")
                                     if selected.get("source") == "daily_order":
                                         store_ops.set_daily_order_check(
                                             business_date, selected["destination"],
@@ -311,9 +365,11 @@ def render_live_board(business_date, period, period_label):
                                     else:
                                         store_ops.set_service_prep_status(
                                             business_date, period, selected["id"], selected["status"])
+                                    record_result(selected["id"])
                                     paint()
                                     refresh_progress()
 
+                                completion_painters[item["id"]] = paint_completion
                                 done_button.on("click", toggle_completion)
                                 done_button.classes("live-completion-button")
                                 done_button.move(controls)
@@ -332,12 +388,15 @@ def render_live_board(business_date, period, period_label):
 
                                             def save_note(selected=item, field=note_input,
                                                           label=note_label, menu=note_menu):
+                                                current_context()
                                                 text = store_ops.set_service_prep_note(
                                                     business_date, period, selected["id"], field.value)
+                                                record_result(selected["id"], mark_checked=False)
                                                 selected["note"] = text
                                                 label.set_text(text)
                                                 label.set_visibility(bool(text))
                                                 menu.close()
+                                                refresh_progress()
                                                 ui.notify("メモを保存しました", type="positive")
 
                                             ui.button("完了", on_click=save_note).props(
@@ -352,8 +411,10 @@ def render_live_board(business_date, period, period_label):
                     with ui.row().classes("w-full items-center justify-between"):
                         ui.label(destination).classes("font-bold")
                         def save_order(event, name=destination):
+                            current_context()
                             store_ops.set_daily_order_check(business_date, name, event.value)
                             updated_label.set_text(update_time_text())
+                            save_feedback.set_text("保存済み · " + update_time_text())
 
                         ui.toggle({False: "未発注", True: "発注済み"},
                                   value=order_checks[destination], on_change=save_order).props(
@@ -362,6 +423,17 @@ def render_live_board(business_date, period, period_label):
         if not items:
             ui.label("表示する項目はありません").classes("live-board-empty")
     board_card.move(board_expansion)
+
+    def follow_review_day():
+        today = live_board_review.day_key()
+        if today != review_day['value']:
+            review_day['value'] = today
+            refresh_progress(saved_message=False)
+            save_feedback.set_text("午前4時になったため、チェックを未確認に戻しました。引き継ぎは残っています。")
+
+    # No reload: a note being typed stays intact across the boundary.
+    ui.timer(1, follow_review_day)
+
 
     ui.add_css("""
     .live-handover-top{padding:8px 14px!important;margin-bottom:12px;border:1px solid #dce7de;border-radius:14px!important;background:#f4f7f3!important;box-shadow:none!important}.live-handover-details .q-item{min-height:36px;padding:2px 0}.live-handover-details .q-expansion-item__content{padding:4px 0}.live-handover-group{margin-top:6px}
