@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date
 from pathlib import Path
 
@@ -30,6 +31,18 @@ def financial_reports_page():
             with ui.element("div").classes("report-date-grid w-full"):
                 start_date = ui.input("開始日", value=today.replace(day=1).isoformat()).props("type=date outlined")
                 end_date = ui.input("終了日", value=today.isoformat()).props("type=date outlined")
+
+            month_picker = ui.input("月を選ぶ", value=today.strftime('%Y-%m')).props('type=month outlined').classes('w-full q-mt-sm')
+            def choose_month():
+                try:
+                    first = date.fromisoformat(str(month_picker.value)+'-01')
+                except ValueError:
+                    ui.notify('月を選んでください',type='warning');return
+                start_date.value=first.isoformat()
+                end_date.value=first.replace(day=monthrange(first.year,first.month)[1]).isoformat()
+                report_view.refresh()
+            month_picker.on_value_change(choose_month)
+            ui.button("この月を表示",icon="calendar_month",on_click=choose_month).props("outline").classes("w-full q-mt-sm")
 
             def selected():
                 try:
@@ -87,79 +100,88 @@ def financial_reports_page():
             values = build_financial_report(str(start_date.value), str(end_date.value))
             ratios = values["ratios"]
             with ui.element("section").classes("print-report w-full"):
-                ui.label("未来決算　期間集計レポート").classes("report-title")
-                ui.label(f"集計期間　{values['start'].replace('-', '/')} 〜 {values['end'].replace('-', '/')}").classes("report-period")
-                with ui.element("div").classes("report-metrics w-full q-mt-md"):
-                    for title, value, style in (
-                        ("売上", values["sales_total"], "sales"), ("原価", values["cost_total"], "cost"),
-                        ("粗利", values["gross_profit"], "gross"), ("人件費", values["personnel"], "personnel"),
-                        ("営業経費", values["operating_expenses"], "expense"),
-                        ("営業利益" if values["operating_profit"] >= 0 else "営業損失", values["operating_profit"], "profit"),
-                    ):
-                        with ui.element("div").classes(f"report-metric {style}"):
-                            ui.label(title).classes("report-metric-label"); ui.label(f"¥{value:,}").classes("report-metric-value")
+                with ui.element("section").classes("report-print-page report-overview"):
+                    ui.label("未来決算　期間集計レポート").classes("report-title")
+                    ui.label(f"集計期間　{values['start'].replace('-', '/')} 〜 {values['end'].replace('-', '/')}").classes("report-period")
+                    with ui.element("div").classes("report-metrics w-full q-mt-md"):
+                        for title, value, style in (
+                            ("売上", values["sales_total"], "sales"), ("原価", values["cost_total"], "cost"),
+                            ("粗利", values["gross_profit"], "gross"), ("人件費", values["personnel"], "personnel"),
+                            ("営業経費", values["operating_expenses"], "expense"),
+                            ("営業利益" if values["operating_profit"] >= 0 else "営業損失", values["operating_profit"], "profit"),
+                        ):
+                            with ui.element("div").classes(f"report-metric {style}"):
+                                ui.label(title).classes("report-metric-label"); ui.label(f"¥{value:,}").classes("report-metric-value")
 
-                settled = values['settlement']
-                with ui.column().classes('w-full gap-1 q-my-md'):
-                    ui.label('税金・返済の調整（同じ集計期間）').classes('font-bold')
-                    for label, amount in [('消費税見込（マイナスは還付見込）', settled['tax']['net_tax']), ('法人税等', settled['corporate_tax']), (settled['net_label'], settled['net_profit']), (settled['surplus_label'], settled['post_repayment_profit'])]:
-                        ui.label(f'{label}：' + ('未設定' if amount is None else f'¥{amount:,}'))
-                    if settled['provisional']:
-                        ui.label('税設定に未確認項目があります。残額は暫定です。')
-                    ui.link('税設定を確認', '/mirai-kessan/taxes?month='+values['start'][:7]).classes('no-print')
+                    settled = values['settlement']
+                    with ui.column().classes('w-full gap-1 q-my-md'):
+                        ui.label('税金・返済の調整（同じ集計期間）').classes('font-bold')
+                        for label, amount in [('消費税見込（マイナスは還付見込）', settled['tax']['net_tax']), ('法人税等', settled['corporate_tax']), (settled['net_label'], settled['net_profit']), (settled['surplus_label'], settled['post_repayment_profit'])]:
+                            ui.label(f'{label}：' + ('未設定' if amount is None else f'¥{amount:,}'))
+                        if settled['provisional']:
+                            ui.label('税設定に未確認項目があります。残額は暫定です。')
+                        ui.link('税設定を確認', '/mirai-kessan/taxes?month='+values['start'][:7]).classes('no-print')
 
-                ui.label("重要な経営比率").classes("report-section-title")
-                with ui.element("div").classes("ratio-grid"):
-                    for label, key in (("原価率", "cost_rate"), ("粗利率", "gross_margin"),
-                                       ("人件費率", "personnel_rate"), ("労働分配率", "labor_distribution"),
-                                       ("営業利益率", "operating_margin")):
-                        with ui.element("div").classes("ratio-card"):
-                            ui.label(label); value = ratios[key]
-                            ui.label("—" if value is None else f"{value * 100:.1f}%").classes("ratio-value")
+                    ui.label("重要な経営比率").classes("report-section-title")
+                    with ui.element("div").classes("ratio-grid"):
+                        for label, key in (("原価率", "cost_rate"), ("粗利率", "gross_margin"),
+                                           ("人件費率", "personnel_rate"), ("労働分配率", "labor_distribution"),
+                                           ("営業利益率", "operating_margin")):
+                            with ui.element("div").classes("ratio-card"):
+                                ui.label(label); value = ratios[key]
+                                ui.label("—" if value is None else f"{value * 100:.1f}%").classes("ratio-value")
 
-                ui.label("利益ブロック").classes("report-section-title")
-                render_profit_block(values)
+                    ui.label("利益ブロック").classes("report-section-title")
+                    render_profit_block(values)
 
-                ui.label("営業経費の内訳").classes("report-section-title")
-                expense_rows = list(values["expense_breakdown"])
-                render_two_column_table(expense_rows, "項目", "期間配賦額",
-                                        ("営業経費合計", values["operating_expenses"]))
+                with ui.element("section").classes("report-print-page"):
+                    ui.label(f"集計期間　{values['start']} 〜 {values['end']}").classes("report-page-period")
+                    ui.label("営業経費の内訳").classes("report-section-title")
+                    expense_rows = list(values["expense_breakdown"])
+                    render_two_column_table(expense_rows, "項目", "期間配賦額",
+                                            ("営業経費合計", values["operating_expenses"]))
 
-                ui.label("決済方法別集計").classes("report-section-title")
-                payment_rows = [(label, values["payment_totals"][field]) for label, field in PAYMENT_COLUMNS]
-                payment_rows.append(("ポイント", values["payment_totals"]["points_sales"]))
-                payment_rows.append(("未分類", values["payment_totals"]["unclassified_sales"]))
-                render_two_column_table(payment_rows, "決済方法", "期間合計",
-                                        ("決済内訳合計", sum(value for _, value in payment_rows)))
+                with ui.element("section").classes("report-print-page"):
+                    ui.label(f"集計期間　{values['start']} 〜 {values['end']}").classes("report-page-period")
+                    ui.label("決済方法別集計").classes("report-section-title")
+                    payment_rows = [(label, values["payment_totals"][field]) for label, field in PAYMENT_COLUMNS]
+                    payment_rows.append(("ポイント", values["payment_totals"]["points_sales"]))
+                    payment_rows.append(("未分類", values["payment_totals"]["unclassified_sales"]))
+                    render_two_column_table(payment_rows, "決済方法", "期間合計",
+                                            ("決済内訳合計", sum(value for _, value in payment_rows)))
 
-                ui.label("仕入れ先別集計").classes("report-section-title")
-                with ui.element("div").classes("report-table-wrap"), ui.element("table").classes("report-table"):
-                    table_header(("仕入れ先", "件数", "原価", "営業用品", "一般経費", "合計"))
-                    with ui.element("tbody"):
-                        for supplier, row in values["suppliers"]:
-                            table_row((supplier, f"{row['count']}件", money(row["cost"]), money(row["supply"]),
-                                       money(row["expense"]), money(row["total"])))
-                        table_row(("合計", f"{len(values['purchases'])}件", money(values["cost_total"]),
-                                   money(values["supply_total"]), money(values["expense_total"]),
-                                   money(values["cost_total"] + values["supply_total"] + values["expense_total"])), "total-row")
+                with ui.element("section").classes("report-print-page"):
+                    ui.label(f"集計期間　{values['start']} 〜 {values['end']}").classes("report-page-period")
+                    ui.label("仕入れ先別集計").classes("report-section-title")
+                    with ui.element("div").classes("report-table-wrap"), ui.element("table").classes("report-table"):
+                        table_header(("仕入れ先", "件数", "原価", "営業用品", "一般経費", "合計"))
+                        with ui.element("tbody"):
+                            for supplier, row in values["suppliers"]:
+                                table_row((supplier, f"{row['count']}件", money(row["cost"]), money(row["supply"]),
+                                           money(row["expense"]), money(row["total"])))
+                            table_row(("合計", f"{len(values['purchases'])}件", money(values["cost_total"]),
+                                       money(values["supply_total"]), money(values["expense_total"]),
+                                       money(values["cost_total"] + values["supply_total"] + values["expense_total"])), "total-row")
 
-                ui.label("日別売上明細").classes("report-section-title")
-                headers = ("日付", "ランチ", "ディナー", "現金", "クレジット", "PayPay", "電子マネー", "旅行社", "ポイント", "売上合計")
-                totals = [0] * 9
-                with ui.element("div").classes("report-table-wrap"), ui.element("table").classes("report-table"):
-                    table_header(headers)
-                    with ui.element("tbody"):
-                        for row in sorted(values["sales"], key=lambda item: str(item.get("date", ""))):
-                            numbers = [int(row.get("lunch_sales", 0) or 0), int(row.get("dinner_sales", 0) or 0),
-                                       *[int(row.get(field, 0) or 0) for _, field in PAYMENT_COLUMNS],
-                                       int(row.get("tabelog_points_sales", 0) or 0) + int(row.get("hotpepper_points_sales", 0) or 0),
-                                       int(row.get("amount", 0) or 0)]
-                            totals = [a + b for a, b in zip(totals, numbers)]
-                            table_row((str(row.get("date", "")).replace("-", "/"), *[money(number) for number in numbers]))
-                        table_row(("合計", *[money(number) for number in totals]), "total-row")
+                with ui.element("section").classes("report-print-page"):
+                    ui.label(f"集計期間　{values['start']} 〜 {values['end']}").classes("report-page-period")
+                    ui.label("日別売上明細").classes("report-section-title")
+                    headers = ("日付", "ランチ", "ディナー", "現金", "クレジット", "PayPay", "電子マネー", "旅行社", "ポイント", "売上合計")
+                    totals = [0] * 9
+                    with ui.element("div").classes("report-table-wrap"), ui.element("table").classes("report-table"):
+                        table_header(headers)
+                        with ui.element("tbody"):
+                            for row in sorted(values["sales"], key=lambda item: str(item.get("date", ""))):
+                                numbers = [int(row.get("lunch_sales", 0) or 0), int(row.get("dinner_sales", 0) or 0),
+                                           *[int(row.get(field, 0) or 0) for _, field in PAYMENT_COLUMNS],
+                                           int(row.get("tabelog_points_sales", 0) or 0) + int(row.get("hotpepper_points_sales", 0) or 0),
+                                           int(row.get("amount", 0) or 0)]
+                                totals = [a + b for a, b in zip(totals, numbers)]
+                                table_row((str(row.get("date", "")).replace("-", "/"), *[money(number) for number in numbers]))
+                            table_row(("合計", *[money(number) for number in totals]), "total-row")
 
         report_view()
-        ui.add_css(REPORT_CSS)
+        ui.add_css(REPORT_CSS + MONTHLY_PRINT_CSS)
 
 
 def report_shell(title, subtitle):
@@ -396,4 +418,22 @@ MANAGEMENT_REPORT_CSS = """
 .management-report{max-width:920px;margin:0 auto}.management-lead{margin-top:12px;padding:11px 13px;border-radius:12px;background:#F3F6F4;color:#526159;font-size:11px;font-weight:700}.consulting-verdict{margin-top:16px;padding:16px;border-radius:16px;background:#EAF2ED;color:#173B2E}.consulting-verdict.danger,.consulting-verdict.critical{background:#FBE9E7;color:#8C2520}.management-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:16px}.management-metrics.three{grid-template-columns:repeat(3,minmax(0,1fr))}.management-metric{min-width:0;padding:12px;border-radius:14px;background:#F1F4F2}.management-metric.good{background:#E7F3EA}.management-metric.danger{background:#FCE9E7}.management-metric.primary{background:#173B2E;color:white}.management-metric-label{font-size:8px;font-weight:850;opacity:.72}.management-metric-value{font-size:clamp(13px,2.6vw,20px);font-weight:950;white-space:nowrap;letter-spacing:-.04em}.action-list{display:grid;gap:9px}.action-card{position:relative;padding:14px;border-radius:14px;border:1px solid #DFE5E1;background:#fff}.action-rank{position:absolute;right:10px;top:10px;color:#A06B11;font-size:9px;font-weight:950}.action-title{padding-right:54px;font-size:15px;font-weight:950;color:#173B2E}.action-reason{font-size:10px;color:#68736D;margin-top:4px}.action-next{margin-top:9px;padding:9px;border-radius:10px;background:#EEF4F0;font-size:10px}.action-next-label{font-size:8px;font-weight:950;color:#2E6B52}.action-target{font-size:9px;font-weight:800;color:#7A5A17;margin-top:7px}.knowledge-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.knowledge-card{padding:12px;border-radius:13px;background:#EAF3ED}.knowledge-card.unknown{background:#FFF3DE}.next-input{margin-top:10px;padding:11px;border-radius:11px;background:#173B2E;color:white;font-size:11px;font-weight:850}.analysis-message{padding:8px 10px;margin-bottom:6px;border-left:4px solid #C98A28;background:#FFF7E8;font-size:10px}.attendance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.attendance-card{padding:12px;border-radius:13px;background:#F2F5F3}
 @media(max-width:520px){.management-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.management-metrics.three{grid-template-columns:1fr}.knowledge-grid{grid-template-columns:1fr}.attendance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media print{.management-report{max-width:none}.action-card,.management-metric,.knowledge-card,.attendance-card{break-inside:avoid}.management-lead{background:#F3F6F4!important}.management-metric.primary{background:#173B2E!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+"""
+
+
+MONTHLY_PRINT_CSS = """
+.report-page-period{font-size:11px;margin-top:12px}
+@media print {
+  .report-print-page + .report-print-page {break-before:page;page-break-before:always}
+  .report-overview{break-inside:avoid;page-break-inside:avoid}
+  .report-overview .report-section-title{margin-top:10px!important;margin-bottom:4px!important;font-size:13pt!important}
+  .report-overview .report-title{font-size:18pt!important}
+  .report-overview .report-metric{padding:6px!important}
+  .report-overview .report-metric-value{font-size:13pt!important}
+  .report-overview .q-my-md{margin-top:6px!important;margin-bottom:6px!important;font-size:9pt;line-height:1.35}
+  .report-overview .report-block-map{height:58mm!important}
+  .report-page-period{font-size:9pt;margin:0 0 4mm}
+  .report-table thead{display:table-header-group}
+  .report-table-wrap{overflow:visible!important}
+}
 """

@@ -9,7 +9,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import PageBreak, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core.financial_report_data import PAYMENT_COLUMNS
 
@@ -66,8 +66,7 @@ def create_financial_report_pdf(path, report):
                          Paragraph(f"¥{report['operating_expenses']:,}", right)])
     expense_table = Table(expense_rows, colWidths=[58 * mm, 42 * mm], hAlign="LEFT", repeatRows=1)
     expense_table.setStyle(_table_style(total_row=True))
-    story.extend([profit_table, Spacer(1, 4 * mm), Paragraph("営業経費の内訳", heading),
-                  expense_table, Spacer(1, 4 * mm)])
+    story.append(profit_table)
 
     if 'settlement' in report:
         settled=report['settlement']
@@ -84,7 +83,13 @@ def create_financial_report_pdf(path, report):
 
         story.append(KeepTogether(tax_section))
 
-    story.append(Paragraph("決済方法別集計", heading))
+    def section_page(label):
+        story.extend([PageBreak(), Paragraph(label, title),
+                      Paragraph(f"集計期間　{report['start']} 〜 {report['end']}", normal), Spacer(1, 5 * mm)])
+
+    section_page("営業経費の内訳")
+    story.append(expense_table)
+    section_page("決済方法別集計")
     payment_rows = [[Paragraph("決済方法", center), Paragraph("期間合計", center)]]
     for label, field in (*PAYMENT_COLUMNS, ("ポイント", "points_sales"), ("未分類", "unclassified_sales")):
         payment_rows.append([Paragraph(label, normal), Paragraph(f"¥{report['payment_totals'][field]:,}", right)])
@@ -92,7 +97,8 @@ def create_financial_report_pdf(path, report):
                          Paragraph(f"¥{sum(report['payment_totals'].values()):,}", right)])
     payment_table = Table(payment_rows, colWidths=[65 * mm, 50 * mm], repeatRows=1, hAlign="LEFT")
     payment_table.setStyle(_table_style(total_row=True))
-    story.extend([payment_table, Spacer(1, 4 * mm), Paragraph("仕入れ先別集計", heading)])
+    story.append(payment_table)
+    section_page("仕入れ先別集計")
     supplier_rows = [[Paragraph(value, center) for value in
                       ("仕入れ先", "件数", "原価", "営業用品", "一般経費", "合計")]]
     for supplier, values in report["suppliers"]:
@@ -105,7 +111,8 @@ def create_financial_report_pdf(path, report):
                           Paragraph(f"¥{report['cost_total'] + report['supply_total'] + report['expense_total']:,}", right)])
     supplier_table = Table(supplier_rows, colWidths=[46 * mm, 17 * mm, 28 * mm, 28 * mm, 28 * mm, 31 * mm], repeatRows=1)
     supplier_table.setStyle(_table_style(total_row=True))
-    story.extend([supplier_table, Spacer(1, 4 * mm), Paragraph("日別売上明細", heading)])
+    story.append(supplier_table)
+    section_page("日別売上明細")
     headers = ["日付", "ランチ", "ディナー", *[label for label, _ in PAYMENT_COLUMNS], "ポイント", "売上合計"]
     daily_rows = [[Paragraph(value, center) for value in headers]]
     daily_totals = [0] * (len(headers) - 1)
@@ -141,13 +148,14 @@ def _profit_block(report, normal, center):
         scale = total_height / (cost_height + gross_height)
         cost_height *= scale; gross_height *= scale
 
-    tiny = ParagraphStyle("profit-block-tiny", parent=center, fontSize=7.2, leading=8.2)
+    white = ParagraphStyle("profit-block-white", parent=center, textColor=colors.white)
+    tiny = ParagraphStyle("profit-block-tiny", parent=white, fontSize=7.2, leading=8.2)
 
     def label(text, value, note="", style=None):
         parts = [f"<b>{text}</b>", f"¥{int(value):,}"]
         if note:
             parts.append(f"<font size='6'>{note}</font>")
-        return Paragraph("<br/>".join(parts), style or center)
+        return Paragraph("<br/>".join(parts), style or white)
 
     def percent(key):
         value = report["ratios"].get(key)
